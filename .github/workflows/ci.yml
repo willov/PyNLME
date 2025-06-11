@@ -39,7 +39,6 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --dev
-        uv pip install maturin
 
     - name: Build Rust extension
       run: uv run maturin develop
@@ -66,7 +65,7 @@ jobs:
 
     - name: Build wheels
       run: |
-        uv pip install maturin
+        uv sync --dev
         uv run maturin build --release
 
     - name: Upload wheels

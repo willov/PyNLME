@@ -85,13 +85,12 @@ jobs:
           fi
           echo "✅ Valid version format: $VERSION"
 
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v2
+
       - name: Run release preparation
         run: |
           echo "🚀 Running automated release preparation for v${{ needs.check-version.outputs.new-version }}"
-          
-          # Set up Python and dependencies
-          python -m pip install --upgrade pip
-          pip install uv
           
           # Install dependencies
           uv sync --dev
