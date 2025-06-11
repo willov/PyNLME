@@ -3,7 +3,7 @@
 [![Tests](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen)]()
 [![Rust Backend](https://img.shields.io/badge/rust%20backend-enabled-orange)]()
 [![MATLAB Compatible](https://img.shields.io/badge/MATLAB-compatible-blue)]()
-[![Python](https://img.shields.io/badge/python-3.8%2B-blue)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 
 A high-performance Python implementation of nonlinear mixed-effects (NLME) models with MATLAB-compatible API and Rust backend for optimization.
 
@@ -38,11 +38,15 @@ print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
 
 ```bash
 # Download and install latest pre-built wheel - no Rust required!
-pip install https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.0-cp38-abi3-linux_x86_64.whl
+# Replace the URL below with the actual wheel for your platform from:
+# https://github.com/willov/PyNLME/releases/latest
+
+# For Linux x86_64:
+pip install https://github.com/willov/PyNLME/releases/download/v0.1.4/pynlme-0.1.4-cp310-abi3-linux_x86_64.whl
 
 # Or download manually from releases page and install:
 # 1. Go to: https://github.com/willov/PyNLME/releases
-# 2. Download the appropriate wheel for your platform
+# 2. Download the appropriate wheel for your platform  
 # 3. pip install downloaded_wheel.whl
 ```
 

@@ -1,4 +1,29 @@
-# Changelog
+# Chang## [Unreleased]
+
+## [0.1.6] - 2025-01-14
+
+### Fixed
+- **Wheel building workflow** - Simplified cibuildwheel configuration using official examples
+- **Windows build issues** - Removed complex environment variable configurations that were causing failures
+- **GitHub Actions** - Updated to use standard cibuildwheel setup without custom Rust installation scripts
+
+### Changed
+- Adopted official cibuildwheel workflow pattern for better reliability
+- Simplified build process to rely on standard GitHub Actions Rust toolchain setup
+- Removed problematic Windows-specific PATH and environment configurations
+
+## [0.1.5] - 2025-01-14
+
+### Fixed
+- **Windows wheel builds**: Fixed cibuildwheel Windows environment variable syntax
+- **Auto-release integration**: Added automatic wheel building trigger from auto-release workflow
+- **Cross-platform compatibility**: Improved Rust toolchain setup for all platforms
+
+### Changed
+- Enhanced GitHub Actions workflow integration for automatic releases
+- Updated auto-release workflow to trigger wheel building directly
+
+## [0.1.4] - 2025-01-14g
 
 All notable changes to the PyNLME project will be documented in this file.
 

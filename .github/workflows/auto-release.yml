@@ -75,7 +75,7 @@ jobs:
     if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
     permissions:
       contents: write
-      actions: read
+      actions: write
     
     steps:
       - uses: actions/checkout@v4
@@ -163,8 +163,30 @@ jobs:
 
       - name: Wait for wheels workflow
         run: |
-          echo "⏳ Waiting for wheel building workflow to start..."
-          sleep 30  # Give GitHub Actions time to detect the new tag
+          echo "⏳ Triggering wheel building workflow..."
+
+      - name: Trigger wheels workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = "${{ needs.check-version.outputs.new-version }}";
+            console.log(`Triggering wheels workflow for version ${version}`);
+            
+            try {
+              const result = await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'wheels.yml',
+                ref: 'main',
+                inputs: {
+                  version: `v${version}`
+                }
+              });
+              console.log('✅ Successfully triggered wheels workflow');
+            } catch (error) {
+              console.error('❌ Failed to trigger wheels workflow:', error);
+              throw error;
+            }
 
   notify-skip:
     name: Notify why release was skipped
