@@ -1,6 +1,14 @@
 //! MLE (Maximum Likelihood Estimation) algorithm implementation
 
-use nalgebra as na;
+#![allow(
+    clippy::too_many_arguments,
+    clippy::manual_clamp,
+    clippy::new_without_default,
+    unused_variables,
+    dead_code,
+    non_local_definitions
+)]
+
 use ndarray::{Array1, Array2, Axis};
 use numpy::{PyArray1, PyArray2, ToPyArray};
 use pyo3::prelude::*;
@@ -49,6 +57,12 @@ impl MLEOptions {
             compute_std_errors: true,
             verbose: 0,
         }
+    }
+}
+
+impl Default for MLEOptions {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -283,7 +297,7 @@ impl MLEFitter {
                 let a = (sum_y - b * sum_x) / n;
 
                 beta[0] = a.exp().max(0.1); // Convert back from log scale
-                beta[1] = (-b).max(0.001).min(10.0); // Ensure positive decay rate
+                beta[1] = (-b).clamp(0.001, 10.0); // Ensure positive decay rate
             } else {
                 beta[0] = y.mean().unwrap_or(1.0).max(0.1);
                 beta[1] = 0.1;
@@ -318,10 +332,10 @@ impl MLEFitter {
                 // Keep parameters in reasonable bounds
                 if i == 0 {
                     // Amplitude
-                    beta[i] = beta[i].max(0.01).min(1000.0);
+                    beta[i] = beta[i].clamp(0.01, 1000.0);
                 } else if i == 1 {
                     // Decay rate
-                    beta[i] = beta[i].max(0.001).min(10.0);
+                    beta[i] = beta[i].clamp(0.001, 10.0);
                 }
             }
 

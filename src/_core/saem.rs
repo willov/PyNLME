@@ -1,5 +1,12 @@
 //! SAEM (Stochastic Approximation Expectation-Maximization) algorithm implementation
 
+#![allow(
+    clippy::too_many_arguments,
+    unused_variables,
+    dead_code,
+    non_local_definitions
+)]
+
 use nalgebra as na;
 use ndarray::{Array1, Array2, Axis};
 use numpy::{PyArray1, PyArray2, ToPyArray};
@@ -56,6 +63,12 @@ impl SAEMOptions {
             random_seed: None,
             verbose: 0,
         }
+    }
+}
+
+impl Default for SAEMOptions {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
