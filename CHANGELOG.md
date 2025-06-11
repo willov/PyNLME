@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2025-06-11
+
+### Fixed
+- **Rust code formatting** - Applied `cargo fmt` to resolve all formatting issues
+- **Rust lint warnings** - Added appropriate `#[allow()]` directives for proof-of-concept code
+- **GitHub Actions permissions** - Fixed auto-release workflow authentication for tag creation
+- **Deprecated uv commands** - Updated CI workflows to use modern uv syntax
+- **Clippy warnings** - Resolved clippy warnings for cleaner Rust compilation
+
+### Changed
+- **CI/CD improvements** - Enhanced GitHub Actions workflows for better reliability
+- **Code quality** - Applied consistent formatting across Rust codebase
+
+## [0.1.1] - 2025-06-11
+
+### Fixed
+- **Auto-release workflow** - Fixed GitHub Actions permissions and authentication issues
+- **Version detection** - Improved version change detection in CI pipeline
+
 ## [0.1.0] - 2025-06-11
 
 Note: this release was written (code and changelog) by AI (Claude Sonnet 4 in GitHub Copilot agent mode).
