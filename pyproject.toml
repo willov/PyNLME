@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "William Lövfors", email = "william.lovfors@farmbio.uu.se"},
+    {name = "William Lövfors", email = "william.lovfors@liu.se"},
 ]
 keywords = ["statistics", "mixed-effects", "nonlinear", "nlme"]
 classifiers = [
