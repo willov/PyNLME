@@ -9,7 +9,7 @@ A high-performance Python implementation of nonlinear mixed-effects (NLME) model
 
 ## AI Disclaimer
 
-I (willov) asked Claude Sonnet 4 in GitHub Copilot agent mode to "create a Python NLME implementation with a rust backend with a similar call syntax to MATLAB's nlmefitsa". This version 0.1.0 is what it managed to produce. Please use the package with caution, it is very likely that the AI have hallucinated quirks not tested. If you find it useful, please assist in creating tests to test the reliability of the package.
+I (willov) asked Claude Sonnet 4 in GitHub Copilot agent mode to "create a Python NLME implementation with a rust backend with a similar call syntax to MATLAB's nlmefitsa". Please use the package with caution, it is very likely that the AI have hallucinated quirks not tested. If you find it useful, please assist in creating tests to test the reliability of the package.
 
 At the current state, this should be seen as a proof-of-concept rather than production ready.
 

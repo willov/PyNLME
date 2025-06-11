@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2025-06-11
+
+### Added
+- **Python 3.13 support** - Full support for Python 3.13 in wheel builds and testing
+- **Extended Python support** - Now supports Python 3.10, 3.11, 3.12, and 3.13
+
+### Changed
+- Updated all GitHub Actions workflows to test against Python 3.13
+- Updated project classifiers to include Python 3.13
+- Enhanced cibuildwheel configuration for Python 3.13 compatibility
+
+## [0.1.3] - 2025-06-11
+
+### Fixed
+- **CI/CD**: Fixed wheel building workflow to properly generate and distribute wheels
+- Updated cibuildwheel to v2.21.0 for better compatibility
+- Fixed artifact naming in GitHub Actions for proper wheel collection
+- Added debugging output to track artifact generation
+
+### Changed
+- Improved wheel distribution workflow reliability
+- Updated artifact download patterns for better file collection
+
 ## [0.1.2] - 2025-06-11
 
 ### Fixed
