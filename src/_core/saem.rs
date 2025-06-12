@@ -88,8 +88,40 @@ impl SAEMFitter {
         Self { options, rng }
     }
 
-    /// Fit NLME model using SAEM algorithm
+    /// Fit NLME model using SAEM algorithm (original hardcoded method)
     pub fn fit(
+        &mut self,
+        x: &Array2<f64>,
+        y: &Array1<f64>,
+        groups: &Array1<usize>,
+        v: Option<&Array2<f64>>,
+        beta0: &Array1<f64>,
+        error_model: ErrorModel,
+        transforms: &[Transform],
+    ) -> Result<NLMEResult, NLMEError> {
+        // Use hardcoded exponential model for backward compatibility
+        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, None, None)
+    }
+
+    /// Fit NLME model using SAEM algorithm with Python model function
+    pub fn fit_with_model(
+        &mut self,
+        x: &Array2<f64>,
+        y: &Array1<f64>,
+        groups: &Array1<usize>,
+        v: Option<&Array2<f64>>,
+        beta0: &Array1<f64>,
+        error_model: ErrorModel,
+        transforms: &[Transform],
+        py: Python,
+        model_func: &PyAny,
+    ) -> Result<NLMEResult, NLMEError> {
+        // Use Python model function
+        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, Some(py), Some(model_func))
+    }
+
+    /// Internal fit method that handles both hardcoded and Python models
+    fn fit_internal(
         &mut self,
         x: &Array2<f64>,
         y: &Array1<f64>,
@@ -98,6 +130,8 @@ impl SAEMFitter {
         beta0: &Array1<f64>,
         mut error_model: ErrorModel,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<NLMEResult, NLMEError> {
         let n_obs = y.len();
         let n_groups = groups.iter().max().unwrap_or(&0) + 1;
@@ -153,6 +187,8 @@ impl SAEMFitter {
                     &error_model,
                     transforms,
                     *n_mcmc,
+                    py,
+                    model_func,
                 )?;
 
                 // SA-step: Update sufficient statistics
@@ -172,31 +208,24 @@ impl SAEMFitter {
                     &error_model,
                     transforms,
                     step_size,
+                    py,
+                    model_func,
                 )?;
 
                 // Update error model with new sigma
                 error_model = ErrorModel::Constant { sigma };
-
-                if self.options.verbose > 1 {
-                    println!(
-                        "Phase {}, Iteration {}: beta = {:?}",
-                        phase_idx + 1,
-                        iter + 1,
-                        beta
-                    );
-                }
             }
         }
 
         // Compute final statistics
         let logl =
-            self.compute_log_likelihood(x, y, groups, v, &beta, &psi, &error_model, transforms)?;
+            self.compute_log_likelihood(x, y, groups, v, &beta, &psi, &error_model, transforms, py, model_func)?;
         let n_total_params = n_params + psi.len(); // Fixed effects + covariance parameters
         let aic = -2.0 * logl + 2.0 * n_total_params as f64;
         let bic = -2.0 * logl + (n_groups as f64).ln() * n_total_params as f64;
 
         // Compute RMSE
-        let y_pred = self.predict_population(x, v, &beta, transforms)?;
+        let y_pred = self.predict_population(x, v, &beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
         let rmse = (residuals.mapv(|x| x * x).sum() / n_obs as f64).sqrt();
 
@@ -227,6 +256,8 @@ impl SAEMFitter {
         error_model: &ErrorModel,
         transforms: &[Transform],
         n_mcmc: usize,
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<(), NLMEError> {
         // Simplified MCMC sampling for random effects
         // In practice, this would use more sophisticated methods like HMC or NUTS
@@ -272,6 +303,8 @@ impl SAEMFitter {
                     gamma,
                     error_model,
                     transforms,
+                    py,
+                    model_func,
                 )?;
                 let proposal_logp = self.log_posterior_re(
                     &proposal,
@@ -281,6 +314,8 @@ impl SAEMFitter {
                     gamma,
                     error_model,
                     transforms,
+                    py,
+                    model_func,
                 )?;
 
                 let alpha = (proposal_logp - current_logp).exp().min(1.0);
@@ -308,13 +343,15 @@ impl SAEMFitter {
         gamma: &Array2<f64>,
         error_model: &ErrorModel,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<f64, NLMEError> {
         // Compute log posterior density for random effects
         // log p(b_i | y_i, beta, Gamma) ∝ log p(y_i | b_i, beta) + log p(b_i | Gamma)
 
         // Log-likelihood contribution
         let phi = beta + re; // Combined parameters
-        let y_pred = self.evaluate_model(&phi, x_group, None, transforms)?;
+        let y_pred = self.evaluate_model(&phi, x_group, None, transforms, py, model_func)?;
 
         let mut log_lik = 0.0;
         for (&obs, &pred) in y_group.iter().zip(y_pred.iter()) {
@@ -349,6 +386,8 @@ impl SAEMFitter {
         _error_model: &ErrorModel,
         transforms: &[Transform],
         step_size: f64,
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<(), NLMEError> {
         // IMPROVED SAEM parameter updates
         let n_groups = random_effects.ncols();
@@ -385,11 +424,11 @@ impl SAEMFitter {
             for p in 0..beta.len() {
                 let mut params_plus = current_params.clone();
                 params_plus[p] += eps;
-                let y_plus = self.evaluate_model(&params_plus, &x_group, None, transforms)?;
+                let y_plus = self.evaluate_model(&params_plus, &x_group, None, transforms, py, model_func)?;
 
                 let mut params_minus = current_params.clone();
                 params_minus[p] -= eps;
-                let y_minus = self.evaluate_model(&params_minus, &x_group, None, transforms)?;
+                let y_minus = self.evaluate_model(&params_minus, &x_group, None, transforms, py, model_func)?;
 
                 for i in 0..y_group.len() {
                     jacobian[[i, p]] = (y_plus[i] - y_minus[i]) / (2.0 * eps);
@@ -397,7 +436,7 @@ impl SAEMFitter {
             }
 
             // Add to normal equations (J^T J and J^T (y - f))
-            let y_pred = self.evaluate_model(&current_params, &x_group, None, transforms)?;
+            let y_pred = self.evaluate_model(&current_params, &x_group, None, transforms, py, model_func)?;
             let residuals = &y_group - &y_pred;
 
             for i in 0..beta.len() {
@@ -476,7 +515,7 @@ impl SAEMFitter {
             let re_group = random_effects.column(group).to_owned();
 
             let current_params = beta.clone() + &re_group;
-            let y_pred = self.evaluate_model(&current_params, &x_group, None, transforms)?;
+            let y_pred = self.evaluate_model(&current_params, &x_group, None, transforms, py, model_func)?;
 
             for (&obs, &pred) in y_group.iter().zip(y_pred.iter()) {
                 sum_sq_residuals += (obs - pred).powi(2);
@@ -509,9 +548,11 @@ impl SAEMFitter {
         _psi: &Array2<f64>,
         error_model: &ErrorModel,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<f64, NLMEError> {
         // Simplified log-likelihood computation
-        let y_pred = self.predict_population(x, _v, beta, transforms)?;
+        let y_pred = self.predict_population(x, _v, beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
 
         let mut log_lik = 0.0;
@@ -529,8 +570,10 @@ impl SAEMFitter {
         _v: Option<&Array2<f64>>,
         beta: &Array1<f64>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
-        self.evaluate_model(beta, x, _v, transforms)
+        self.evaluate_model(beta, x, _v, transforms, py, model_func)
     }
 
     fn evaluate_model(
@@ -539,6 +582,8 @@ impl SAEMFitter {
         x: &Array2<f64>,
         v: Option<&Array2<f64>>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
         // Apply parameter transformations
         let transformed_params: Array1<f64> = params
@@ -547,34 +592,60 @@ impl SAEMFitter {
             .map(|(&p, t)| t.apply(p))
             .collect();
 
-        // Simplified model evaluation - exponential decay
-        // In practice, this would call user-defined model functions
-        let mut y_pred = Array1::zeros(x.nrows());
+        // Check if we should use Python model function or hardcoded model
+        if let (Some(py_ctx), Some(func)) = (py, model_func) {
+            // Call Python model function
+            let params_py = transformed_params.to_pyarray(py_ctx);
+            let x_py = x.to_pyarray(py_ctx);
+            let v_py = v.map(|v_arr| v_arr.to_pyarray(py_ctx));
 
-        if transformed_params.len() >= 2 {
-            for (i, x_row) in x.axis_iter(Axis(0)).enumerate() {
-                // Example: y = phi[0] * exp(-phi[1] * x[0])
-                let t = x_row[0];
-                y_pred[i] = transformed_params[0] * (-transformed_params[1] * t).exp();
+            // Call the Python model function: model_func(phi, x, v)
+            let result = if let Some(v_pyarray) = v_py {
+                func.call1((params_py, x_py, v_pyarray))
+            } else {
+                let none_py = py_ctx.None();
+                func.call1((params_py, x_py, none_py))
+            };
+
+            match result {
+                Ok(py_result) => {
+                    // Convert Python result back to Rust Array1
+                    let result_array: &PyArray1<f64> = py_result.extract()
+                        .map_err(|_| NLMEError::InvalidParameters)?;
+                    Ok(result_array.to_owned_array())
+                }
+                Err(_) => Err(NLMEError::InvalidParameters),
             }
         } else {
-            return Err(NLMEError::InvalidParameters);
-        }
+            // Use hardcoded exponential decay model for backward compatibility
+            let mut y_pred = Array1::zeros(x.nrows());
 
-        Ok(y_pred)
+            if transformed_params.len() >= 2 {
+                for (i, x_row) in x.axis_iter(Axis(0)).enumerate() {
+                    // Hardcoded model: y = phi[0] * exp(-phi[1] * x[0])
+                    let t = x_row[0];
+                    y_pred[i] = transformed_params[0] * (-transformed_params[1] * t).exp();
+                }
+            } else {
+                return Err(NLMEError::InvalidParameters);
+            }
+
+            Ok(y_pred)
+        }
     }
 }
 
 /// Python interface for SAEM fitting
 #[pyfunction]
-#[pyo3(signature = (x, y, groups, beta0, options, v=None))]
+#[pyo3(signature = (x, y, groups, beta0, options, model_func, v=None))]
 pub fn fit_nlme_saem(
-    _py: Python,
+    py: Python,
     x: &PyArray2<f64>,
     y: &PyArray1<f64>,
     groups: &PyArray1<usize>,
     beta0: &PyArray1<f64>,
     options: SAEMOptions,
+    model_func: &PyAny,
     v: Option<&PyArray2<f64>>,
 ) -> PyResult<NLMEResult> {
     let x_array = x.to_owned_array();
@@ -587,7 +658,7 @@ pub fn fit_nlme_saem(
     let error_model = ErrorModel::Constant { sigma: 1.0 }; // Default
     let transforms = vec![Transform::Identity; beta0_array.len()]; // Default
 
-    match fitter.fit(
+    match fitter.fit_with_model(
         &x_array,
         &y_array,
         &groups_array,
@@ -595,6 +666,8 @@ pub fn fit_nlme_saem(
         &beta0_array,
         error_model,
         &transforms,
+        py,
+        model_func,
     ) {
         Ok(result) => Ok(result),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(

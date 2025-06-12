@@ -123,7 +123,7 @@ def nlmefit(
             # Call Rust implementation
             # Convert group array to uint64 for Rust compatibility
             group_uint = group.astype(np.uint64)
-            result = rust_backend.fit_nlme_mle(X, y, group_uint, beta0, rust_options, V)
+            result = rust_backend.fit_nlme_mle(X, y, group_uint, beta0, rust_options, modelfun, V)
 
             # Convert result to expected format
             # Create stats object from Rust result
@@ -266,7 +266,7 @@ def nlmefitsa(
             # Convert group array to uint64 for Rust compatibility
             group_uint = group.astype(np.uint64)
             result = rust_backend.fit_nlme_saem(
-                X, y, group_uint, beta0, rust_saem_options, V
+                X, y, group_uint, beta0, rust_saem_options, modelfun, V
             )
 
             # Convert result to expected format

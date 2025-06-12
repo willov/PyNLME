@@ -76,7 +76,7 @@ impl MLEFitter {
         Self { options }
     }
 
-    /// Fit NLME model using MLE
+    /// Fit NLME model using MLE (original hardcoded method)
     pub fn fit(
         &self,
         x: &Array2<f64>,
@@ -86,6 +86,40 @@ impl MLEFitter {
         beta0: &Array1<f64>,
         error_model: ErrorModel,
         transforms: &[Transform],
+    ) -> Result<NLMEResult, NLMEError> {
+        // Use hardcoded exponential model for backward compatibility
+        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, None, None)
+    }
+
+    /// Fit NLME model using MLE with Python model function
+    pub fn fit_with_model(
+        &self,
+        x: &Array2<f64>,
+        y: &Array1<f64>,
+        groups: &Array1<usize>,
+        v: Option<&Array2<f64>>,
+        beta0: &Array1<f64>,
+        error_model: ErrorModel,
+        transforms: &[Transform],
+        py: Python,
+        model_func: &PyAny,
+    ) -> Result<NLMEResult, NLMEError> {
+        // Use Python model function
+        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, Some(py), Some(model_func))
+    }
+
+    /// Internal fit method that handles both hardcoded and Python models
+    fn fit_internal(
+        &self,
+        x: &Array2<f64>,
+        y: &Array1<f64>,
+        groups: &Array1<usize>,
+        v: Option<&Array2<f64>>,
+        beta0: &Array1<f64>,
+        error_model: ErrorModel,
+        transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<NLMEResult, NLMEError> {
         let n_obs = y.len();
         let n_groups = groups.iter().max().unwrap_or(&0) + 1;
@@ -115,7 +149,7 @@ impl MLEFitter {
 
             // M-step: Update parameters
             let (new_beta, new_psi, new_sigma) =
-                self.update_parameters(x, y, groups, v, &random_effects, &error_model, transforms)?;
+                self.update_parameters(x, y, groups, v, &random_effects, &error_model, transforms, py, model_func)?;
 
             // Compute log-likelihood
             let logl = self.compute_log_likelihood(
@@ -128,25 +162,16 @@ impl MLEFitter {
                 new_sigma,
                 &error_model,
                 transforms,
+                py,
+                model_func,
             )?;
 
             // Check convergence
             let beta_change = (&new_beta - &beta).mapv(|x| x.abs()).sum();
             let logl_change = (logl - prev_logl).abs() / (prev_logl.abs() + 1e-12);
 
-            if self.options.verbose > 1 {
-                println!(
-                    "Iteration {}: logl = {:.6}, beta_change = {:.6}",
-                    iter + 1,
-                    logl,
-                    beta_change
-                );
-            }
-
+            // Check convergence
             if beta_change < self.options.tol_x && logl_change < self.options.tol_fun {
-                if self.options.verbose > 0 {
-                    println!("Converged after {} iterations", iter + 1);
-                }
                 break;
             }
 
@@ -167,13 +192,15 @@ impl MLEFitter {
             sigma,
             &error_model,
             transforms,
+            py,
+            model_func,
         )?;
         let n_total_params = n_params + psi.len() + 1; // Fixed effects + covariance + error variance
         let aic = -2.0 * logl + 2.0 * n_total_params as f64;
         let bic = -2.0 * logl + (n_groups as f64).ln() * n_total_params as f64;
 
         // Compute RMSE
-        let y_pred = self.predict_population(x, v, &beta, transforms)?;
+        let y_pred = self.predict_population(x, v, &beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
         let rmse = (residuals.mapv(|x| x * x).sum() / n_obs as f64).sqrt();
 
@@ -264,6 +291,8 @@ impl MLEFitter {
         random_effects: &Array2<f64>,
         error_model: &ErrorModel,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<(Array1<f64>, Array2<f64>, f64), NLMEError> {
         let n_obs = y.len();
         let n_params = random_effects.nrows();
@@ -317,13 +346,15 @@ impl MLEFitter {
                 1.0,
                 error_model,
                 transforms,
+                py,
+                model_func,
             )?;
 
             if (current_logl - prev_logl).abs() < 1e-8 {
                 break;
             }
 
-            let gradient = self.compute_gradient_loglik(x, y, &beta, transforms)?;
+            let gradient = self.compute_gradient_loglik(x, y, &beta, transforms, py, model_func)?;
             let step_size = 0.01 / (1.0 + iter as f64 * 0.1); // Decreasing step size
 
             // Update parameters
@@ -346,7 +377,7 @@ impl MLEFitter {
         let psi = Array2::eye(n_params) * 0.1;
 
         // Update error variance using residuals
-        let y_pred = self.predict_population(x, v, &beta, transforms)?;
+        let y_pred = self.predict_population(x, v, &beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
         let sigma = (residuals.mapv(|x| x * x).sum() / n_obs as f64)
             .sqrt()
@@ -361,6 +392,8 @@ impl MLEFitter {
         y: &Array1<f64>,
         beta: &Array1<f64>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
         let n_params = beta.len();
         let mut gradient = Array1::zeros(n_params);
@@ -373,8 +406,8 @@ impl MLEFitter {
             beta_plus[i] += h;
             beta_minus[i] -= h;
 
-            let y_pred_plus = self.evaluate_model(&beta_plus, x, None, transforms)?;
-            let y_pred_minus = self.evaluate_model(&beta_minus, x, None, transforms)?;
+            let y_pred_plus = self.evaluate_model(&beta_plus, x, None, transforms, py, model_func)?;
+            let y_pred_minus = self.evaluate_model(&beta_minus, x, None, transforms, py, model_func)?;
 
             // Compute log-likelihood for both
             let mut logl_plus = 0.0;
@@ -410,8 +443,10 @@ impl MLEFitter {
         sigma: f64,
         error_model: &ErrorModel,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<f64, NLMEError> {
-        let y_pred = self.predict_population(x, v, beta, transforms)?;
+        let y_pred = self.predict_population(x, v, beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
 
         let mut log_lik = 0.0;
@@ -448,8 +483,10 @@ impl MLEFitter {
         v: Option<&Array2<f64>>,
         beta: &Array1<f64>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
-        self.evaluate_model(beta, x, v, transforms)
+        self.evaluate_model(beta, x, v, transforms, py, model_func)
     }
 
     fn predict_group(
@@ -458,8 +495,10 @@ impl MLEFitter {
         x_group: &Array2<f64>,
         v_group: Option<&Array2<f64>>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
-        self.evaluate_model(params, x_group, v_group, transforms)
+        self.evaluate_model(params, x_group, v_group, transforms, py, model_func)
     }
 
     fn evaluate_model(
@@ -468,6 +507,8 @@ impl MLEFitter {
         x: &Array2<f64>,
         v: Option<&Array2<f64>>,
         transforms: &[Transform],
+        py: Option<Python>,
+        model_func: Option<&PyAny>,
     ) -> Result<Array1<f64>, NLMEError> {
         // Apply parameter transformations
         let transformed_params: Array1<f64> = params
@@ -476,33 +517,60 @@ impl MLEFitter {
             .map(|(&p, t)| t.apply(p))
             .collect();
 
-        // Simplified model evaluation - exponential decay
-        let mut y_pred = Array1::zeros(x.nrows());
+        // Check if we should use Python model function or hardcoded model
+        if let (Some(py_ctx), Some(func)) = (py, model_func) {
+            // Call Python model function
+            let params_py = transformed_params.to_pyarray(py_ctx);
+            let x_py = x.to_pyarray(py_ctx);
+            let v_py = v.map(|v_arr| v_arr.to_pyarray(py_ctx));
 
-        if transformed_params.len() >= 2 {
-            for (i, x_row) in x.axis_iter(Axis(0)).enumerate() {
-                // Example: y = phi[0] * exp(-phi[1] * x[0])
-                let t = x_row[0];
-                y_pred[i] = transformed_params[0] * (-transformed_params[1] * t).exp();
+            // Call the Python model function: model_func(phi, x, v)
+            let result = if let Some(v_pyarray) = v_py {
+                func.call1((params_py, x_py, v_pyarray))
+            } else {
+                let none_py = py_ctx.None();
+                func.call1((params_py, x_py, none_py))
+            };
+
+            match result {
+                Ok(py_result) => {
+                    // Convert Python result back to Rust Array1
+                    let result_array: &PyArray1<f64> = py_result.extract()
+                        .map_err(|_| NLMEError::InvalidParameters)?;
+                    Ok(result_array.to_owned_array())
+                }
+                Err(_) => Err(NLMEError::InvalidParameters),
             }
         } else {
-            return Err(NLMEError::InvalidParameters);
-        }
+            // Use hardcoded exponential decay model for backward compatibility
+            let mut y_pred = Array1::zeros(x.nrows());
 
-        Ok(y_pred)
+            if transformed_params.len() >= 2 {
+                for (i, x_row) in x.axis_iter(Axis(0)).enumerate() {
+                    // Hardcoded model: y = phi[0] * exp(-phi[1] * x[0])
+                    let t = x_row[0];
+                    y_pred[i] = transformed_params[0] * (-transformed_params[1] * t).exp();
+                }
+            } else {
+                return Err(NLMEError::InvalidParameters);
+            }
+
+            Ok(y_pred)
+        }
     }
 }
 
 /// Python interface for MLE fitting
 #[pyfunction]
-#[pyo3(signature = (x, y, groups, beta0, options, v=None))]
+#[pyo3(signature = (x, y, groups, beta0, options, model_func, v=None))]
 pub fn fit_nlme_mle(
-    _py: Python,
+    py: Python,
     x: &PyArray2<f64>,
     y: &PyArray1<f64>,
     groups: &PyArray1<usize>,
     beta0: &PyArray1<f64>,
     options: MLEOptions,
+    model_func: &PyAny,
     v: Option<&PyArray2<f64>>,
 ) -> PyResult<NLMEResult> {
     let x_array = x.to_owned_array();
@@ -515,7 +583,7 @@ pub fn fit_nlme_mle(
     let error_model = ErrorModel::Constant { sigma: 1.0 }; // Default
     let transforms = vec![Transform::Identity; beta0_array.len()]; // Default
 
-    match fitter.fit(
+    match fitter.fit_with_model(
         &x_array,
         &y_array,
         &groups_array,
@@ -523,6 +591,8 @@ pub fn fit_nlme_mle(
         &beta0_array,
         error_model,
         &transforms,
+        py,
+        model_func,
     ) {
         Ok(result) => Ok(result),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(

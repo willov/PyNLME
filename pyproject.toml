@@ -70,6 +70,7 @@ dev = [
     "pandas>=2.3.0",
     "pynlme",
     "pytest>=8.3.5",
+    "seaborn>=0.13.2",
 ]
 
 [tool.pytest.ini_options]
