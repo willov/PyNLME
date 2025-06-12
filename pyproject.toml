@@ -147,7 +147,7 @@ ignore = [
 # Build for Python 3.11+ only
 build = ["cp311-*", "cp312-*", "cp313-*"]
 # Skip 32-bit and PyPy builds for now
-skip = ["*-win32", "*-manylinux_i686", "pp*"]
+skip = ["*-win32", "*-manylinux_i686", "pp*-*"]
 # Test the built wheels
 test-requires = ["pytest", "numpy", "scipy"]
 test-command = "pytest {project}/tests/test_basic.py -v"
@@ -159,7 +159,7 @@ before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s 
 environment = { PATH = "$HOME/.cargo/bin:$PATH" }
 
 [tool.cibuildwheel.windows]
-before-all = "curl --proto '=https' --tlsv1.2 -sSf https://win.rustup.rs/x86_64 -o rustup-init.exe && rustup-init.exe -y"
+before-all = "powershell -Command \"& { Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'; .\\rustup-init.exe -y --default-host x86_64-pc-windows-msvc }\""
 environment = { PATH = "$USERPROFILE\\.cargo\\bin;$PATH" }
 
 [tool.cibuildwheel.macos]

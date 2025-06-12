@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pyproject.toml** - Fixed TOML parsing errors from corrupted configuration
 - **Dependencies** - Updated cibuildwheel to 3.0.0 for better Python 3.11+ support
 - **Test stability** - Fixed SAEM test flakiness by making stochastic algorithm tests more robust
+- **Windows builds** - Fixed Rust installation command for Windows wheel building
+- **Build configuration** - Fixed invalid PyPy skip selector pattern
 
 ## [0.1.7] - 2025-06-12
 
