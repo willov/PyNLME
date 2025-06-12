@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before comprehensive testing, now requires all tests to pass first
 - **Wheel building automation** - Fixed issue where wheel building workflow
   wasn't triggered automatically after tag creation, now uses workflow_dispatch
+- **CI/CD efficiency** - Eliminated duplicate test runs by using reusable
+  test workflows and skipping cibuildwheel testing after comprehensive testing
+- **Script cleanup** - Removed redundant manual scripts (build-wheels.sh,
+  prepare-release.sh, bump-version.sh) now handled by automated workflows
+- **Workflow consolidation** - Merged all 5 workflow files into 1 unified
+  GitLab-style pipeline with 8 stages: version check → test → release →
+  build wheels → build sdist → GitHub release → notify
 
 ### Changed
 

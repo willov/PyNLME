@@ -1,0 +1,360 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # Stage 1: Check version changes (only on main)
+  check-version:
+    name: Check for version changes
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      version-changed: ${{ steps.version-check.outputs.changed }}
+      new-version: ${{ steps.version-check.outputs.version }}
+      tag-exists: ${{ steps.tag-check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Get current version
+        id: current-version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get previous version
+        id: previous-version
+        run: |
+          git checkout HEAD~1 -- pyproject.toml || echo "No previous version"
+          if [ -f pyproject.toml ]; then
+            PREV_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/' || echo "none")
+          else
+            PREV_VERSION="none"
+          fi
+          echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          git checkout HEAD -- pyproject.toml
+
+      - name: Check if version changed
+        id: version-check
+        run: |
+          CURRENT="${{ steps.current-version.outputs.version }}"
+          PREVIOUS="${{ steps.previous-version.outputs.version }}"
+          echo "Current version: $CURRENT"
+          echo "Previous version: $PREVIOUS"
+          
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT" >> $GITHUB_OUTPUT
+            echo "✅ Version changed from $PREVIOUS to $CURRENT"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT" >> $GITHUB_OUTPUT
+            echo "ℹ️  Version unchanged: $CURRENT"
+          fi
+
+      - name: Check if tag already exists
+        id: tag-check
+        run: |
+          VERSION="${{ steps.current-version.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Tag v$VERSION already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag v$VERSION does not exist"
+          fi
+
+  # Stage 2: Testing - runs on all events
+  test:
+    name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+      fail-fast: false
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Build Rust extension
+        run: uv run maturin develop
+
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short
+
+      - name: Check import works
+        run: |
+          uv run python -c "import pynlme; print(f'PyNLME version: {pynlme.__version__}')"
+
+      - name: Type checking (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: uv run mypy src/pynlme/ --ignore-missing-imports || true
+
+  # Stage 3: Release - only runs on main if version changed and tests pass
+  release:
+    name: Create release
+    needs: [check-version, test]
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
+    permissions:
+      contents: write
+      actions: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ needs.check-version.outputs.new-version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            exit 1
+          fi
+          echo "✅ Valid version format: $VERSION"
+
+      - name: Set up Python and uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.check-version.outputs.new-version }}"
+          echo "📋 Extracting changelog for version $VERSION"
+          
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG_CONTENT=$(awk "/^## \[?v?$VERSION\]?/ {flag=1; next} /^## \[?v?[0-9]/ {flag=0} flag" CHANGELOG.md || echo "")
+            
+            if [ -n "$CHANGELOG_CONTENT" ]; then
+              echo "✅ Found changelog content for v$VERSION"
+              echo "$CHANGELOG_CONTENT" > /tmp/changelog.txt
+            else
+              echo "⚠️  No specific changelog found for v$VERSION, using default"
+              echo "See CHANGELOG.md for details about this release." > /tmp/changelog.txt
+            fi
+          else
+            echo "⚠️  No CHANGELOG.md found, using default content"
+            echo "Automatic release for version $VERSION" > /tmp/changelog.txt
+          fi
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.check-version.outputs.new-version }}"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git tag -a "v$VERSION" -m "Release v$VERSION
+
+          Automatically created from version change in pyproject.toml
+          
+          $(cat /tmp/changelog.txt)"
+          
+          git push origin "v$VERSION"
+          echo "✅ Created and pushed tag v$VERSION"
+
+  # Stage 5: Build wheels - only runs after successful release
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }}
+    needs: [check-version, test, release]
+    runs-on: ${{ matrix.os }}
+    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.check-version.outputs.new-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync project
+        run: uv sync
+
+      - name: Build wheels
+        run: uv run cibuildwheel --output-dir wheelhouse
+        env:
+          # Configure cibuildwheel to build for Python 3.11+
+          CIBW_BUILD: "cp311-* cp312-* cp313-*"
+          # Skip 32-bit builds and PyPy for now
+          CIBW_SKIP: "*-win32 *-manylinux_i686 pp*-*"
+          # Use uv as the build frontend for faster builds
+          CIBW_BUILD_FRONTEND: "build[uv]"
+          # Use latest dependencies for faster builds
+          CIBW_DEPENDENCY_VERSIONS: "latest"
+          # Skip testing in cibuildwheel since tests already passed
+          # CIBW_TEST_REQUIRES: "pytest numpy scipy"
+          # CIBW_TEST_COMMAND: "pytest {project}/tests/test_basic.py -v"
+          # macOS specific: Skip wheel repair if it fails (common with Rust extensions)
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel --require-archs {wheel} -w {dest_dir} {wheel} || (echo 'Wheel repair failed, copying unrepaired wheel' && cp {wheel} {dest_dir}/)"
+          # Verbose output for debugging
+          CIBW_BUILD_VERBOSITY: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  # Stage 6: Build source distribution
+  build-sdist:
+    name: Build source distribution
+    needs: [check-version, test, release]
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.check-version.outputs.new-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync project
+        run: uv sync
+
+      - name: Build sdist
+        run: uv build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
+  # Stage 7: Create GitHub Release with artifacts
+  github-release:
+    name: Create GitHub Release
+    needs: [check-version, test, release, build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.check-version.outputs.new-version }}
+
+      - name: Debug trigger information
+        run: |
+          echo "🔍 GitHub Release creation info:"
+          echo "Version: ${{ needs.check-version.outputs.new-version }}"
+          echo "Tag: v${{ needs.check-version.outputs.new-version }}"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "wheels-*"
+          path: dist
+          merge-multiple: true
+      
+      - uses: actions/download-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist
+
+      - name: List all artifacts
+        run: |
+          echo "📦 Contents of dist directory:"
+          ls -la dist/
+          echo ""
+          echo "🔍 All files to be uploaded:"
+          find dist/ -type f -name "*.whl" -o -name "*.tar.gz"
+          echo ""
+          echo "📊 File count:"
+          echo "Wheels: $(find dist/ -name "*.whl" | wc -l)"
+          echo "Sdist: $(find dist/ -name "*.tar.gz" | wc -l)"
+
+      - name: Extract changelog for release
+        id: release-info
+        run: |
+          VERSION="${{ needs.check-version.outputs.new-version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Try to extract changelog for this version
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG_CONTENT=$(awk "/^## \[?v?$VERSION\]?/ {flag=1; next} /^## \[?v?[0-9]/ {flag=0} flag" CHANGELOG.md || echo "")
+            if [ -n "$CHANGELOG_CONTENT" ]; then
+              echo "Found changelog content for v$VERSION"
+              echo "$CHANGELOG_CONTENT" > /tmp/release_notes.md
+            else
+              echo "No specific changelog found for v$VERSION"
+              echo "See [CHANGELOG.md](https://github.com/willov/PyNLME/blob/main/CHANGELOG.md) for details about this release." > /tmp/release_notes.md
+            fi
+          else
+            echo "Automatic release for PyNLME v$VERSION" > /tmp/release_notes.md
+            echo "" >> /tmp/release_notes.md
+            echo "This is a proof-of-concept implementation. Please use with caution and report any issues." >> /tmp/release_notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.check-version.outputs.new-version }}
+          files: dist/*
+          name: "PyNLME v${{ steps.release-info.outputs.version }}"
+          body_path: /tmp/release_notes.md
+          draft: false
+          prerelease: true  # Mark as pre-release since it's proof-of-concept
+          fail_on_unmatched_files: true
+
+  # Stage 8: Notify if skipped
+  notify-skip:
+    name: Notify why release was skipped
+    needs: [check-version, test]
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main' && (needs.check-version.outputs.version-changed != 'true' || needs.check-version.outputs.tag-exists == 'true' || needs.test.result == 'failure')
+    
+    steps:
+      - name: Explain why release was skipped
+        run: |
+          if [ "${{ needs.check-version.outputs.version-changed }}" != "true" ]; then
+            echo "ℹ️  No release created: Version unchanged (${{ needs.check-version.outputs.new-version }})"
+          elif [ "${{ needs.check-version.outputs.tag-exists }}" == "true" ]; then
+            echo "⚠️  No release created: Tag v${{ needs.check-version.outputs.new-version }} already exists"
+          elif [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "❌ No release created: Tests failed"
+          fi

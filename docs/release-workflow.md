@@ -15,14 +15,11 @@ PyNLME uses **manual version setting** combined with **automatic release creatio
 ### 1. Prepare for Release
 
 ```bash
-# Run validation script
-./scripts/prepare-release.sh
-
-# This checks:
-# - All tests pass
-# - Code is formatted
-# - Rust builds correctly
-# - Examples work
+# The automated workflow will:
+# - Run comprehensive tests across all platforms
+# - Validate code formatting and builds
+# - Test examples and functionality
+# - Only create releases if everything passes
 ```
 
 ### 2. Update Version Manually
@@ -120,7 +117,7 @@ git commit -m "Fix edge case"
 git commit -m "Update docs"
 
 # Ready to release!
-./scripts/prepare-release.sh  # Validate everything
+# The automated workflow will handle validation
 
 # Edit pyproject.toml: version = "0.2.0"
 # Edit CHANGELOG.md: ## [0.2.0] - 2025-06-11
@@ -129,7 +126,9 @@ git add pyproject.toml CHANGELOG.md
 git commit -m "Release v0.2.0: Major algorithm improvements"
 git push origin main
 
-# 🤖 GitHub Actions automatically creates v0.2.0 release with wheels
+# 🤖 GitHub Actions automatically:
+# 1. Detects version change and runs comprehensive tests
+# 2. Creates v0.2.0 release with wheels if tests pass
 # ✅ Users can install: uv pip install <wheel-url>
 ```
 

@@ -65,7 +65,7 @@ PyNLME/
 ├── tests/              # Test suite
 ├── examples/           # Usage examples
 ├── docs/               # Documentation
-├── scripts/            # Development scripts
+├── scripts/            # Utility scripts (e.g., verify-installation.py)
 └── .github/            # CI/CD workflows
 ```
 
@@ -143,13 +143,14 @@ python -m cProfile -o profile.stats your_script.py
 ## 🚢 Release Process
 
 ```bash
-# Prepare release
-./scripts/prepare-release.sh
+# Update version in pyproject.toml
+# Update CHANGELOG.md
+# Commit and push to main
 
-# Follow the checklist output
-# Update version numbers
-# Create git tag
-# Build and upload to PyPI
+# GitHub Actions automatically:
+# - Detects version change
+# - Runs comprehensive tests
+# - Creates release with wheels if tests pass
 ```
 
 ## 🤝 Contribution Guidelines
@@ -210,7 +211,7 @@ The project uses GitHub Actions with `cibuildwheel` to:
 ### **Local Wheel Building:**
 ```bash
 # Build wheels locally for testing
-./scripts/build-wheels.sh
+uv run cibuildwheel --output-dir wheelhouse
 
 # Test a local wheel
 uv pip install wheelhouse/pynlme-*.whl
@@ -222,16 +223,14 @@ PyNLME uses **manual version control** with automatic release creation:
 
 #### **Manual Version Release (Recommended):**
 
-1. **Run validation**: `./scripts/prepare-release.sh` to ensure everything works
-
-2. **Update version manually** in `pyproject.toml`:
+1. **Update version manually** in `pyproject.toml`:
 
    ```toml
    [project]
    version = "0.1.1"  # Change from 0.1.0 to 0.1.1
    ```
 
-3. **Update changelog** in `CHANGELOG.md`:
+2. **Update changelog** in `CHANGELOG.md`:
 
    ```markdown
    ## [0.1.1] - 2025-06-11
@@ -241,7 +240,7 @@ PyNLME uses **manual version control** with automatic release creation:
    - Bug fix Y
    ```
 
-4. **Commit and push**:
+3. **Commit and push**:
 
    ```bash
    git add pyproject.toml CHANGELOG.md
@@ -249,7 +248,7 @@ PyNLME uses **manual version control** with automatic release creation:
    git push origin main
    ```
 
-5. **🤖 GitHub Actions automatically**:
+4. **🤖 GitHub Actions automatically**:
    - Detects version change in `pyproject.toml`
    - Runs tests and validation
    - Creates git tag `v0.1.1`
