@@ -185,7 +185,25 @@ jobs:
           git push origin "v$VERSION"
           
           echo "✅ Created and pushed tag v$VERSION"
-          echo "🔄 Tag push should automatically trigger wheel building workflow"
+
+      - name: Trigger wheel building workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = "${{ needs.check-version.outputs.new-version }}";
+            console.log(`🔄 Triggering wheel building workflow for v${version}`);
+            
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'wheels.yml',
+              ref: `v${version}`,
+              inputs: {
+                version: `v${version}`
+              }
+            });
+            
+            console.log(`✅ Successfully triggered wheel building workflow for v${version}`);
 
   notify-skip:
     name: Notify why release was skipped

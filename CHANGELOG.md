@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   platforms use consistent pytest testing
 - **Release workflow** - Fixed critical issue where auto-release was running
   before comprehensive testing, now requires all tests to pass first
+- **Wheel building automation** - Fixed issue where wheel building workflow
+  wasn't triggered automatically after tag creation, now uses workflow_dispatch
 
 ### Changed
 
