@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14] - 2025-06-12
+
+### Changed
+
+- **Pipeline Testing** - Testing the unified CI/CD pipeline to validate end-to-end 
+  workflow from version detection through automated release creation
+- **Workflow Validation** - Confirming that all 8 pipeline stages work correctly:
+  version check → testing → release → wheel building → GitHub release
+
 ## [0.1.13] - 2025-06-12
 
 ### Fixed
