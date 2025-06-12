@@ -44,7 +44,7 @@ uv run maturin develop
 
 # For end users - install from releases (when available)
 # Download wheel from https://github.com/willov/PyNLME/releases
-# and install with: uv pip install downloaded_wheel.whl
+# and install with: uv add downloaded_wheel.whl
 ```
 
 ## 🔧 Core Features

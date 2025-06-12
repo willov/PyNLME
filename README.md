@@ -36,22 +36,36 @@ print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
 
 ### Option 1: Install from GitHub Release (Recommended)
 
+Pre-built wheels are available for easy installation without requiring Rust:
+
 ```bash
-# Download and install latest pre-built wheel - no Rust required!
-# Replace the URL below with the actual wheel for your platform from:
+# Latest release (v0.1.15+):
+# Choose the appropriate wheel for your platform:
+
+# Linux (x86_64):
+uv add https://github.com/willov/PyNLME/releases/download/v0.1.15/pynlme-0.1.15-cp311-abi3-linux_x86_64.whl
+
+# Windows (x86_64):
+uv add https://github.com/willov/PyNLME/releases/download/v0.1.15/pynlme-0.1.15-cp311-abi3-win_amd64.whl
+
+# macOS (Intel):
+uv add https://github.com/willov/PyNLME/releases/download/v0.1.15/pynlme-0.1.15-cp311-abi3-macosx_10_12_x86_64.whl
+
+# macOS (Apple Silicon):
+uv add https://github.com/willov/PyNLME/releases/download/v0.1.15/pynlme-0.1.15-cp311-abi3-macosx_11_0_arm64.whl
+
+# Or using pip instead of uv:
+pip install https://github.com/willov/PyNLME/releases/download/v0.1.15/pynlme-0.1.15-cp311-abi3-linux_x86_64.whl
+
+# Or browse releases to find the exact wheel for your platform:
 # https://github.com/willov/PyNLME/releases/latest
-
-# Using uv (recommended):
-uv pip install https://github.com/willov/PyNLME/releases/download/v0.1.4/pynlme-0.1.4-cp310-abi3-linux_x86_64.whl
-
-# Or using pip:
-pip install https://github.com/willov/PyNLME/releases/download/v0.1.4/pynlme-0.1.4-cp310-abi3-linux_x86_64.whl
-
-# Or download manually from releases page and install:
-# 1. Go to: https://github.com/willov/PyNLME/releases
-# 2. Download the appropriate wheel for your platform  
-# 3. uv pip install downloaded_wheel.whl
 ```
+
+**Platform compatibility:**
+- **Python**: 3.11, 3.12, 3.13+ (single wheel works for all)
+- **Linux**: x86_64 (Intel/AMD 64-bit)
+- **Windows**: x86_64 (Intel/AMD 64-bit)  
+- **macOS**: Intel x86_64 and Apple Silicon ARM64
 
 ### Option 2: Install from source (for developers)
 
@@ -66,7 +80,7 @@ uv sync
 uv run maturin develop  # Build Rust extension
 ```
 
-> **Note**: Option 1 uses pre-built wheels and doesn't require Rust installation. Option 2 is for developers who want to build from source or contribute to the project.
+> **Note**: The `cp311-abi3` wheels use Python's stable ABI and work with Python 3.11+ including future versions. You don't need separate wheels for each Python version. Option 2 is for developers who want to build from source or contribute to the project.
 
 ## 🎯 Features
 

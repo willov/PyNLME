@@ -214,7 +214,7 @@ The project uses GitHub Actions with `cibuildwheel` to:
 uv run cibuildwheel --output-dir wheelhouse
 
 # Test a local wheel
-uv pip install wheelhouse/pynlme-*.whl
+uv add wheelhouse/pynlme-*.whl
 ```
 
 ### **Release Process:**
