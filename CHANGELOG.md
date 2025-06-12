@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12] - 2025-06-12
+
+### Fixed
+
+- **Windows wheel testing** - Fixed shell escaping issues in cibuildwheel test command that was causing syntax errors on Windows
+- **Cross-platform testing** - Switched from problematic Python import test to reliable pytest-based testing for all platforms
+- **CI/CD reliability** - Removed platform-specific test skipping, now all platforms use consistent pytest testing
+
+### Changed
+
+- **Test strategy** - Replaced complex Python one-liner import test with `pytest {project}/tests/test_basic.py -v` for better reliability
+- **Platform support** - Enabled testing on all platforms (Linux, macOS, Windows) using unified pytest approach
+
 ## [0.1.11] - 2025-06-12
 
 ### Changed
