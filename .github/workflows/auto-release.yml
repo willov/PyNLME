@@ -160,33 +160,7 @@ jobs:
           git push origin "v$VERSION"
           
           echo "✅ Created and pushed tag v$VERSION"
-
-      - name: Wait for wheels workflow
-        run: |
-          echo "⏳ Triggering wheel building workflow..."
-
-      - name: Trigger wheels workflow
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const version = "${{ needs.check-version.outputs.new-version }}";
-            console.log(`Triggering wheels workflow for version ${version}`);
-            
-            try {
-              const result = await github.rest.actions.createWorkflowDispatch({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: 'wheels.yml',
-                ref: 'main',
-                inputs: {
-                  version: `v${version}`
-                }
-              });
-              console.log('✅ Successfully triggered wheels workflow');
-            } catch (error) {
-              console.error('❌ Failed to trigger wheels workflow:', error);
-              throw error;
-            }
+          echo "🔄 Tag push should automatically trigger wheel building workflow"
 
   notify-skip:
     name: Notify why release was skipped

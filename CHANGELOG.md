@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2025-06-12
+
+### Fixed
+
+- **Workflow automation** - Fixed automatic wheel building to trigger properly from version changes
+- **Windows builds** - Further improved Rust installation reliability on Windows runners
+- **CI/CD integration** - Simplified workflow triggers for better automation
+
 ## [0.1.8] - 2025-06-12
 
 ### Changed
@@ -23,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test stability** - Fixed SAEM test flakiness by making stochastic algorithm tests more robust
 - **Windows builds** - Fixed Rust installation command for Windows wheel building
 - **Build configuration** - Fixed invalid PyPy skip selector pattern
+- **Workflow automation** - Improved automatic wheel building trigger from version changes
 
 ## [0.1.7] - 2025-06-12
 
