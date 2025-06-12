@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] - 2025-06-12
+
+### Changed
+
+- **Development workflow** - Fully migrated development environment to uv-first approach
+- **Documentation** - Updated all installation and development instructions to prioritize uv
+- **Scripts** - Updated build-wheels.sh to use `uv sync` and `uv run cibuildwheel` instead of pip
+- **CI/CD** - Updated all GitHub workflows to use latest `astral-sh/setup-uv@v6`
+- **Dependencies** - Streamlined dependency management with consistent uv usage across all workflows
+- **Testing** - Updated all test runner commands to use `uv run pytest`
+- **Contributing** - Updated developer guidelines to use uv for all development tasks
+
+### Fixed
+
+- **Documentation consistency** - Aligned all docs to show uv as primary method while keeping pip as fallback for end users
+- **Workflow versions** - Updated outdated uv setup actions across all GitHub workflows
+- **Python requirements** - Consistent Python ≥3.11 requirement across all documentation
+
 ## [0.1.10] - 2025-06-12
 
 ### Fixed

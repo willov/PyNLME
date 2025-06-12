@@ -31,7 +31,10 @@ UserWarning: Rust backend temporarily disabled due to optimization bug. Using Py
 ### Git Installation
 ```bash
 # Install directly from GitHub (requires Rust toolchain)
-pip install git+https://github.com/willov/PyNLME.git
+git clone https://github.com/willov/PyNLME
+cd PyNLME
+uv sync
+uv run maturin develop
 ```
 
 ### Rust Compilation Errors
@@ -50,8 +53,11 @@ If you encounter Rust compilation issues:
 
 3. **Clear cache** and reinstall:
    ```bash
-   pip cache purge
-   pip install --no-cache-dir git+https://github.com/willov/PyNLME.git
+   uv cache clean
+   git clone https://github.com/willov/PyNLME
+   cd PyNLME
+   uv sync
+   uv run maturin develop
    ```
 
 ## Runtime Issues
@@ -259,10 +265,10 @@ print(f"Python version: {sys.version}")
 **Solutions**:
 ```bash
 # Check versions
-pip list | grep -E "(numpy|scipy)"
+uv run python -c "import numpy, scipy; print(f'NumPy: {numpy.__version__}, SciPy: {scipy.__version__}')"
 
 # Upgrade dependencies
-pip install --upgrade numpy scipy
+uv sync --upgrade
 ```
 
 ## Getting Help

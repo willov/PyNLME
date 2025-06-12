@@ -75,7 +75,10 @@ GitHub Actions automatically:
 Users can now install without Rust:
 
 ```bash
-# Install latest wheel from GitHub releases
+# Install latest wheel from GitHub releases (using uv)
+uv pip install https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
+
+# Or using pip
 pip install https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
 
 # Or browse releases and pick specific wheel
@@ -127,7 +130,7 @@ git commit -m "Release v0.2.0: Major algorithm improvements"
 git push origin main
 
 # 🤖 GitHub Actions automatically creates v0.2.0 release with wheels
-# ✅ Users can install: pip install <wheel-url>
+# ✅ Users can install: uv pip install <wheel-url>
 ```
 
 This workflow gives you full control over versioning while automating the tedious parts of release creation!

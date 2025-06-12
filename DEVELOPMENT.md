@@ -4,7 +4,7 @@ Welcome to PyNLME development! This guide will help you get set up quickly.
 
 ## 🛠️ Prerequisites
 
-- **Python ≥3.10**
+- **Python ≥3.11**
 - **Rust ≥1.65** ([Install Rust](https://rustup.rs/))
 - **UV package manager** ([Install UV](https://docs.astral.sh/uv/getting-started/installation/))
 - **Git**
@@ -194,11 +194,11 @@ python -m cProfile -o profile.stats your_script.py
 PyNLME uses pre-built wheels to eliminate the need for users to have Rust installed. This provides several benefits:
 
 ### **Benefits of Wheel Distribution:**
-- ✅ **Easy installation**: Users just run `pip install pynlme` 
+- ✅ **Easy installation**: Users can install from GitHub releases 
 - ✅ **No Rust required**: Pre-compiled binaries included
 - ✅ **Fast installation**: No compilation step
 - ✅ **Cross-platform**: Wheels for Linux, macOS, and Windows
-- ✅ **Multiple Python versions**: Support for Python 3.9-3.13
+- ✅ **Multiple Python versions**: Support for Python 3.11+
 
 ### **CI/CD Pipeline:**
 The project uses GitHub Actions with `cibuildwheel` to:
@@ -213,7 +213,7 @@ The project uses GitHub Actions with `cibuildwheel` to:
 ./scripts/build-wheels.sh
 
 # Test a local wheel
-pip install wheelhouse/pynlme-*.whl
+uv pip install wheelhouse/pynlme-*.whl
 ```
 
 ### **Release Process:**

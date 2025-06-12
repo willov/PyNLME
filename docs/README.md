@@ -36,14 +36,15 @@ print(f"AIC: {stats.aic}")
 ## 📦 Installation
 
 ```bash
-# Install from source (recommended for latest features)
+# Install from source (recommended for development)
 git clone https://github.com/willov/PyNLME
 cd PyNLME
 uv sync
-uv pip install -e .
+uv run maturin develop
 
-# Or install from PyPI (when published)
-pip install pynlme
+# For end users - install from releases (when available)
+# Download wheel from https://github.com/willov/PyNLME/releases
+# and install with: uv pip install downloaded_wheel.whl
 ```
 
 ## 🔧 Core Features

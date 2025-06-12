@@ -5,7 +5,7 @@ Thank you for your interest in contributing to PyNLME! This document provides gu
 ## Development Setup
 
 ### Prerequisites
-- Python ≥3.10
+- Python ≥3.11
 - Rust ≥1.65
 - UV package manager (recommended)
 
@@ -19,10 +19,10 @@ cd PyNLME
 uv sync --dev
 
 # Build the Rust extension
-maturin develop
+uv run maturin develop
 
 # Run tests
-pytest
+uv run pytest
 ```
 
 ## Code Style
@@ -43,13 +43,13 @@ pytest
 ### Running Tests
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with coverage
-pytest --cov=pynlme
+uv run pytest --cov=pynlme
 
 # Run specific test file
-pytest tests/test_fitting.py
+uv run pytest tests/test_fitting.py
 ```
 
 ### Writing Tests

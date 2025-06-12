@@ -18,13 +18,13 @@ All examples require the basic PyNLME installation. Some examples have additiona
 Install optional dependencies:
 ```bash
 # For plotting
-pip install matplotlib
+uv add matplotlib
 
-# For performance benchmarks
-pip install pandas psutil
+# For performance benchmarks  
+uv add pandas psutil
 
 # Or install all optional dependencies
-pip install matplotlib pandas psutil
+uv add matplotlib pandas psutil
 ```
 
 ## 📋 Example Files

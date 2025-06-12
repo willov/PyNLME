@@ -41,13 +41,16 @@ print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
 # Replace the URL below with the actual wheel for your platform from:
 # https://github.com/willov/PyNLME/releases/latest
 
-# For Linux x86_64:
+# Using uv (recommended):
+uv pip install https://github.com/willov/PyNLME/releases/download/v0.1.4/pynlme-0.1.4-cp310-abi3-linux_x86_64.whl
+
+# Or using pip:
 pip install https://github.com/willov/PyNLME/releases/download/v0.1.4/pynlme-0.1.4-cp310-abi3-linux_x86_64.whl
 
 # Or download manually from releases page and install:
 # 1. Go to: https://github.com/willov/PyNLME/releases
 # 2. Download the appropriate wheel for your platform  
-# 3. pip install downloaded_wheel.whl
+# 3. uv pip install downloaded_wheel.whl
 ```
 
 ### Option 2: Install from source (for developers)
