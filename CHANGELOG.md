@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pyproject.toml** - Fixed TOML parsing errors from corrupted configuration
 - **Dependencies** - Updated cibuildwheel to 3.0.0 for better Python 3.11+ support
 
-## [0.1.6] - 2025-01-14
+## [0.1.6] - 2025-06-11
 
 ### Fixed
 - **Wheel building workflow** - Simplified cibuildwheel configuration using official examples
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simplified build process to rely on standard GitHub Actions Rust toolchain setup
 - Removed problematic Windows-specific PATH and environment configurations
 
-## [0.1.5] - 2025-01-14
+## [0.1.5] - 2025-06-11
 
 ### Fixed
 - **Windows wheel builds**: Fixed cibuildwheel Windows environment variable syntax
@@ -41,15 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Enhanced GitHub Actions workflow integration for automatic releases
 - Updated auto-release workflow to trigger wheel building directly
-
-## [0.1.4] - 2025-01-14g
-
-All notable changes to the PyNLME project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
 
 ## [0.1.4] - 2025-06-11
 
