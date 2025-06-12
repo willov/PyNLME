@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 path = "src/_core/lib.rs"
 
 [dependencies]
-pyo3 = { version = "0.20", features = ["extension-module", "abi3-py38"] }
+pyo3 = { version = "0.20", features = ["extension-module", "abi3-py311"] }
 numpy = "0.20"
 ndarray = "0.15"
 nalgebra = "0.32"

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2025-06-12
+
+### Fixed
+
+- **Wheel Configuration** - Fixed PyO3 configuration to use `abi3-py311` instead of 
+  `abi3-py38`, ensuring wheels target the correct minimum Python version
+- **Wheel Building** - Cleaned up cibuildwheel configuration to avoid conflicts 
+  between workflow environment variables and pyproject.toml settings
+- **Platform Support** - Ensured wheels are built correctly for Python 3.11+ 
+  across all platforms (Linux, Windows, macOS)
+
 ## [0.1.14] - 2025-06-12
 
 ### Changed

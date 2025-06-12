@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pynlme"
-version = "0.1.14"
+version = "0.1.15"
 description = "Nonlinear Mixed Effects Models for Python with Rust backend"
 readme = "README.md"
 requires-python = ">=3.11"
