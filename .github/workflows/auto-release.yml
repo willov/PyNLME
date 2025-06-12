@@ -68,9 +68,46 @@ jobs:
             echo "✅ Tag v$VERSION does not exist"
           fi
 
+  # Run comprehensive tests before creating any release
+  test:
+    name: Run comprehensive tests
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev
+
+      - name: Run tests
+        run: |
+          uv run pytest tests/ -v --tb=short
+
+      - name: Check import works
+        run: |
+          uv run python -c "import pynlme; print(f'PyNLME version: {pynlme.__version__}')"
+
   auto-release:
     name: Create automatic release
-    needs: check-version
+    needs: [check-version, test]
     runs-on: ubuntu-latest
     if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
     permissions:
@@ -100,20 +137,8 @@ jobs:
         run: |
           echo "🚀 Running automated release preparation for v${{ needs.check-version.outputs.new-version }}"
           
-          # Install dependencies
-          uv sync --dev
-          
-          # Run tests
-          echo "🧪 Running tests..."
-          uv run pytest tests/ -v
-          
-          # Check code formatting (but don't fail on this)
-          echo "🎨 Checking code formatting..."
-          uv run ruff format --check src/ tests/ examples/ || echo "⚠️  Code formatting issues found but continuing..."
-          
-          # Build Rust extension
-          echo "🦀 Building Rust extension..."
-          uv run maturin develop
+          # Install dependencies (minimal, since testing already passed)
+          uv sync
           
           echo "✅ Release preparation completed successfully"
 
@@ -164,9 +189,9 @@ jobs:
 
   notify-skip:
     name: Notify why release was skipped
-    needs: check-version
+    needs: [check-version, test]
     runs-on: ubuntu-latest
-    if: needs.check-version.outputs.version-changed != 'true' || needs.check-version.outputs.tag-exists == 'true'
+    if: always() && (needs.check-version.outputs.version-changed != 'true' || needs.check-version.outputs.tag-exists == 'true' || needs.test.result == 'failure')
     
     steps:
       - name: Explain why release was skipped
@@ -175,4 +200,7 @@ jobs:
             echo "ℹ️  No release created: Version unchanged (${{ needs.check-version.outputs.new-version }})"
           elif [ "${{ needs.check-version.outputs.tag-exists }}" == "true" ]; then
             echo "⚠️  No release created: Tag v${{ needs.check-version.outputs.new-version }} already exists"
+          elif [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "❌ No release created: Tests failed"
+            echo "Fix the failing tests before releasing v${{ needs.check-version.outputs.new-version }}"
           fi

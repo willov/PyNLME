@@ -42,6 +42,8 @@ jobs:
           CIBW_BUILD: "cp311-* cp312-* cp313-*"
           # Skip 32-bit builds and PyPy for now
           CIBW_SKIP: "*-win32 *-manylinux_i686 pp*-*"
+          # Use uv as the build frontend for faster builds
+          CIBW_BUILD_FRONTEND: "uv"
           # Use latest dependencies for faster builds
           CIBW_DEPENDENCY_VERSIONS: "latest"
           # Test the built wheels using pytest

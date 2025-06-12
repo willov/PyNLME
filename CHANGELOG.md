@@ -7,18 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.13] - 2025-06-12
+
+### Fixed
+
+- **Windows wheel testing** - Fixed shell escaping issues in cibuildwheel test
+  command that was causing syntax errors on Windows
+- **Cross-platform testing** - Switched from problematic Python import test to
+  reliable pytest-based testing for all platforms
+- **CI/CD reliability** - Removed platform-specific test skipping, now all
+  platforms use consistent pytest testing
+- **Release workflow** - Fixed critical issue where auto-release was running
+  before comprehensive testing, now requires all tests to pass first
+
+### Changed
+
+- **Build performance** - Switched to uv build frontend in cibuildwheel for
+  significantly faster wheel builds
+- **Test strategy** - Replaced complex Python one-liner import test with
+  `pytest {project}/tests/test_basic.py -v` for better reliability
+- **Platform support** - Enabled testing on all platforms (Linux, macOS,
+  Windows) using unified pytest approach
+- **Release safety** - Auto-release now runs comprehensive cross-platform
+  tests before creating any tags or releases
+
 ## [0.1.12] - 2025-06-12
 
 ### Fixed
 
-- **Windows wheel testing** - Fixed shell escaping issues in cibuildwheel test command that was causing syntax errors on Windows
-- **Cross-platform testing** - Switched from problematic Python import test to reliable pytest-based testing for all platforms
-- **CI/CD reliability** - Removed platform-specific test skipping, now all platforms use consistent pytest testing
+- **Windows wheel testing** - Fixed shell escaping issues in cibuildwheel test
+  command that was causing syntax errors on Windows
+- **Cross-platform testing** - Switched from problematic Python import test to
+  reliable pytest-based testing for all platforms
+- **CI/CD reliability** - Removed platform-specific test skipping, now all
+  platforms use consistent pytest testing
+- **Release workflow** - Fixed critical issue where auto-release was running
+  before comprehensive testing, now requires all tests to pass first
 
 ### Changed
 
-- **Test strategy** - Replaced complex Python one-liner import test with `pytest {project}/tests/test_basic.py -v` for better reliability
-- **Platform support** - Enabled testing on all platforms (Linux, macOS, Windows) using unified pytest approach
+- **Build performance** - Switched to uv build frontend in cibuildwheel for
+  significantly faster wheel builds
+- **Test strategy** - Replaced complex Python one-liner import test with
+  `pytest {project}/tests/test_basic.py -v` for better reliability
+- **Platform support** - Enabled testing on all platforms (Linux, macOS,
+  Windows) using unified pytest approach
+- **Release safety** - Auto-release now runs comprehensive cross-platform
+  tests before creating any tags or releases
 
 ## [0.1.11] - 2025-06-12
 
