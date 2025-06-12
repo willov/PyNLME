@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] - 2025-06-12
+
+### Fixed
+
+- **Wheel uploads** - Fixed artifact naming and download patterns for proper wheel attachment to releases
+- **Release automation** - Improved GitHub release creation with better artifact collection
+- **Workflow reliability** - Enhanced trigger conditions to work with both tag pushes and release events
+
 ## [0.1.9] - 2025-06-12
 
 ### Fixed
@@ -14,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Workflow automation** - Fixed automatic wheel building to trigger properly from version changes
 - **Windows builds** - Further improved Rust installation reliability on Windows runners
 - **CI/CD integration** - Simplified workflow triggers for better automation
+- **Wheel uploads** - Fixed artifact naming and download patterns for proper wheel attachment to releases
 
 ## [0.1.8] - 2025-06-12
 

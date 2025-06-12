@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
@@ -87,18 +87,31 @@ jobs:
     name: Upload to GitHub Release
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || github.event_name == 'release'
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug trigger information
+        run: |
+          echo "🔍 Workflow trigger debug info:"
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Ref starts with refs/tags/v: ${{ startsWith(github.ref, 'refs/tags/v') }}"
+          echo "Should upload: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}"
+
       - uses: actions/download-artifact@v4
         with:
-          pattern: "cibw-*"
+          pattern: "wheels-*"
           path: dist
           merge-multiple: true
+      
+      - uses: actions/download-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist
 
       - name: List all artifacts
         run: |
@@ -106,7 +119,11 @@ jobs:
           ls -la dist/
           echo ""
           echo "🔍 All files to be uploaded:"
-          find dist/ -type f
+          find dist/ -type f -name "*.whl" -o -name "*.tar.gz"
+          echo ""
+          echo "📊 File count:"
+          echo "Wheels: $(find dist/ -name "*.whl" | wc -l)"
+          echo "Sdist: $(find dist/ -name "*.tar.gz" | wc -l)"
 
       - name: Extract version and changelog
         id: release-info
@@ -139,3 +156,4 @@ jobs:
           body_path: /tmp/release_notes.md
           draft: false
           prerelease: true  # Mark as pre-release since it's proof-of-concept
+          fail_on_unmatched_files: true
