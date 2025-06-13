@@ -117,7 +117,7 @@ class MLEFitter:
 
             return beta, psi, stats, b
 
-        except Exception as e:
+        except (ValueError, RuntimeError, optimize.OptimizeWarning) as e:
             if self.options.verbose > 0:
                 print(f"MLE fitting failed: {e}")
             # Return reasonable defaults
@@ -130,6 +130,8 @@ class MLEFitter:
 
     def _optimize_likelihood(self, X, y, group, V, modelfun, beta0):
         """Simplified likelihood optimization - to be replaced with Rust implementation."""
+        # Note: group parameter will be used in full mixed-effects implementation
+        _ = group  # Acknowledge unused parameter
 
         def objective(params):
             beta = params[: len(beta0)]
@@ -142,7 +144,7 @@ class MLEFitter:
                     residuals**2 / sigma**2 + np.log(2 * np.pi * sigma**2)
                 )
                 return -logl  # Minimize negative log-likelihood
-            except Exception:
+            except (ValueError, RuntimeError, OverflowError):
                 return 1e10  # Return large value if model evaluation fails
 
         # Initial parameters: beta + log(sigma)
@@ -169,7 +171,7 @@ class MLEFitter:
             # No group-level predictors
             try:
                 y_pred = modelfun(beta, X)
-            except Exception:
+            except (ValueError, RuntimeError, TypeError):
                 # Try observation-by-observation
                 for i in range(n_obs):
                     y_pred[i] = modelfun(beta, X[i : i + 1])
@@ -180,7 +182,7 @@ class MLEFitter:
             try:
                 # Pass the full V matrix to let the model function handle it
                 y_pred = modelfun(beta, X, V)
-            except Exception:
+            except (ValueError, TypeError):
                 y_pred = modelfun(beta, X)
 
         return y_pred
@@ -219,7 +221,6 @@ class SAEMFitter:
         This is a proper (simplified) SAEM implementation that estimates both
         fixed effects (beta) and random effects covariance (psi).
         """
-        n_obs = len(y)
         n_groups = len(np.unique(group))
         n_params = len(beta0)
 
@@ -333,7 +334,7 @@ class SAEMFitter:
                         b_g = b_prop
                         if self.options.verbose > 1:
                             print("          Accepted proposal")
-                except Exception as e:
+                except (ValueError, RuntimeError, OverflowError) as e:
                     if self.options.verbose > 1:
                         print(f"          MCMC error: {e}")
                     break
@@ -369,7 +370,7 @@ class SAEMFitter:
 
             result = log_lik + log_prior
             return result
-        except Exception as e:
+        except (ValueError, RuntimeError, OverflowError) as e:
             if self.options.verbose > 0:
                 print(f"        Exception in log_posterior_b: {e}")
             return -np.inf
@@ -416,7 +417,7 @@ class SAEMFitter:
                 weighted_sum += weight * beta_contribution
                 total_weight += weight
                 
-            except Exception:
+            except (ValueError, RuntimeError, np.linalg.LinAlgError):
                 # Fallback: use the current estimate
                 weighted_sum += weight * beta_old
                 total_weight += weight
@@ -453,7 +454,7 @@ class SAEMFitter:
                 residuals = y_g - y_pred
                 total_sse += np.sum(residuals**2)
                 total_n += len(y_g)
-            except Exception:
+            except (ValueError, RuntimeError):
                 continue
 
         if total_n > 0:
@@ -473,6 +474,8 @@ class SAEMFitter:
 
     def _compute_stats(self, X, y, group, V, modelfun, beta, psi, sigma, b):
         """Compute final statistics."""
+        # Note: psi used implicitly in total parameter count calculation
+        _ = psi  # Acknowledge unused parameter
         n_obs = len(y)
         n_params = len(beta)
 
@@ -501,7 +504,7 @@ class SAEMFitter:
                     sigma
                 )
                 total_sse += np.sum(residuals**2)
-            except Exception:
+            except (ValueError, RuntimeError):
                 continue
 
         rmse = np.sqrt(total_sse / n_obs) if n_obs > 0 else sigma
@@ -535,7 +538,7 @@ class SAEMFitter:
                     y_pred = np.array(y_pred)
                 residuals = y_g - y_pred
                 return np.sum(residuals**2)
-            except Exception:
+            except (ValueError, RuntimeError):
                 return 1e10  # Large penalty for invalid parameters
         
         try:
@@ -546,7 +549,7 @@ class SAEMFitter:
                 return result.x
             else:
                 return phi_init
-        except Exception:
+        except (ValueError, RuntimeError, optimize.OptimizeWarning):
             return phi_init
 
 

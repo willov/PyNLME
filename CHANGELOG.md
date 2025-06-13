@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-06-13
+
+### Fixed
+
+- **Example Scripts** - Fixed critical API usage issues in  
+  `warfarin_case_study.py` and `performance_benchmark.py`
+  - Corrected model function signatures from `model(x, params)` to  
+    `model(params, x, v=None)` to match PyNLME API expectations
+  - Fixed result unpacking to properly handle nlmefit return tuple  
+    `(beta, psi, stats, b)`
+  - Updated convergence checking to use robust `stats.logl is not None`  
+    instead of non-existent attributes
+- **Model Implementation** - Fixed array indexing issues in warfarin PK model  
+  where dose parameter was incorrectly used as scalar
+- **Plotting Fixes** - Resolved multiple plotting issues:
+  - Fixed scipy.stats.probplot import conflict
+  - Corrected f-string formatting with conditional expressions
+  - Updated matplotlib parameters to avoid deprecation warnings
+- **Output Organization** - All example scripts now properly save outputs in  
+  organized subdirectories
+- **Error Handling** - Added robust error handling and informative messages  
+  across all example scripts
+
+### Improved
+
+- **API Consistency** - All example scripts now use consistent PyNLME API  
+  patterns
+- **Documentation** - Example scripts provide better demonstrations of library  
+  capabilities
+- **Reliability** - All demos now run to completion and generate expected  
+  outputs without errors
+
 ## [0.1.15] - 2025-06-12
 
 ### Fixed

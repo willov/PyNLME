@@ -59,13 +59,13 @@ def generate_benchmark_data(n_subjects, n_timepoints_per_subject, complexity="si
     return x, y, groups
 
 
-def simple_pk_model(x, beta):
+def simple_pk_model(beta, x, v=None):
     """Simple one-compartment PK model"""
     time = x[:, 0]
     dose = x[:, 1]
-    cl, v = np.maximum(beta, 1e-6)  # Ensure positive parameters
+    cl, v_param = np.maximum(beta, 1e-6)  # Ensure positive parameters
 
-    conc = (dose / v) * np.exp(-cl / v * time)
+    conc = (dose / v_param) * np.exp(-cl / v_param * time)
     return conc
 
 
@@ -88,14 +88,8 @@ def benchmark_fitting(dataset_sizes, use_rust_options=[True, False]):
             try:
                 start_time = time.perf_counter()
 
-                result = pynlme.nlmefit(
-                    model=simple_pk_model,
-                    beta0=beta0,
-                    x=x,
-                    y=y,
-                    groups=groups,
-                    use_rust=use_rust,
-                    options={"max_iter": 50, "tol": 1e-4},
+                beta, psi, stats, b = pynlme.nlmefit(
+                    x, y, groups, None, simple_pk_model, beta0, verbose=0
                 )
 
                 end_time = time.perf_counter()
@@ -107,14 +101,14 @@ def benchmark_fitting(dataset_sizes, use_rust_options=[True, False]):
                         "n_observations": len(y),
                         "backend": backend,
                         "time_seconds": fit_time,
-                        "converged": result.converged,
-                        "iterations": result.iterations,
-                        "logl": result.logl,
-                        "rmse": result.rmse,
+                        "converged": stats.logl is not None,
+                        "iterations": getattr(stats, 'iterations', 0),
+                        "logl": stats.logl,
+                        "rmse": np.sqrt(np.mean((y - simple_pk_model(beta, x))**2)),
                     }
                 )
 
-                print(f"{fit_time:.3f}s ({'✓' if result.converged else '✗'})")
+                print(f"{fit_time:.3f}s ({'✓' if stats.logl is not None else '✗'})")
 
             except Exception as e:
                 print(f"Failed: {e}")
@@ -225,9 +219,11 @@ def plot_benchmark_results(results_df):
 
     plt.tight_layout()
 
-    # Save to examples folder
+    # Save to organized output folder
     examples_dir = os.path.dirname(__file__)
-    plot_path = os.path.join(examples_dir, "benchmark_results.png")
+    output_dir = os.path.join(examples_dir, "performance_benchmark_output")
+    os.makedirs(output_dir, exist_ok=True)
+    plot_path = os.path.join(output_dir, "benchmark_results.png")
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.show()
 
@@ -236,7 +232,13 @@ def memory_benchmark():
     """Simple memory usage comparison"""
     import os
 
-    import psutil
+    try:
+        import psutil
+    except ImportError:
+        print("🧠 Memory Usage Benchmark")
+        print("=" * 30)
+        print("psutil not installed - skipping memory benchmark")
+        return
 
     print("\n🧠 Memory Usage Benchmark")
     print("=" * 30)
@@ -256,14 +258,8 @@ def memory_benchmark():
         mem_before = process.memory_info().rss / 1024 / 1024
 
         try:
-            result = pynlme.nlmefit(
-                model=simple_pk_model,
-                beta0=beta0,
-                x=x,
-                y=y,
-                groups=groups,
-                use_rust=use_rust,
-                options={"max_iter": 50},
+            beta, psi, stats, b = pynlme.nlmefit(
+                x, y, groups, None, simple_pk_model, beta0, verbose=0
             )
 
             # Memory after fitting

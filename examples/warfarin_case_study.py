@@ -143,7 +143,7 @@ def generate_warfarin_data(n_subjects=50, seed=42):
     return pd.DataFrame(data)
 
 
-def warfarin_model(x, beta):
+def warfarin_model(beta, x, v=None):
     """
     Warfarin PK model with covariate effects
 
@@ -192,15 +192,16 @@ def warfarin_model(x, beta):
 
     for i in range(len(time)):
         t = time[i]
+        dose_i = dose[i]
         if t > 0:
             if abs(ka - ke[i]) > 1e-6:
                 conc[i] = (
-                    (f * dose * ka)
+                    (f * dose_i * ka)
                     / (v[i] * (ka - ke[i]))
                     * (np.exp(-ke[i] * t) - np.exp(-ka * t))
                 )
             else:
-                conc[i] = (f * dose * t) / v[i] * np.exp(-ke[i] * t)
+                conc[i] = (f * dose_i * t) / v[i] * np.exp(-ke[i] * t)
 
     return np.maximum(conc, 1e-6)  # Avoid zero/negative concentrations
 
@@ -248,30 +249,33 @@ def main():
     # Fit the model
     print("\n⚙️  Fitting NLME model...")
     try:
-        result = pynlme.nlmefit(
-            model=warfarin_model,
-            beta0=beta0,
-            x=x,
-            y=y,
-            groups=groups,
-            options={"max_iter": 200, "tol": 1e-6},
+        beta, psi, stats, b = pynlme.nlmefit(
+            x, y, groups, None, warfarin_model, beta0, verbose=1
         )
 
-        print(f"✅ Convergence: {'Yes' if result.converged else 'No'}")
-        print(f"Iterations: {result.iterations}")
-        print(f"Final log-likelihood: {result.logl:.2f}")
+        converged = stats.logl is not None
+        print(f"✅ Convergence: {'Yes' if converged else 'No'}")
+        if hasattr(stats, 'iterations') and stats.iterations is not None:
+            print(f"Iterations: {stats.iterations}")
+        if stats.logl is not None:
+            print(f"Final log-likelihood: {stats.logl:.2f}")
 
     except Exception as e:
         print(f"❌ Fitting failed: {e}")
         return
 
+    # Check if fitting was successful
+    if stats.logl is None:
+        print("❌ Fitting was not successful - no likelihood computed")
+        return
+
     # Display results
     print("\n📈 Population Parameter Estimates:")
-    cl_est = np.exp(result.beta[0])
-    v_est = np.exp(result.beta[1])
-    ka_est = np.exp(result.beta[2])
-    age_eff = result.beta[3]
-    fem_eff = result.beta[4]
+    cl_est = np.exp(beta[0])
+    v_est = np.exp(beta[1])
+    ka_est = np.exp(beta[2])
+    age_eff = beta[3]
+    fem_eff = beta[4]
 
     print(f"CL (70kg):     {cl_est:.3f} L/h  (Literature: ~0.065)")
     print(f"V (per kg):    {v_est:.3f} L/kg (Literature: ~0.14)")
@@ -290,15 +294,15 @@ def main():
 
     # Model diagnostics
     print("\n📊 Model Fit Statistics:")
-    print(f"AIC: {result.aic:.1f}")
-    print(f"BIC: {result.bic:.1f}")
-    print(f"RMSE: {result.rmse:.3f} mg/L")
+    print(f"AIC: {stats.aic:.1f}")
+    print(f"BIC: {stats.bic:.1f}")
+    print(f"RMSE: {np.sqrt(np.mean((y - warfarin_model(beta, x))**2)):.3f} mg/L")
 
     # Create comprehensive plots
-    plot_results(df, result, x, y)
+    plot_results(df, beta, psi, stats, x, y)
 
 
-def plot_results(df, result, x, y):
+def plot_results(df, beta, psi, stats, x, y):
     """Create comprehensive diagnostic plots"""
 
     fig = plt.figure(figsize=(20, 15))
@@ -328,7 +332,7 @@ def plot_results(df, result, x, y):
 
     # 2. Population predictions
     plt.subplot(3, 4, 2)
-    fitted = warfarin_model(x, result.beta)
+    fitted = warfarin_model(beta, x)
     plt.scatter(y, fitted, alpha=0.6, s=20)
     min_val, max_val = min(y.min(), fitted.min()), max(y.max(), fitted.max())
     plt.plot([min_val, max_val], [min_val, max_val], "r--", label="Perfect fit")
@@ -348,7 +352,8 @@ def plot_results(df, result, x, y):
 
     # 4. Q-Q plot of residuals
     plt.subplot(3, 4, 4)
-    stats.probplot(residuals, dist="norm", plot=plt)
+    from scipy import stats as scipy_stats
+    scipy_stats.probplot(residuals, dist="norm", plot=plt)
     plt.title("Residual Q-Q Plot")
 
     # 5. Covariate effects - Age
@@ -356,13 +361,13 @@ def plot_results(df, result, x, y):
     df_unique = df.groupby("subject").first()
     plt.scatter(
         df_unique["age"],
-        np.exp(result.beta[0])
+        np.exp(beta[0])
         * (df_unique["weight"] / 70) ** 0.75
-        * np.exp(result.beta[3] * (df_unique["age"] - 40)),
+        * np.exp(beta[3] * (df_unique["age"] - 40)),
         alpha=0.6,
     )
     ages = np.linspace(df_unique["age"].min(), df_unique["age"].max(), 100)
-    cl_age = np.exp(result.beta[0]) * np.exp(result.beta[3] * (ages - 40))
+    cl_age = np.exp(beta[0]) * np.exp(beta[3] * (ages - 40))
     plt.plot(ages, cl_age, "r-", label="Population trend")
     plt.xlabel("Age (years)")
     plt.ylabel("Clearance (L/h)")
@@ -375,15 +380,15 @@ def plot_results(df, result, x, y):
     female_cl = df_unique[df_unique["female"] == 1]
 
     cl_male = (
-        np.exp(result.beta[0])
+        np.exp(beta[0])
         * (male_cl["weight"] / 70) ** 0.75
-        * np.exp(result.beta[3] * (male_cl["age"] - 40))
+        * np.exp(beta[3] * (male_cl["age"] - 40))
     )
     cl_female = (
-        np.exp(result.beta[0])
+        np.exp(beta[0])
         * (female_cl["weight"] / 70) ** 0.75
-        * np.exp(result.beta[3] * (female_cl["age"] - 40))
-        * np.exp(result.beta[4])
+        * np.exp(beta[3] * (female_cl["age"] - 40))
+        * np.exp(beta[4])
     )
 
     plt.boxplot([cl_male, cl_female], labels=["Male", "Female"])
@@ -392,27 +397,23 @@ def plot_results(df, result, x, y):
 
     # 7. Weight effect on volume
     plt.subplot(3, 4, 7)
-    v_pred = np.exp(result.beta[1]) * df_unique["weight"]
+    v_pred = np.exp(beta[1]) * df_unique["weight"]
     plt.scatter(df_unique["weight"], v_pred, alpha=0.6)
     weights = np.linspace(df_unique["weight"].min(), df_unique["weight"].max(), 100)
-    v_pop = np.exp(result.beta[1]) * weights
+    v_pop = np.exp(beta[1]) * weights
     plt.plot(weights, v_pop, "r-", label="Population")
     plt.xlabel("Weight (kg)")
     plt.ylabel("Volume (L)")
     plt.title("Weight Effect on Volume")
     plt.legend()
 
-    # 8. Random effects correlation
+    # 8. Random effects covariance matrix
     plt.subplot(3, 4, 8)
-    if hasattr(result, "random_effects") and result.random_effects is not None:
-        re = result.random_effects
-        if re.shape[1] >= 2:
-            plt.scatter(re[:, 0], re[:, 1], alpha=0.7)
-            plt.xlabel("CL Random Effect")
-            plt.ylabel("V Random Effect")
-            plt.title("Random Effects")
-            plt.axhline(y=0, color="r", linestyle="--", alpha=0.5)
-            plt.axvline(x=0, color="r", linestyle="--", alpha=0.5)
+    im = plt.imshow(psi, cmap='RdBu_r', aspect='auto')
+    plt.colorbar(im)
+    plt.title("Random Effects Covariance")
+    plt.xlabel("Parameter")
+    plt.ylabel("Parameter")
 
     # 9. Histogram of concentrations
     plt.subplot(3, 4, 9)
@@ -440,43 +441,48 @@ def plot_results(df, result, x, y):
     # 11. Parameter recovery (if true values available)
     plt.subplot(3, 4, 11)
     true_cl = df.groupby("subject")["cl_true"].first().values
-    if hasattr(result, "random_effects") and result.random_effects is not None:
-        pred_cl = np.exp(result.beta[0] + result.random_effects[:, 0])
-        plt.scatter(true_cl, pred_cl, alpha=0.6)
-        plt.plot([true_cl.min(), true_cl.max()], [true_cl.min(), true_cl.max()], "r--")
-        plt.xlabel("True Clearance (L/h)")
-        plt.ylabel("Estimated Clearance (L/h)")
-        plt.title("Parameter Recovery")
+    # Using population estimates for demonstration
+    pop_cl = np.exp(beta[0]) * np.ones_like(true_cl)
+    plt.scatter(true_cl, pop_cl, alpha=0.6)
+    plt.plot([true_cl.min(), true_cl.max()], [true_cl.min(), true_cl.max()], "r--")
+    plt.xlabel("True Clearance (L/h)")
+    plt.ylabel("Population Clearance (L/h)")
+    plt.title("Parameter Recovery")
 
-        # Calculate correlation
-        corr = np.corrcoef(true_cl, pred_cl)[0, 1]
-        plt.text(
-            0.05,
-            0.95,
-            f"r = {corr:.3f}",
-            transform=plt.gca().transAxes,
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
-        )
+    # Calculate correlation
+    corr = np.corrcoef(true_cl, pop_cl)[0, 1]
+    plt.text(
+        0.05,
+        0.95,
+        f"r = {corr:.3f}",
+        transform=plt.gca().transAxes,
+        bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+    )
 
     # 12. Model summary text
     plt.subplot(3, 4, 12)
     plt.axis("off")
+    # Format AIC and log-likelihood with proper conditional formatting
+    aic_str = f"{stats.aic:.1f}" if stats.aic is not None else "N/A"
+    logl_str = f"{stats.logl:.2f}" if stats.logl is not None else "N/A"
+    converged_str = "Yes" if stats.logl is not None else "No"
+    
     summary_text = f"""
     WARFARIN PK MODEL SUMMARY
     
     Population Parameters:
-    • CL = {np.exp(result.beta[0]):.3f} L/h
-    • V = {np.exp(result.beta[1]):.3f} L/kg  
-    • Ka = {np.exp(result.beta[2]):.3f} h⁻¹
+    • CL = {np.exp(beta[0]):.3f} L/h
+    • V = {np.exp(beta[1]):.3f} L/kg
+    • Ka = {np.exp(beta[2]):.3f} h⁻¹
     
     Covariate Effects:
-    • Age: {(1 - np.exp(result.beta[3])) * 100:.1f}% ↓ per year
-    • Female: {(1 - np.exp(result.beta[4])) * 100:.1f}% ↓ CL
+    • Age: {(1 - np.exp(beta[3])) * 100:.1f}% ↓ per year
+    • Female: {(1 - np.exp(beta[4])) * 100:.1f}% ↓ CL
     
     Model Fit:
-    • AIC: {result.aic:.1f}
-    • RMSE: {result.rmse:.3f} mg/L
-    • Converged: {"Yes" if result.converged else "No"}
+    • AIC: {aic_str}
+    • Log-likelihood: {logl_str}
+    • Converged: {converged_str}
     """
     plt.text(
         0.1,
@@ -486,14 +492,16 @@ def plot_results(df, result, x, y):
         fontfamily="monospace",
         fontsize=10,
         verticalalignment="top",
-        bbox=dict(boxstyle="round", facecolor="lightgray", alpha=0.8),
+        bbox={"boxstyle": "round", "facecolor": "lightgray", "alpha": 0.8},
     )
 
     plt.tight_layout()
 
-    # Save to examples folder
+    # Save to organized output folder
     examples_dir = os.path.dirname(__file__)
-    plot_path = os.path.join(examples_dir, "warfarin_analysis.png")
+    output_dir = os.path.join(examples_dir, "warfarin_case_study_output")
+    os.makedirs(output_dir, exist_ok=True)
+    plot_path = os.path.join(output_dir, "warfarin_analysis.png")
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.show()
 

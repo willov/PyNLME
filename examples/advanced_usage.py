@@ -232,9 +232,11 @@ def plot_results(X, y, group, beta_1comp, beta_2comp, psi_1comp, psi_2comp):
 
     plt.tight_layout()
 
-    # Save to examples folder
+    # Save to organized output folder
     examples_dir = os.path.dirname(__file__)
-    plot_path = os.path.join(examples_dir, "advanced_pynlme_analysis.png")
+    output_dir = os.path.join(examples_dir, "advanced_usage_output")
+    os.makedirs(output_dir, exist_ok=True)
+    plot_path = os.path.join(output_dir, "advanced_pynlme_analysis.png")
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     print(f"\nComprehensive analysis plot saved as '{plot_path}'")
 

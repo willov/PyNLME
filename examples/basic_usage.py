@@ -191,9 +191,11 @@ def main():
 
     plt.tight_layout()
 
-    # Save to examples folder
+    # Save to organized output folder
     examples_dir = os.path.dirname(__file__)
-    plot_path = os.path.join(examples_dir, "pynlme_demo.png")
+    output_dir = os.path.join(examples_dir, "basic_usage_output")
+    os.makedirs(output_dir, exist_ok=True)
+    plot_path = os.path.join(output_dir, "pynlme_demo.png")
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     print(f"Plot saved as '{plot_path}'")
 
