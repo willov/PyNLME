@@ -95,7 +95,6 @@ class TestMATLABBaseline:
         except Exception as e:
             pytest.fail(f"Pharmacokinetic model function failed: {e}")
 
-    @pytest.mark.xfail(reason="nlmefitsa implementation not yet complete")
     def test_specify_group_nlmefitsa(self):
         """Test nlmefitsa with the specify group example."""
         X, y, group, V = self._get_specify_group_data()
@@ -105,7 +104,7 @@ class TestMATLABBaseline:
         tolerance = 0.1  # 10% tolerance
         
         try:
-            result = nlmefitsa(
+            beta, psi, stats, b = nlmefitsa(
                 X=X,
                 y=y,
                 group=group,
@@ -114,6 +113,7 @@ class TestMATLABBaseline:
                 beta0=initial_params
             )
             
+            result = beta
             # Check if result has the right structure
             assert hasattr(result, '__len__'), "Result should be array-like"
             assert len(result) >= 3, f"Result should have at least 3 parameters, got {len(result)}"
@@ -133,7 +133,6 @@ class TestMATLABBaseline:
             print(f"nlmefitsa failed with error: {e}")
             pytest.fail(f"nlmefitsa failed: {e}")
 
-    @pytest.mark.xfail(reason="nlmefit implementation not yet complete")
     def test_indomethacin_nlmefit(self):
         """Test nlmefit with the indomethacin example."""
         concentration, time, subject = self._get_indomethacin_data()
@@ -143,7 +142,7 @@ class TestMATLABBaseline:
         tolerance = 0.1  # 10% tolerance
         
         try:
-            result = nlmefit(
+            beta, psi, stats, b = nlmefit(
                 X=time.reshape(-1, 1),
                 y=concentration,
                 group=subject,
@@ -152,6 +151,7 @@ class TestMATLABBaseline:
                 beta0=initial_params
             )
             
+            result = beta
             # Check if result has the right structure
             assert hasattr(result, '__len__'), "Result should be array-like"
             assert len(result) >= 4, f"Result should have at least 4 parameters, got {len(result)}"
