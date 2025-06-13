@@ -346,40 +346,32 @@ class SAEMFitter:
 
     def _log_posterior_b(self, X_g, y_g, modelfun, beta, b_g, psi, sigma, V, g):
         """Compute log-posterior for random effects of one group."""
-        print(f"      Computing log-posterior: b_g={b_g}, beta={beta}")
         try:
             # Individual parameters for this group
             phi_g = beta + b_g
-            print(f"        phi_g={phi_g}")
 
             # Model prediction
-            print(f"        Calling model with phi_g={phi_g}, X_g.shape={X_g.shape}")
             # Pass the appropriate group-level covariates for this group
             v_group = V[g] if V is not None and len(V) > g else None
             y_pred = modelfun(phi_g, X_g, v_group)
-            print(f"        Model returned: {y_pred}")
             if not isinstance(y_pred, np.ndarray):
                 y_pred = np.array(y_pred)
 
             # Log-likelihood contribution
             residuals = y_g - y_pred
-            print(f"        Residuals: {residuals}")
             log_lik = -0.5 * np.sum(residuals**2) / (sigma**2) - len(y_g) * np.log(
                 sigma
             )
-            print(f"        Log-likelihood: {log_lik}")
 
             # Log-prior (multivariate normal)
-            print(f"        Computing log-prior with psi={psi}")
             psi_inv = np.linalg.inv(psi + np.eye(len(psi)) * 1e-6)  # Regularize
             log_prior = -0.5 * b_g.T @ psi_inv @ b_g
-            print(f"        Log-prior: {log_prior}")
 
             result = log_lik + log_prior
-            print(f"        Final log-posterior: {result}")
             return result
         except Exception as e:
-            print(f"        Exception in log_posterior_b: {e}")
+            if self.options.verbose > 0:
+                print(f"        Exception in log_posterior_b: {e}")
             return -np.inf
 
     def _update_parameters(
