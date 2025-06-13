@@ -175,9 +175,11 @@ class MLEFitter:
                     y_pred[i] = modelfun(beta, X[i : i + 1])
         else:
             # Handle group-level predictors
-            # Simplified implementation
+            # V should be (m, g) where m=number of groups, g=number of group variables
+            # For now, pass the V matrix for the first group to the model function
             try:
-                y_pred = modelfun(beta, X, V[0])  # Use first group's V for all
+                # Pass the full V matrix to let the model function handle it
+                y_pred = modelfun(beta, X, V)
             except Exception:
                 y_pred = modelfun(beta, X)
 
@@ -266,16 +268,9 @@ class SAEMFitter:
 
                 # M-step: Update parameters
                 step_size = 1.0 / (iteration + 1) if phase == 0 else 0.1
-                beta_old, psi_old, sigma_old = beta.copy(), psi.copy(), sigma
                 beta, psi, sigma = self._update_parameters(
                     X, y, group, V, modelfun, b, beta, psi, sigma, step_size
                 )
-
-                if self.options.verbose > 1:
-                    print(f"    After M-step: beta={beta}, sigma={sigma:.3f}")
-                    print(
-                        f"    Changes: beta_change={np.abs(beta - beta_old)}, sigma_change={abs(sigma - sigma_old):.3f}"
-                    )
 
                 if iteration % 10 == 0 and self.options.verbose > 0:
                     print(f"  Iter {iteration}: beta={beta}, sigma={sigma:.3f}")
@@ -326,10 +321,10 @@ class SAEMFitter:
                 # Compute log-posterior for current and proposed
                 try:
                     log_p_current = self._log_posterior_b(
-                        X_g, y_g, modelfun, beta, b_g, psi, sigma
+                        X_g, y_g, modelfun, beta, b_g, psi, sigma, V, g
                     )
                     log_p_proposal = self._log_posterior_b(
-                        X_g, y_g, modelfun, beta, b_prop, psi, sigma
+                        X_g, y_g, modelfun, beta, b_prop, psi, sigma, V, g
                     )
 
                     # Accept/reject
@@ -349,7 +344,7 @@ class SAEMFitter:
             print("    MCMC sampling completed")
         return b_new
 
-    def _log_posterior_b(self, X_g, y_g, modelfun, beta, b_g, psi, sigma):
+    def _log_posterior_b(self, X_g, y_g, modelfun, beta, b_g, psi, sigma, V, g):
         """Compute log-posterior for random effects of one group."""
         print(f"      Computing log-posterior: b_g={b_g}, beta={beta}")
         try:
@@ -359,7 +354,9 @@ class SAEMFitter:
 
             # Model prediction
             print(f"        Calling model with phi_g={phi_g}, X_g.shape={X_g.shape}")
-            y_pred = modelfun(phi_g, X_g, None)
+            # Pass the appropriate group-level covariates for this group
+            v_group = V[g] if V is not None and len(V) > g else None
+            y_pred = modelfun(phi_g, X_g, v_group)
             print(f"        Model returned: {y_pred}")
             if not isinstance(y_pred, np.ndarray):
                 y_pred = np.array(y_pred)
@@ -392,8 +389,8 @@ class SAEMFitter:
         n_groups = len(np.unique(group))
         n_params = len(beta_old)
 
-        # Update beta using weighted least squares (simplified)
-        # In practice, this should solve the full likelihood equations
+        # Update beta using weighted least squares approach
+        # We need to find beta that minimizes the residuals given current random effects
         total_weight = 0
         weighted_sum = np.zeros(n_params)
 
@@ -409,11 +406,28 @@ class SAEMFitter:
             # Weight is inverse variance (simplified)
             weight = len(y_g) / (sigma_old**2)
 
-            # Contribution to beta estimate
-            # This is a simplified approximation
-            phi_g = beta_old + b_g
-            weighted_sum += weight * (phi_g - b_g)
-            total_weight += weight
+            # For SAEM, we want to estimate beta by fitting the model
+            # The current individual parameters are phi_g = beta + b_g
+            # We need to extract what beta should be given the current b_g
+            try:
+                # Try to estimate phi_g from the data for this group
+                v_group = V[g] if V is not None and len(V) > g else None
+                
+                # Use current phi as starting point for optimization
+                phi_current = beta_old + b_g
+                phi_optimal = self._optimize_individual_params(
+                    X_g, y_g, v_group, modelfun, phi_current
+                )
+                
+                # The optimal beta contribution from this group would be phi_optimal - b_g
+                beta_contribution = phi_optimal - b_g
+                weighted_sum += weight * beta_contribution
+                total_weight += weight
+                
+            except Exception:
+                # Fallback: use the current estimate
+                weighted_sum += weight * beta_old
+                total_weight += weight
 
         if total_weight > 0:
             beta_new = weighted_sum / total_weight
@@ -440,13 +454,14 @@ class SAEMFitter:
             phi_g = beta_new + b[g]
 
             try:
-                y_pred = modelfun(phi_g, X_g, None)
+                v_group = V[g] if V is not None and len(V) > g else None
+                y_pred = modelfun(phi_g, X_g, v_group)
                 if not isinstance(y_pred, np.ndarray):
                     y_pred = np.array(y_pred)
                 residuals = y_g - y_pred
                 total_sse += np.sum(residuals**2)
                 total_n += len(y_g)
-            except:
+            except Exception:
                 continue
 
         if total_n > 0:
@@ -483,7 +498,8 @@ class SAEMFitter:
             phi_g = beta + b[g]
 
             try:
-                y_pred = modelfun(phi_g, X_g, None)
+                v_group = V[g] if V is not None and len(V) > g else None
+                y_pred = modelfun(phi_g, X_g, v_group)
                 if not isinstance(y_pred, np.ndarray):
                     y_pred = np.array(y_pred)
                 residuals = y_g - y_pred
@@ -493,7 +509,7 @@ class SAEMFitter:
                     sigma
                 )
                 total_sse += np.sum(residuals**2)
-            except:
+            except Exception:
                 continue
 
         rmse = np.sqrt(total_sse / n_obs) if n_obs > 0 else sigma
@@ -510,6 +526,36 @@ class SAEMFitter:
         )
 
         return stats
+
+    def _optimize_individual_params(self, X_g, y_g, v_group, modelfun, phi_init):
+        """
+        Optimize individual parameters for a single group.
+        
+        This is a simplified optimization that tries to find the best phi_g
+        for group g given the current data.
+        """
+        from scipy.optimize import minimize
+        
+        def objective(phi):
+            try:
+                y_pred = modelfun(phi, X_g, v_group)
+                if not isinstance(y_pred, np.ndarray):
+                    y_pred = np.array(y_pred)
+                residuals = y_g - y_pred
+                return np.sum(residuals**2)
+            except Exception:
+                return 1e10  # Large penalty for invalid parameters
+        
+        try:
+            # Simple optimization with bounds to avoid extreme values
+            bounds = [(-10, 10) for _ in phi_init]
+            result = minimize(objective, phi_init, bounds=bounds, method='L-BFGS-B')
+            if result.success:
+                return result.x
+            else:
+                return phi_init
+        except Exception:
+            return phi_init
 
 
 # Convenience functions for easier testing and usage

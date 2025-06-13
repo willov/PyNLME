@@ -77,7 +77,9 @@ def example_1_specify_group():
     group = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
 
     # Group-level covariates V
-    V = np.array([2, 3])
+    # V should be (m, g) where m=number of groups, g=number of group variables
+    # We have 1 group with 2 group predictor variables
+    V = np.array([[2, 3]])  # Shape: (1, 2)
 
     print(f"Data: {len(y)} observations, {len(np.unique(group))} group(s)")
     print("Model: y = φ₁ * X₁ * exp(φ₂ * X₂ / V) + φ₃ * X₃")
@@ -86,13 +88,15 @@ def example_1_specify_group():
     try:
         initial_params = np.array([1.0, 1.0, 1.0])
 
-        beta, psi, stats, b  = nlmefitsa(
+        from src.pynlme import nlmefitsa
+        beta, psi, stats, b = nlmefitsa(
             X=X,
             y=y,
             group=group,
             V=V,
             modelfun=model_function_group_predictors,
             beta0=initial_params,
+            verbose=2,  # More verbose output
         )
 
         result = beta
@@ -146,8 +150,11 @@ def model_function_group_predictors(phi, x, v=None):
 
     # Apply the MATLAB model formula
     # PHI(1) * XFUN(:,1) * exp(PHI(2) * XFUN(:,2) / VFUN) + PHI(3) * XFUN(:,3)
-    # For single group, use first element of V
-    v_scalar = v[0] if hasattr(v, '__len__') else v
+    # For this model, use the first group variable (V[0]) as VFUN
+    if hasattr(v, "shape") and len(v.shape) > 0:
+        v_scalar = v[0] if len(v.shape) == 1 else v[0, 0]  # Handle both 1D and 2D V
+    else:
+        v_scalar = v
     result = phi1 * x1 * np.exp(phi2 * x2 / v_scalar) + phi3 * x3
 
     return result
