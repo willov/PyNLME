@@ -86,7 +86,7 @@ def example_1_specify_group():
     try:
         initial_params = np.array([1.0, 1.0, 1.0])
 
-        result = nlmefitsa(
+        beta, psi, stats, b  = nlmefitsa(
             X=X,
             y=y,
             group=group,
@@ -95,6 +95,7 @@ def example_1_specify_group():
             beta0=initial_params,
         )
 
+        result = beta
         print(f"✓ Estimated parameters: {result}")
         print("  Expected parameters:  [1.0008, 4.9980, 6.9999]")
 
@@ -271,7 +272,7 @@ def example_2_transform_and_plot():
             [0.5, -1.0, 2.5, 0.5]
         )  # [ka, log(V), log(Cl), log(σ²)]
 
-        result = nlmefit(
+        beta, psi, stats, b = nlmefit(
             X=time.reshape(-1, 1),  # Time as X predictor
             y=concentration,
             group=subject,
@@ -280,6 +281,7 @@ def example_2_transform_and_plot():
             beta0=initial_params,
         )
 
+        result = beta
         print(f"✓ Estimated parameters: {result}")
         print("  Expected parameters:  [0.4606, -1.3459, 2.8277, 0.7729]")
 
