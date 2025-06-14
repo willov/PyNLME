@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2025-06-14
+
+### Changed
+- **Rust Backend Architecture** - Completely removed hardcoded model logic
+  - Eliminated all fallback hardcoded exponential decay models from MLE and SAEM
+  - Refactored all internal methods to require explicit Python model functions
+  - Removed Optional wrapper types, ensuring clean dependency injection
+  - Updated `fit_internal`, `evaluate_model`, `sample_random_effects`, etc.
+  - Improved code maintainability by removing dead code paths
+  - Backend now exclusively uses user-supplied Python model functions
+
+### Removed
+- **Deprecated Methods** - Removed unused `fit` methods with hardcoded models
+- **Legacy Code** - Eliminated hardcoded model paths and conditional logic
+
 ## [0.2.2] - 2025-06-14
 
 ### Fixed

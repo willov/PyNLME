@@ -76,21 +76,6 @@ impl MLEFitter {
         Self { options }
     }
 
-    /// Fit NLME model using MLE (original hardcoded method)
-    pub fn fit(
-        &self,
-        x: &Array2<f64>,
-        y: &Array1<f64>,
-        groups: &Array1<usize>,
-        v: Option<&Array2<f64>>,
-        beta0: &Array1<f64>,
-        error_model: ErrorModel,
-        transforms: &[Transform],
-    ) -> Result<NLMEResult, NLMEError> {
-        // Use hardcoded exponential model for backward compatibility
-        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, None, None)
-    }
-
     /// Fit NLME model using MLE with Python model function
     pub fn fit_with_model(
         &self,
@@ -105,10 +90,10 @@ impl MLEFitter {
         model_func: &PyAny,
     ) -> Result<NLMEResult, NLMEError> {
         // Use Python model function
-        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, Some(py), Some(model_func))
+        self.fit_internal(x, y, groups, v, beta0, error_model, transforms, py, model_func)
     }
 
-    /// Internal fit method that handles both hardcoded and Python models
+    /// Internal fit method for Python models
     fn fit_internal(
         &self,
         x: &Array2<f64>,
@@ -118,8 +103,8 @@ impl MLEFitter {
         beta0: &Array1<f64>,
         error_model: ErrorModel,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<NLMEResult, NLMEError> {
         let n_obs = y.len();
         let n_groups = groups.iter().max().unwrap_or(&0) + 1;
@@ -268,8 +253,7 @@ impl MLEFitter {
         // For the simplified model, we'll use minimal random effects
         // This ensures the fixed effects estimation is not corrupted
 
-        // Since we're using a hardcoded exponential model and want the main
-        // optimization to work correctly, we'll keep random effects small
+        // Initialize random effects to zero for initial optimization
         // This focuses the optimization on getting the fixed effects right
 
         for group in 0..n_groups {
@@ -291,8 +275,8 @@ impl MLEFitter {
         random_effects: &Array2<f64>,
         error_model: &ErrorModel,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
         current_beta: &Array1<f64>, // Use current beta as starting point
     ) -> Result<(Array1<f64>, Array2<f64>, f64), NLMEError> {
         let n_obs = y.len();
@@ -361,8 +345,8 @@ impl MLEFitter {
         y: &Array1<f64>,
         beta: &Array1<f64>,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<Array1<f64>, NLMEError> {
         let n_params = beta.len();
         let mut gradient = Array1::zeros(n_params);
@@ -412,8 +396,8 @@ impl MLEFitter {
         sigma: f64,
         error_model: &ErrorModel,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<f64, NLMEError> {
         let y_pred = self.predict_population(x, v, beta, transforms, py, model_func)?;
         let residuals = y - &y_pred;
@@ -452,8 +436,8 @@ impl MLEFitter {
         v: Option<&Array2<f64>>,
         beta: &Array1<f64>,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<Array1<f64>, NLMEError> {
         self.evaluate_model(beta, x, v, transforms, py, model_func)
     }
@@ -464,8 +448,8 @@ impl MLEFitter {
         x_group: &Array2<f64>,
         v_group: Option<&Array2<f64>>,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<Array1<f64>, NLMEError> {
         self.evaluate_model(params, x_group, v_group, transforms, py, model_func)
     }
@@ -476,8 +460,8 @@ impl MLEFitter {
         x: &Array2<f64>,
         v: Option<&Array2<f64>>,
         transforms: &[Transform],
-        py: Option<Python>,
-        model_func: Option<&PyAny>,
+        py: Python,
+        model_func: &PyAny,
     ) -> Result<Array1<f64>, NLMEError> {
         // Apply parameter transformations
         let transformed_params: Array1<f64> = params
@@ -486,45 +470,34 @@ impl MLEFitter {
             .map(|(&p, t)| t.apply(p))
             .collect();
 
-        // Check if we should use Python model function or hardcoded model
-        if let (Some(py_ctx), Some(func)) = (py, model_func) {
-            // Call Python model function
-            let params_py = transformed_params.to_pyarray(py_ctx);
-            let x_py = x.to_pyarray(py_ctx);
-            let v_py = v.map(|v_arr| v_arr.to_pyarray(py_ctx));
+        // Apply parameter transformations
+        let transformed_params: Array1<f64> = params
+            .iter()
+            .zip(transforms.iter())
+            .map(|(&p, t)| t.apply(p))
+            .collect();
 
-            // Call the Python model function: model_func(phi, x, v)
-            let result = if let Some(v_pyarray) = v_py {
-                func.call1((params_py, x_py, v_pyarray))
-            } else {
-                let none_py = py_ctx.None();
-                func.call1((params_py, x_py, none_py))
-            };
+        // Call Python model function
+        let params_py = transformed_params.to_pyarray(py);
+        let x_py = x.to_pyarray(py);
+        let v_py = v.map(|v_arr| v_arr.to_pyarray(py));
 
-            match result {
-                Ok(py_result) => {
-                    // Convert Python result back to Rust Array1
-                    let result_array: &PyArray1<f64> = py_result.extract()
-                        .map_err(|_| NLMEError::InvalidParameters)?;
-                    Ok(result_array.to_owned_array())
-                }
-                Err(_) => Err(NLMEError::InvalidParameters),
-            }
+        // Call the Python model function: model_func(phi, x, v)
+        let result = if let Some(v_pyarray) = v_py {
+            model_func.call1((params_py, x_py, v_pyarray))
         } else {
-            // Use hardcoded exponential decay model for backward compatibility
-            let mut y_pred = Array1::zeros(x.nrows());
+            let none_py = py.None();
+            model_func.call1((params_py, x_py, none_py))
+        };
 
-            if transformed_params.len() >= 2 {
-                for (i, x_row) in x.axis_iter(Axis(0)).enumerate() {
-                    // Hardcoded model: y = phi[0] * exp(-phi[1] * x[0])
-                    let t = x_row[0];
-                    y_pred[i] = transformed_params[0] * (-transformed_params[1] * t).exp();
-                }
-            } else {
-                return Err(NLMEError::InvalidParameters);
+        match result {
+            Ok(py_result) => {
+                // Convert Python result back to Rust Array1
+                let result_array: &PyArray1<f64> = py_result.extract()
+                    .map_err(|_| NLMEError::InvalidParameters)?;
+                Ok(result_array.to_owned_array())
             }
-
-            Ok(y_pred)
+            Err(_) => Err(NLMEError::InvalidParameters),
         }
     }
 }
