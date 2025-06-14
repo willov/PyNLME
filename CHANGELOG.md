@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2025-06-14
+
+### Added
+- **New Pythonic API**: Added `fit_nlme()` as primary unified interface with method parameter
+- **Direct Algorithm Access**: Added `fit_mle()` and `fit_saem()` functions for direct algorithm access
+- **Enhanced Documentation**: Updated README and docs to emphasize Python API as primary interface
+- **API Comparison Demo**: Added `examples/api_comparison.py` to demonstrate all interface styles
+
+### Changed
+- **MATLAB Compatibility**: `nlmefit()` and `nlmefitsa()` are now documented as compatibility aliases
+- **Documentation Priority**: Python API (`fit_nlme`, `fit_mle`, `fit_saem`) now featured prominently in docs
+- **Examples Updated**: `basic_usage.py` now showcases Python API first, with MATLAB compatibility demo
+- **Method Parameter**: `fit_nlme()` uses `method='MLE'` and `method='SAEM'` for algorithm selection
+
+### Notes
+- All APIs produce identical results for the same algorithm
+- MATLAB users can continue using `nlmefit()`/`nlmefitsa()` without changes
+- New Python users should prefer `fit_nlme()` for unified interface
+- No breaking changes - existing code continues to work unchanged
+
 ## [0.2.3] - 2025-06-14
 
 ### Changed

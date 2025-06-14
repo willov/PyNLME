@@ -4,7 +4,7 @@ PyNLME Demo - Nonlinear Mixed-Effects Models
 =============================================
 
 This demo shows the basic usage of PyNLME for fitting nonlinear mixed-effects models
-with both MLE (nlmefit) and SAEM (nlmefitsa) algorithms.
+with both Python API (fit_nlme, fit_mle, fit_saem) and MATLAB-compatible (nlmefit, nlmefitsa).
 """
 
 import os
@@ -12,7 +12,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pynlme import nlmefit, nlmefitsa
+from pynlme import fit_nlme, nlmefit
 
 
 def exponential_model(phi, x, v=None):
@@ -73,12 +73,12 @@ def main():
     # Initial parameter estimates
     beta0 = np.array([10.0, 0.5])  # [amplitude, decay rate]
 
-    # Fit using MLE (traditional approach)
-    print("1. Maximum Likelihood Estimation (nlmefit)")
-    print("-" * 45)
+    # Fit using Python API (recommended approach)
+    print("1. Python API: Maximum Likelihood Estimation (fit_nlme)")
+    print("-" * 60)
 
-    beta_mle, psi_mle, stats_mle, b_mle = nlmefit(
-        X, y, group, None, exponential_model, beta0, verbose=1
+    beta_mle, psi_mle, stats_mle, b_mle = fit_nlme(
+        X, y, group, None, exponential_model, beta0, method='MLE', verbose=1
     )
 
     print("Fixed effects:")
@@ -91,12 +91,12 @@ def main():
     print(f"AIC: {stats_mle.aic:.3f}")
     print()
 
-    # Fit using SAEM (stochastic approach)
-    print("2. Stochastic Approximation EM (nlmefitsa)")
-    print("-" * 47)
+    # Fit using Python API with SAEM
+    print("2. Python API: Stochastic Approximation EM (fit_nlme)")
+    print("-" * 62)
 
-    beta_saem, psi_saem, stats_saem, b_saem = nlmefitsa(
-        X, y, group, None, exponential_model, beta0, max_iter=50, verbose=1
+    beta_saem, psi_saem, stats_saem, b_saem = fit_nlme(
+        X, y, group, None, exponential_model, beta0, method='SAEM', max_iter=50, verbose=1
     )
 
     print("Fixed effects:")
@@ -111,8 +111,23 @@ def main():
         print(f"AIC: {stats_saem.aic:.3f}")
     print()
 
+    # MATLAB compatibility example
+    print("3. MATLAB Compatibility: Using nlmefit (same results as above)")
+    print("-" * 70)
+
+    beta_matlab, psi_matlab, stats_matlab, b_matlab = nlmefit(
+        X, y, group, None, exponential_model, beta0, verbose=1
+    )
+
+    print("Fixed effects:")
+    print(f"  Amplitude: {beta_matlab[0]:.3f}")
+    print(f"  Decay rate: {beta_matlab[1]:.3f}")
+    print(f"Log-likelihood: {stats_matlab.logl:.3f}")
+    print(f"Results match Python API: {np.allclose(beta_mle, beta_matlab)}")
+    print()
+
     # Create visualization
-    print("3. Visualization")
+    print("4. Visualization")
     print("-" * 16)
 
     plt.figure(figsize=(12, 8))

@@ -21,15 +21,35 @@ At the current state, this should be seen as a proof-of-concept rather than prod
 
 ```python
 import numpy as np
-from pynlme import nlmefit
+from pynlme import fit_nlme
 
 # Define your model
 def exponential_decay(phi, t, v=None):
     return phi[0] * np.exp(-phi[1] * t.ravel())
 
 # Fit the model (uses optimized Rust backend with Python fallback)
-beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, [10.0, 0.5])
+beta, psi, stats, b = fit_nlme(t, y, group, None, exponential_decay, [10.0, 0.5])
 print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
+
+# Alternative: specify algorithm explicitly
+beta, psi, stats, b = fit_nlme(
+    t, y, group, None, exponential_decay, [10.0, 0.5], method='SAEM'
+)
+```
+
+### MATLAB Compatibility
+
+For users migrating from MATLAB, PyNLME provides identical function signatures:
+
+```python
+# MATLAB-style usage (compatibility aliases)
+from pynlme import nlmefit, nlmefitsa
+
+# Maximum Likelihood Estimation (same as fit_nlme with method='MLE')
+beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, [10.0, 0.5])
+
+# SAEM Algorithm (same as fit_nlme with method='SAEM') 
+beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, [10.0, 0.5])
 ```
 
 ## 📦 Installation
@@ -39,23 +59,23 @@ print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
 Pre-built wheels are available for easy installation without requiring Rust:
 
 ```bash
-# Latest release (v0.2.3+):
+# Latest release (v0.2.4+):
 # Choose the appropriate wheel for your platform:
 
 # Linux (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.3/pynlme-0.2.3-cp311-abi3-linux_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-linux_x86_64.whl
 
 # Windows (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.3/pynlme-0.2.3-cp311-abi3-win_amd64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-win_amd64.whl
 
 # macOS (Intel):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.3/pynlme-0.2.3-cp311-abi3-macosx_10_12_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-macosx_10_12_x86_64.whl
 
 # macOS (Apple Silicon):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.3/pynlme-0.2.3-cp311-abi3-macosx_11_0_arm64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-macosx_11_0_arm64.whl
 
 # Or using pip instead of uv:
-pip install https://github.com/willov/PyNLME/releases/download/v0.2.3/pynlme-0.2.3-cp311-abi3-linux_x86_64.whl
+pip install https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-linux_x86_64.whl
 
 # Or browse releases to find the exact wheel for your platform:
 # https://github.com/willov/PyNLME/releases/latest
@@ -84,8 +104,9 @@ uv run maturin develop  # Build Rust extension
 
 ## 🎯 Features
 
-- **🔥 Fast**: Rust backend with automatic fallback to Python
+- **� Pythonic API**: Modern `fit_nlme()` interface with method parameter
 - **🔄 MATLAB Compatible**: Drop-in replacement for `nlmefit`/`nlmefitsa`
+- **🔥 Fast**: Rust backend with automatic fallback to Python
 - **🧪 Robust**: 48/48 tests passing, comprehensive error handling
 - **📊 Complete**: Full diagnostics, residuals, and model statistics
 
@@ -123,6 +144,7 @@ MIT License - see LICENSE file for details.
 
 ## ✅ Current Features (Working)
 
+- **Modern Python API**: `fit_nlme()`, `fit_mle()`, and `fit_saem()` functions with clean interfaces
 - **MATLAB-Compatible API**: Identical interface to MATLAB's `nlmefit` and `nlmefitsa`
 - **High-Performance Rust Backend**: Core algorithms implemented in Rust with automatic Python fallback
 - **Multiple Algorithms**: Both MLE and SAEM (Stochastic Approximation EM) algorithms with full Rust backend support  

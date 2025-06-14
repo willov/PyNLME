@@ -13,7 +13,7 @@ A high-performance Python implementation of nonlinear mixed-effects (NLME) model
 
 ```python
 import numpy as np
-from pynlme import nlmefit
+from pynlme import fit_nlme
 
 # Define your nonlinear model
 def exponential_decay(phi, t, v=None):
@@ -25,12 +25,31 @@ y = np.array([10, 7, 5, 3])         # Observations
 group = np.array([0, 0, 1, 1])      # Subject grouping
 beta0 = np.array([10.0, 0.5])       # Initial estimates
 
-# Fit model with Rust backend (automatic)
-beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, beta0)
+# Fit model with Python API (recommended)
+beta, psi, stats, b = fit_nlme(t, y, group, None, exponential_decay, beta0)
+
+# Alternative: specify algorithm explicitly
+beta, psi, stats, b = fit_nlme(
+    t, y, group, None, exponential_decay, beta0, method='SAEM'
+)
 
 print(f"Fixed effects: {beta}")
 print(f"Log-likelihood: {stats.logl}")
 print(f"AIC: {stats.aic}")
+```
+
+### MATLAB Compatibility
+
+For users migrating from MATLAB:
+
+```python
+from pynlme import nlmefit, nlmefitsa
+
+# Maximum Likelihood (same as fit_nlme with method='MLE')
+beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, beta0)
+
+# SAEM Algorithm (same as fit_nlme with method='SAEM')
+beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, beta0)
 ```
 
 ## 📦 Installation
@@ -50,8 +69,11 @@ uv run maturin develop
 ## 🔧 Core Features
 
 ### **Algorithms**
-- **`nlmefit()`** - Maximum Likelihood Estimation (MLE) 
-- **`nlmefitsa()`** - Stochastic Approximation EM (SAEM)
+- **`fit_nlme()`** - Unified interface with method parameter ('MLE' or 'SAEM')
+- **`fit_mle()`** - Direct Maximum Likelihood Estimation interface
+- **`fit_saem()`** - Direct SAEM (Stochastic Approximation EM) interface
+- **`nlmefit()`** - MATLAB-compatible MLE function (alias for fit_mle)
+- **`nlmefitsa()`** - MATLAB-compatible SAEM function (alias for fit_saem)
 - **Rust backend** - High-performance optimization (automatic fallback to Python)
 
 ### **MATLAB Compatibility**
@@ -74,33 +96,47 @@ uv run maturin develop
 ## 🎯 Use Cases
 
 **Pharmacokinetics/Pharmacodynamics**
+
 ```python
 # PK model: Concentration = Dose * exp(-ke * t) / V
 def pk_model(phi, t, dose):
     ke, V = phi
     return dose * np.exp(-ke * t) / V
 
+# Using Python API (recommended)
+beta, psi, stats, b = fit_nlme(time, concentration, subject_id, dose, pk_model, [0.1, 50])
+
+# Using MATLAB-compatible API
 beta, psi, stats, b = nlmefit(time, concentration, subject_id, dose, pk_model, [0.1, 50])
 ```
 
 **Growth Models**
+
 ```python  
 # Logistic growth: y = A / (1 + exp(-(t - t0)/tau))
 def logistic_growth(phi, t, v=None):
     A, t0, tau = phi
     return A / (1 + np.exp(-(t - t0) / tau))
 
+# Using Python API with SAEM
+beta, psi, stats, b = fit_nlme(
+    time, size, organism_id, None, logistic_growth, [100, 10, 2], method='SAEM'
+)
+
+# Using MATLAB-compatible API
 beta, psi, stats, b = nlmefitsa(time, size, organism_id, None, logistic_growth, [100, 10, 2])
 ```
 
 **Dose-Response**
+
 ```python
 # Sigmoid: y = Emax * dose^n / (ED50^n + dose^n)  
 def sigmoid_model(phi, dose, v=None):
     Emax, ED50, n = phi
     return Emax * dose**n / (ED50**n + dose**n)
 
-beta, psi, stats, b = nlmefit(dose, response, subject_id, None, sigmoid_model, [100, 10, 1])
+# Using Python API
+beta, psi, stats, b = fit_nlme(dose, response, subject_id, None, sigmoid_model, [100, 10, 1])
 ```
 
 ## 📊 Performance
@@ -187,15 +223,20 @@ The package is designed for:
 
 ## Function Interface
 
-PyNLME provides a clean, simple interface with just 3 essential functions:
+PyNLME provides both modern Python and MATLAB-compatible interfaces:
 
-### MATLAB-Compatible Functions
+### Primary Python Interface (Recommended)
 
-- **`nlmefit()`** - Maximum Likelihood Estimation (identical to MATLAB)
-- **`nlmefitsa()`** - Stochastic Approximation EM (identical to MATLAB)
+- **`fit_nlme(method='MLE'|'SAEM')`** - Unified interface with method parameter
+- **`fit_mle()`** - Direct Maximum Likelihood Estimation
+- **`fit_saem()`** - Direct SAEM (Stochastic Approximation EM)
 
-### Python-Style Unified Interface
+### MATLAB-Compatible Functions (Legacy)
 
-- **`fit_nlme(method='ML'|'SAEM')`** - Unified interface with method parameter
+- **`nlmefit()`** - Maximum Likelihood Estimation (alias for `fit_mle`)
+- **`nlmefitsa()`** - Stochastic Approximation EM (alias for `fit_saem`)
 
-This simplified design makes PyNLME easy to learn and use, whether you're coming from MATLAB or prefer Python-style APIs. All functions provide access to the same underlying algorithms and produce identical results for the same method.
+All functions provide access to the same underlying algorithms and produce
+identical results for the same method. The Python interface offers more
+flexibility and follows Python conventions, while the MATLAB interface
+ensures seamless migration from existing MATLAB code.

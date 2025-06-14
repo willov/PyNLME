@@ -312,7 +312,7 @@ def fit_nlme(
     V: np.ndarray | None,
     modelfun: ModelFunction,
     beta0: np.ndarray,
-    method: str = "ML",
+    method: str = "MLE",
     **kwargs,
 ) -> tuple[np.ndarray, np.ndarray, NLMEStats, np.ndarray | None]:
     """
@@ -336,8 +336,8 @@ def fit_nlme(
         Model function with signature f(phi, x, v) -> y_pred.
     beta0 : array_like, shape (k,)
         Initial parameter estimates.
-    method : str, default "ML"
-        Fitting method: "ML" for Maximum Likelihood or "SAEM" for
+    method : str, default "MLE"
+        Fitting method: "MLE" for Maximum Likelihood or "SAEM" for
         Stochastic Approximation EM.
     **kwargs : keyword arguments
         Additional fitting options.
@@ -355,7 +355,7 @@ def fit_nlme(
 
     Examples
     --------
-    >>> # Using ML estimation (default)
+    >>> # Using MLE estimation (default)
     >>> beta, psi, stats, b = fit_nlme(X, y, group, None, model, beta0)
     >>>
     >>> # Using SAEM estimation
@@ -366,9 +366,119 @@ def fit_nlme(
     This is the recommended function for Python users as it provides a unified
     interface to both algorithms. MATLAB users can use nlmefit()/nlmefitsa() directly.
     """
-    if method.upper() == "ML":
+    if method.upper() == "MLE":
         return nlmefit(X, y, group, V, modelfun, beta0, **kwargs)
     elif method.upper() == "SAEM":
         return nlmefitsa(X, y, group, V, modelfun, beta0, **kwargs)
     else:
-        raise ValueError(f"Unknown method '{method}'. Use 'ML' or 'SAEM'.")
+        raise ValueError(f"Unknown method '{method}'. Use 'MLE' or 'SAEM'.")
+
+
+def fit_mle(
+    X: np.ndarray,
+    y: np.ndarray,
+    group: np.ndarray | list,
+    V: np.ndarray | None,
+    modelfun: ModelFunction,
+    beta0: np.ndarray,
+    **kwargs,
+) -> tuple[np.ndarray, np.ndarray, NLMEStats, np.ndarray | None]:
+    """
+    Fit nonlinear mixed-effects model using Maximum Likelihood Estimation.
+
+    Direct interface to MLE algorithm. This is equivalent to calling
+    fit_nlme(..., method='ML') or nlmefit().
+
+    Parameters
+    ----------
+    X : array_like, shape (n, p)
+        Predictor variables matrix.
+    y : array_like, shape (n,)
+        Response variable vector.
+    group : array_like, shape (n,)
+        Grouping variable.
+    V : array_like, shape (m, q) or None
+        Group-level predictor variables.
+    modelfun : callable
+        Model function with signature f(phi, x, v) -> y_pred.
+    beta0 : array_like, shape (k,)
+        Initial parameter estimates.
+    **kwargs : keyword arguments
+        Additional MLE options.
+
+    Returns
+    -------
+    beta : ndarray
+        Fixed-effects parameter estimates.
+    psi : ndarray
+        Random-effects covariance matrix.
+    stats : NLMEStats
+        Model statistics and diagnostics.
+    b : ndarray or None
+        Random-effects estimates for each group.
+
+    Examples
+    --------
+    >>> beta, psi, stats, b = fit_mle(X, y, group, None, model, beta0)
+
+    Notes
+    -----
+    This is a convenience function that directly calls the MLE algorithm.
+    For MATLAB compatibility, use nlmefit().
+    """
+    return nlmefit(X, y, group, V, modelfun, beta0, **kwargs)
+
+
+def fit_saem(
+    X: np.ndarray,
+    y: np.ndarray,
+    group: np.ndarray | list,
+    V: np.ndarray | None,
+    modelfun: ModelFunction,
+    beta0: np.ndarray,
+    **kwargs,
+) -> tuple[np.ndarray, np.ndarray, NLMEStats, np.ndarray | None]:
+    """
+    Fit nonlinear mixed-effects model using Stochastic Approximation EM.
+
+    Direct interface to SAEM algorithm. This is equivalent to calling
+    fit_nlme(..., method='SAEM') or nlmefitsa().
+
+    Parameters
+    ----------
+    X : array_like, shape (n, p)
+        Predictor variables matrix.
+    y : array_like, shape (n,)
+        Response variable vector.
+    group : array_like, shape (n,)
+        Grouping variable.
+    V : array_like, shape (m, q) or None
+        Group-level predictor variables.
+    modelfun : callable
+        Model function with signature f(phi, x, v) -> y_pred.
+    beta0 : array_like, shape (k,)
+        Initial parameter estimates.
+    **kwargs : keyword arguments
+        Additional SAEM options.
+
+    Returns
+    -------
+    beta : ndarray
+        Fixed-effects parameter estimates.
+    psi : ndarray
+        Random-effects covariance matrix.
+    stats : NLMEStats
+        Model statistics and diagnostics.
+    b : ndarray or None
+        Random-effects estimates for each group.
+
+    Examples
+    --------
+    >>> beta, psi, stats, b = fit_saem(X, y, group, None, model, beta0)
+
+    Notes
+    -----
+    This is a convenience function that directly calls the SAEM algorithm.
+    For MATLAB compatibility, use nlmefitsa().
+    """
+    return nlmefitsa(X, y, group, V, modelfun, beta0, **kwargs)
