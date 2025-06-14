@@ -59,23 +59,23 @@ beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, [10.0, 0.5
 Pre-built wheels are available for easy installation without requiring Rust:
 
 ```bash
-# Latest release (v0.2.4+):
+# Latest release (v0.2.5+):
 # Choose the appropriate wheel for your platform:
 
 # Linux (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-linux_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-linux_x86_64.whl
 
 # Windows (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-win_amd64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-win_amd64.whl
 
 # macOS (Intel):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-macosx_10_12_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-macosx_10_12_x86_64.whl
 
 # macOS (Apple Silicon):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-macosx_11_0_arm64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-macosx_11_0_arm64.whl
 
 # Or using pip instead of uv:
-pip install https://github.com/willov/PyNLME/releases/download/v0.2.4/pynlme-0.2.4-cp311-abi3-linux_x86_64.whl
+pip install https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-linux_x86_64.whl
 
 # Or browse releases to find the exact wheel for your platform:
 # https://github.com/willov/PyNLME/releases/latest
