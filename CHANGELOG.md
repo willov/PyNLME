@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New Python users should prefer `fit_nlme()` for unified interface
 - No breaking changes - existing code continues to work unchanged
 - All 60 tests passing with full backward and forward compatibility
+- Note: SAEM is stochastic - results vary between runs (expected Monte Carlo behavior)
 
 ## [0.2.3] - 2025-06-14
 
