@@ -149,7 +149,7 @@ impl MLEFitter {
 
             // M-step: Update parameters
             let (new_beta, new_psi, new_sigma) =
-                self.update_parameters(x, y, groups, v, &random_effects, &error_model, transforms, py, model_func)?;
+                self.update_parameters(x, y, groups, v, &random_effects, &error_model, transforms, py, model_func, &beta)?;
 
             // Compute log-likelihood
             let logl = self.compute_log_likelihood(
@@ -293,45 +293,13 @@ impl MLEFitter {
         transforms: &[Transform],
         py: Option<Python>,
         model_func: Option<&PyAny>,
+        current_beta: &Array1<f64>, // Use current beta as starting point
     ) -> Result<(Array1<f64>, Array2<f64>, f64), NLMEError> {
         let n_obs = y.len();
-        let n_params = random_effects.nrows();
+        let n_params = current_beta.len();
 
-        // Better parameter optimization using gradient-based method
-        let mut beta = Array1::zeros(n_params);
-
-        // Better initialization based on the data
-        if n_params >= 2 {
-            // For exponential model: y = a * exp(-b * t)
-            // Use log-linear regression as initial guess
-            let mut valid_y = Vec::new();
-            let mut valid_x = Vec::new();
-
-            for (i, &y_val) in y.iter().enumerate() {
-                if y_val > 0.0 {
-                    valid_y.push(y_val.ln());
-                    valid_x.push(x[[i, 0]]);
-                }
-            }
-
-            if valid_y.len() >= 2 {
-                // Linear regression on log(y) = log(a) - b*t
-                let n = valid_y.len() as f64;
-                let sum_x: f64 = valid_x.iter().sum();
-                let sum_y: f64 = valid_y.iter().sum();
-                let sum_xy: f64 = valid_x.iter().zip(valid_y.iter()).map(|(x, y)| x * y).sum();
-                let sum_xx: f64 = valid_x.iter().map(|x| x * x).sum();
-
-                let b = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x * sum_x);
-                let a = (sum_y - b * sum_x) / n;
-
-                beta[0] = a.exp().max(0.1); // Convert back from log scale
-                beta[1] = (-b).clamp(0.001, 10.0); // Ensure positive decay rate
-            } else {
-                beta[0] = y.mean().unwrap_or(1.0).max(0.1);
-                beta[1] = 0.1;
-            }
-        }
+        // Start optimization from current beta values
+        let mut beta = current_beta.clone();
 
         // Gradient descent optimization
         let mut prev_logl = f64::NEG_INFINITY;
@@ -360,13 +328,14 @@ impl MLEFitter {
             // Update parameters
             for i in 0..n_params {
                 beta[i] += step_size * gradient[i];
-                // Keep parameters in reasonable bounds
+                // Apply reasonable bounds based on parameter type
+                // For log-parameterized models, parameters can be negative
                 if i == 0 {
-                    // Amplitude
-                    beta[i] = beta[i].clamp(0.01, 1000.0);
-                } else if i == 1 {
-                    // Decay rate
-                    beta[i] = beta[i].clamp(0.001, 10.0);
+                    // First parameter (often absorption rate or amplitude)
+                    beta[i] = beta[i].clamp(-10.0, 10.0);
+                } else {
+                    // Other parameters (often log-transformed)
+                    beta[i] = beta[i].clamp(-20.0, 20.0);
                 }
             }
 

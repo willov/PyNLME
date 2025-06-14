@@ -101,9 +101,9 @@ class TestMATLABBaseline:
         
         initial_params = np.array([1.0, 1.0, 1.0])
         expected_params = np.array([1.0008, 4.9980, 6.9999])
-        tolerance = 25.0  # Increased tolerance for algorithm development
-                          # Current implementation converges to different local minimum
-                          # TODO: Investigate parameterization/scaling differences with MATLAB
+        tolerance = 0.3  # Reasonable tolerance for mixed-effects optimization
+                         # Algorithms may converge to slightly different local optima
+                         # Current results are close to MATLAB baseline
         
         try:
             beta, psi, stats, b = nlmefitsa(
@@ -141,9 +141,9 @@ class TestMATLABBaseline:
         
         initial_params = np.array([0.5, -1.0, 2.5, 0.5])
         expected_params = np.array([0.4606, -1.3459, 2.8277, 0.7729])
-        tolerance = 25.0  # Increased tolerance for algorithm development
-                          # Current implementation converges to different local minimum
-                          # TODO: Investigate parameterization/scaling differences with MATLAB
+        tolerance = 0.3  # Reasonable tolerance for mixed-effects optimization
+                         # Algorithms may converge to slightly different local optima
+                         # Current results are close to MATLAB baseline
         
         try:
             beta, psi, stats, b = nlmefit(
@@ -280,24 +280,34 @@ class TestMATLABBaseline:
 
     def _indomethacin_model(self, phi, t, dose=None):
         """
-        One-compartment model with first-order absorption for indomethacin.
-        C(t) = (F*D*ka)/(V*(ka-k)) * (exp(-k*t) - exp(-ka*t))
+        Bi-exponential model for indomethacin as used in MATLAB documentation.
+        
+        MATLAB model: model = @(phi,t)(phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t));
+        With ParamTransform=[0 1 0 1], meaning phi(2) and phi(4) are log-transformed.
+        
+        So the actual model is:
+        C(t) = phi[0] * exp(-exp(phi[1]) * t) + phi[2] * exp(-exp(phi[3]) * t)
+        
+        Where phi values are the transformed parameters reported by MATLAB.
         """
-        if dose is None:
-            dose = 1.0  # Default dose
+        # Handle both 1D and 2D input (Rust backend passes 2D arrays)
+        if hasattr(t, 'ndim') and t.ndim == 2:
+            t = t.flatten()
 
-        ka = phi[0]  # Absorption rate constant
-        V = np.exp(phi[1])  # Volume of distribution
-        Cl = np.exp(phi[2])  # Clearance
-        k = Cl / V  # Elimination rate constant
+        # Apply parameter transformations as done by MATLAB
+        # phi[0]: no transform
+        # phi[1]: log transform -> exp(phi[1]) 
+        # phi[2]: no transform
+        # phi[3]: log transform -> exp(phi[3])
+        
+        A1 = phi[0]              # amplitude 1 (no transform)
+        lambda1 = np.exp(phi[1]) # rate constant 1 (log-transformed)
+        A2 = phi[2]              # amplitude 2 (no transform)
+        lambda2 = np.exp(phi[3]) # rate constant 2 (log-transformed)
 
-        # Avoid division by zero
-        if abs(ka - k) < 1e-10:
-            ka = k + 1e-10
-
-        # One-compartment model with first-order absorption
-        concentration = (dose * ka) / (V * (ka - k)) * (np.exp(-k * t) - np.exp(-ka * t))
-        return concentration
+        # Bi-exponential model: C(t) = A1*exp(-lambda1*t) + A2*exp(-lambda2*t)
+        concentration = A1 * np.exp(-lambda1 * t) + A2 * np.exp(-lambda2 * t)
+        return concentration  # Return 1D array
 
 
 if __name__ == "__main__":
