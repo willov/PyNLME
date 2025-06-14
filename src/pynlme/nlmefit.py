@@ -337,7 +337,7 @@ def fit_nlme(
     beta0 : array_like, shape (k,)
         Initial parameter estimates.
     method : str, default "MLE"
-        Fitting method: "MLE" for Maximum Likelihood or "SAEM" for
+        Fitting method: "MLE" (or "ML") for Maximum Likelihood or "SAEM" for
         Stochastic Approximation EM.
     **kwargs : keyword arguments
         Additional fitting options.
@@ -366,12 +366,12 @@ def fit_nlme(
     This is the recommended function for Python users as it provides a unified
     interface to both algorithms. MATLAB users can use nlmefit()/nlmefitsa() directly.
     """
-    if method.upper() == "MLE":
+    if method.upper() in ["MLE", "ML"]:
         return nlmefit(X, y, group, V, modelfun, beta0, **kwargs)
     elif method.upper() == "SAEM":
         return nlmefitsa(X, y, group, V, modelfun, beta0, **kwargs)
     else:
-        raise ValueError(f"Unknown method '{method}'. Use 'MLE' or 'SAEM'.")
+        raise ValueError(f"Unknown method '{method}'. Use 'MLE' (or 'ML') or 'SAEM'.")
 
 
 def fit_mle(
