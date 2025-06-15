@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2025-06-15
+
+### Fixed
+- **Indomethacin Example**: Corrected pharmacokinetic model from one-compartment
+  absorption to bi-exponential decay to match MATLAB documentation
+- **Example Algorithm**: Switched from `nlmefit` (MLE) to `nlmefitsa` (SAEM) to
+  enable proper subject-to-subject variability estimation
+- **Code Quality**: Removed trailing whitespace, fixed matplotlib deprecation
+  warnings, and improved documentation
+- **Test Comments**: Updated MATLAB baseline test comments to reflect current
+  implementation status
+
+### Removed
+- **Output Function Demo**: Removed non-functional output function demo that
+  doesn't match MATLAB's real-time parameter tracking behavior
+
+### Changed
+- **Model Consistency**: Ensured indomethacin model in examples matches the one
+  used in MATLAB baseline tests
+- **Documentation**: Updated example docstrings to explain model choices and
+  implementation differences from MATLAB
+
+## [0.2.6] - 2025-06-15
+
+### Fixed
+- **Indomethacin Example**: Corrected pharmacokinetic model from one-compartment  
+  absorption to bi-exponential decay to match MATLAB documentation
+- **Example Algorithm**: Switched from `nlmefit` (MLE) to `nlmefitsa` (SAEM) to  
+  enable proper subject-to-subject variability estimation
+- **Code Quality**: Removed trailing whitespace, fixed matplotlib deprecation  
+  warnings, and improved documentation
+- **Test Comments**: Updated MATLAB baseline test comments to reflect current  
+  implementation status
+
+### Removed
+- **Output Function Demo**: Removed non-functional output function demo that  
+  doesn't match MATLAB's real-time parameter tracking behavior
+
+### Changed
+- **Model Consistency**: Ensured indomethacin model in examples matches the one  
+  used in MATLAB baseline tests
+- **Documentation**: Updated example docstrings to explain model choices and  
+  implementation differences from MATLAB
+
 ## [0.2.5] - 2025-06-14
 
 ### Added

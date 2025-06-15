@@ -1,21 +1,31 @@
 """
 Recreation of MATLAB nlmefit documentation examples.
 
-This file recreates the exact examples from the MATLAB Statistics and Machine Learning
+This file recreates the key examples from the MATLAB Statistics and Machine Learning
 Toolbox documentation for nlmefit:
 https://se.mathworks.com/help/stats/nlmefit.html
 
 The examples demonstrate:
 1. Specify Group (using nlmefitsa with group-level predictors)
 2. Transform and Plot Fitted Model (using indomethacin pharmacokinetic data)
-3. Replicate the MATLAB documentation plots
+
+Key Implementation Notes:
+- Example 2 uses a bi-exponential decay model: C(t) = A1*exp(-lambda1*t) + A2*exp(-lambda2*t)
+- Uses SAEM (nlmefitsa) instead of MLE (nlmefit) to provide random effects estimation
+  and subject-to-subject variability, since the Python MLE implementation does not
+  currently estimate random effects
+- Model structure was corrected from one-compartment absorption to bi-exponential decay
+  to match the MATLAB documentation and achieve proper model fits
+- The output function demo from MATLAB documentation is not included as it requires
+  real-time parameter tracking during optimization, which is not currently supported
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
 import os
 
-from pynlme import nlmefit, nlmefitsa
+import matplotlib.pyplot as plt
+import numpy as np
+
+from pynlme import nlmefitsa
 
 # Output directory for generated plots
 OUTPUT_DIR = "examples/matlab_documentation_examples_output"
@@ -23,19 +33,17 @@ OUTPUT_DIR = "examples/matlab_documentation_examples_output"
 # Subdirectories for each example
 EXAMPLE1_DIR = os.path.join(OUTPUT_DIR, "example1_group_predictors")
 EXAMPLE2_DIR = os.path.join(OUTPUT_DIR, "example2_indomethacin")
-EXAMPLE3_DIR = os.path.join(OUTPUT_DIR, "example3_output_function")
 
 # Ensure all output directories exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(EXAMPLE1_DIR, exist_ok=True)
 os.makedirs(EXAMPLE2_DIR, exist_ok=True)
-os.makedirs(EXAMPLE3_DIR, exist_ok=True)
 
 
 def create_parameter_convergence_plots(beta_history, psi_history, save_path=None):
     """
     Create parameter convergence plots similar to MATLAB's nlmefitsa output.
-    
+
     Parameters:
     -----------
     beta_history : list of arrays
@@ -48,9 +56,9 @@ def create_parameter_convergence_plots(beta_history, psi_history, save_path=None
     # Create figure with 6 subplots (3 for beta, 3 for psi diagonal)
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     fig.suptitle('Parameter Convergence During SAEM Iterations', fontsize=14)
-    
+
     iterations = range(len(beta_history))
-    
+
     # Plot beta parameters
     for i in range(3):
         beta_values = [beta[i] for beta in beta_history]
@@ -60,7 +68,7 @@ def create_parameter_convergence_plots(beta_history, psi_history, save_path=None
         axes[0, i].set_ylabel('Value')
         axes[0, i].grid(True, alpha=0.3)
         axes[0, i].legend()
-    
+
     # Plot psi diagonal elements
     for i in range(3):
         psi_values = [psi[i, i] for psi in psi_history]
@@ -70,148 +78,152 @@ def create_parameter_convergence_plots(beta_history, psi_history, save_path=None
         axes[1, i].set_ylabel('Value')
         axes[1, i].grid(True, alpha=0.3)
         axes[1, i].legend()
-    
+
     plt.tight_layout()
-    
+
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Parameter convergence plot saved to: {save_path}")
-    
+
     return fig
 
 
 def create_3d_trajectory_plot(beta_history, save_path=None):
     """
     Create a 3D trajectory plot showing the optimization path.
-    
     Parameters:
     -----------
     beta_history : list of arrays
-        History of beta parameter estimates during iterations  
+        History of beta parameter estimates during iterations
     save_path : str, optional
         Path to save the figure
     """
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
-    
+
     iterations = range(len(beta_history))
     beta1_values = [beta[0] for beta in beta_history]
     beta2_values = [beta[1] for beta in beta_history]
     beta3_values = [beta[2] for beta in beta_history]
-    
-    # Plot the trajectory
+
+    # Plot the trajectory (using all three beta parameters)
     ax.plot(iterations, beta2_values, beta1_values, 'mo-', markersize=3, linewidth=1)
-    
+
+    # Add beta3 as color coding or secondary plot
+    scatter = ax.scatter(iterations, beta2_values, beta1_values, c=beta3_values,
+                        cmap='viridis', s=20, alpha=0.6)
+    plt.colorbar(scatter, label='beta(3)', shrink=0.5)
+
     ax.set_xlabel('Iteration')
     ax.set_ylabel('beta(2)')
     ax.set_zlabel('beta(1)')
     ax.set_title('3D Parameter Trajectory During Optimization')
     ax.view_init(elev=10, azim=12)
-    
+
     plt.tight_layout()
-    
+
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"3D trajectory plot saved to: {save_path}")
-    
+
     return fig
 
 
-def create_pharmacokinetic_plots(time, concentration, subject, beta, psi, b, model_func, save_path_pop=None, save_path_ind=None):
+def create_pharmacokinetic_plots(time, concentration, subject, beta, _psi, b, model_func, save_path_pop=None, save_path_ind=None):
     """
     Create pharmacokinetic concentration-time plots.
-    
+
     Parameters:
     -----------
     time : array
         Time points
-    concentration : array  
+    concentration : array
         Observed concentration values
     subject : array
         Subject identifiers
     beta : array
         Fixed effects estimates
-    psi : array
-        Random effects covariance matrix
+    _psi : array
+        Random effects covariance matrix (unused but kept for API consistency)
     b : array
         Random effects estimates
     model_func : callable
         Model function
     save_path_pop : str, optional
         Path to save population model plot
-    save_path_ind : str, optional  
+    save_path_ind : str, optional
         Path to save individual model plot
     """
     unique_subjects = np.unique(subject)
     n_subjects = len(unique_subjects)
-    colors = plt.cm.tab10(np.linspace(0, 1, n_subjects))
-    
+    colors = plt.colormaps.get_cmap('tab10')(np.linspace(0, 1, n_subjects))
+
     # Time points for smooth curves
     tt = np.linspace(0, 8, 100)
-    
+
     # Population model plot (fixed effects only)
     fig1, ax1 = plt.subplots(figsize=(10, 6))
-    
+
     # Plot data points for each subject
     for i, subj in enumerate(unique_subjects):
         mask = subject == subj
-        ax1.scatter(time[mask], concentration[mask], c=[colors[i]], 
+        ax1.scatter(time[mask], concentration[mask], c=[colors[i]],
                    label=f'subject {subj}', alpha=0.7, s=30)
-    
+
     # Plot population fitted curve (fixed effects only)
-    # Transform beta back from log scale for parameters 2 and 4
-    phi_pop = [beta[0], np.exp(beta[1]), beta[2], np.exp(beta[3])]
+    # For bi-exponential model: C(t) = A1*exp(-lambda1*t) + A2*exp(-lambda2*t)
+    phi_pop = [beta[0], beta[1], beta[2], beta[3]]  # No transformation needed here
     cc_pop = model_func(phi_pop, tt)
     ax1.plot(tt, cc_pop, 'k-', linewidth=2, label='fitted curve')
-    
+
     ax1.set_xlabel('Time (hours)')
     ax1.set_ylabel('Concentration (mcg/ml)')
     ax1.set_title('Indomethacin Elimination - Population Model')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    
+
     if save_path_pop:
         plt.savefig(save_path_pop, dpi=300, bbox_inches='tight')
         print(f"Population model plot saved to: {save_path_pop}")
-    
+
     # Individual model plot (fixed + random effects)
     fig2, ax2 = plt.subplots(figsize=(12, 6))
-    
+
     # Plot data points and individual fitted curves
     legend_labels = []
     for i, subj in enumerate(unique_subjects):
         mask = subject == subj
-        ax2.scatter(time[mask], concentration[mask], c=[colors[i]], 
+        ax2.scatter(time[mask], concentration[mask], c=[colors[i]],
                    alpha=0.7, s=30)
         legend_labels.append(f'subject {subj}')
-        
+
         # Individual fitted curve (fixed + random effects)
         # Check if b has the expected dimensions
         if b is not None and b.shape[1] > i and b.shape[0] >= 4:
             phi_ind = [
-                beta[0] + b[0, i], 
-                np.exp(beta[1] + b[1, i]), 
-                beta[2] + b[2, i], 
-                np.exp(beta[3] + b[3, i])
+                beta[0] + b[0, i],
+                beta[1] + b[1, i],
+                beta[2] + b[2, i],
+                beta[3] + b[3, i]
             ]
         else:
             # Use only fixed effects if random effects are not available
-            phi_ind = [beta[0], np.exp(beta[1]), beta[2], np.exp(beta[3])]
-            
+            phi_ind = [beta[0], beta[1], beta[2], beta[3]]
+
         cc_ind = model_func(phi_ind, tt)
         ax2.plot(tt, cc_ind, color=colors[i], linewidth=1.5)
         legend_labels.append(f'fitted curve {subj}')
-    
+
     ax2.set_xlabel('Time (hours)')
     ax2.set_ylabel('Concentration (mcg/ml)')
     ax2.set_title('Indomethacin Elimination - Individual Models')
     ax2.legend(legend_labels)
     ax2.grid(True, alpha=0.3)
-    
+
     if save_path_ind:
         plt.savefig(save_path_ind, dpi=300, bbox_inches='tight')
         print(f"Individual model plot saved to: {save_path_ind}")
-    
+
     return fig1, fig2
 
 
@@ -223,7 +235,7 @@ def example_1_specify_group(create_plots=True):
     MATLAB call: beta = nlmefitsa(X,y,group,V,model,[1 1 1])
 
     Expected parameter estimates: [1.0008, 4.9980, 6.9999]
-    
+
     Parameters:
     -----------
     create_plots : bool, optional
@@ -293,15 +305,14 @@ def example_1_specify_group(create_plots=True):
     try:
         initial_params = np.array([1.0, 1.0, 1.0])
 
-        from pynlme import nlmefitsa
-        beta, psi, stats, b = nlmefitsa(
+        beta, _psi, _stats, _b = nlmefitsa(
             X=X,
             y=y,
             group=group,
             V=V,
             modelfun=model_function_group_predictors,
             beta0=initial_params,
-            verbose=2,  # More verbose output
+            verbose=0,  # Quiet output for production use
         )
 
         result = beta
@@ -320,19 +331,19 @@ def example_1_specify_group(create_plots=True):
         # Create plots if requested
         if create_plots:
             print("\nCreating convergence plots...")
-            
+
             # Generate simulated parameter history for plotting
             # In a real implementation, this would come from the algorithm
             n_iter = 50
             beta_history = []
             psi_history = []
-            
+
             # Simulate convergence from initial values [1, 1, 1] to final values
             for i in range(n_iter):
                 progress = i / (n_iter - 1)
                 # Sigmoid-like convergence
                 alpha = 1 / (1 + np.exp(-10 * (progress - 0.5)))
-                
+
                 # Beta convergence with some realistic dynamics
                 beta_sim = np.array([
                     1.0 + 0.0008 * alpha + 0.1 * np.sin(progress * 4 * np.pi) * (1 - alpha),
@@ -340,26 +351,26 @@ def example_1_specify_group(create_plots=True):
                     1.0 + 5.9999 * alpha + 0.15 * np.sin(progress * 5 * np.pi) * (1 - alpha)
                 ])
                 beta_history.append(beta_sim)
-                
+
                 # Psi convergence (small positive definite matrix)
                 psi_sim = np.eye(3) * 0.001 * (1 + alpha * 0.1)
                 psi_history.append(psi_sim)
-            
+
             # Create convergence plots
-            fig_conv = create_parameter_convergence_plots(
-                beta_history, psi_history, 
+            _fig_conv = create_parameter_convergence_plots(
+                beta_history, psi_history,
                 save_path=f"{EXAMPLE1_DIR}/group_predictors_convergence.png"
             )
-            
+
             # Create 3D trajectory plot
-            fig_3d = create_3d_trajectory_plot(
+            _fig_3d = create_3d_trajectory_plot(
                 beta_history,
                 save_path=f"{EXAMPLE1_DIR}/group_predictors_3d_trajectory.png"
             )
-            
+
             plt.show()
 
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"✗ Error: {e}")
 
     return X, y, group, V
@@ -412,11 +423,17 @@ def example_2_transform_and_plot(create_plots=True):
     Example 2: Transform and Plot Fitted Model
 
     This example demonstrates parameter transformations and result visualization
-    using the indomethacin pharmacokinetic data.
+    using the indomethacin pharmacokinetic data with a bi-exponential decay model.
+
+    Model: C(t) = A1*exp(-lambda1*t) + A2*exp(-lambda2*t)
+
+    Note: Uses SAEM (nlmefitsa) instead of MLE (nlmefit) because the Python MLE
+    implementation does not estimate random effects. SAEM provides the same
+    subject-to-subject variability as MATLAB's nlmefit.
 
     Expected parameter estimates: [0.4606, -1.3459, 2.8277, 0.7729]
-    These correspond to: [ka, log(V), log(Cl), log(σ²)]
-    
+    These correspond to: [A1, log(lambda1), A2, log(lambda2)]
+
     Parameters:
     -----------
     create_plots : bool, optional
@@ -523,21 +540,24 @@ def example_2_transform_and_plot(create_plots=True):
     print(
         f"Data: {len(concentration)} observations, {len(np.unique(subject))} subjects"
     )
-    print("Model: One-compartment with first-order absorption")
+    print("Model: Bi-exponential decay: C(t) = A1*exp(-λ1*t) + A2*exp(-λ2*t)")
 
-    # Fit the model
+    # Fit the model using SAEM (nlmefitsa) for proper random effects estimation
+    # Note: The Python MLE implementation (nlmefit) does not estimate random effects,
+    # so we use SAEM to get subject-to-subject variability like MATLAB's nlmefit
     try:
         initial_params = np.array(
             [0.5, -1.0, 2.5, 0.5]
-        )  # [ka, log(V), log(Cl), log(σ²)]
+        )  # [A1, log(lambda1), A2, log(lambda2)]
 
-        beta, psi, stats, b = nlmefit(
+        beta, psi, _stats, b = nlmefitsa(
             X=time.reshape(-1, 1),  # Time as X predictor
             y=concentration,
             group=subject,
             V=None,  # No group-level predictors for this example
             modelfun=indomethacin_model,
             beta0=initial_params,
+            verbose=0,  # Quiet output for production use
         )
 
         result = beta
@@ -553,76 +573,75 @@ def example_2_transform_and_plot(create_plots=True):
             else:
                 print(f"⚠ Results differ from expected (max diff: {diff.max():.4f})")
 
-        # Parameter transformations
-        if hasattr(result, "__len__") and len(result) >= 3:
+        # Parameter transformations for bi-exponential model
+        if hasattr(result, "__len__") and len(result) >= 4:
             print("\nParameter transformations:")
-            print(f"  ka (absorption rate): {result[0]:.4f}")
-            print(f"  V (volume):          {np.exp(result[1]):.4f}")
-            print(f"  Cl (clearance):      {np.exp(result[2]):.4f}")
-            if len(result) > 3:
-                print(f"  σ² (residual var):   {np.exp(result[3]):.4f}")
+            print(f"  A1 (amplitude 1):     {result[0]:.4f}")
+            print(f"  lambda1 (rate 1):     {np.exp(result[1]):.4f}")
+            print(f"  A2 (amplitude 2):     {result[2]:.4f}")
+            print(f"  lambda2 (rate 2):     {np.exp(result[3]):.4f}")
 
         # Create pharmacokinetic plots if requested
         if create_plots and hasattr(result, "__len__") and len(result) >= 4:
             print("\nCreating pharmacokinetic plots...")
-            
+
             # Create plots
-            fig_pop, fig_ind = create_pharmacokinetic_plots(
+            _fig_pop, _fig_ind = create_pharmacokinetic_plots(
                 time, concentration, subject, beta, psi, b, indomethacin_model,
                 save_path_pop=f"{EXAMPLE2_DIR}/indomethacin_population.png",
                 save_path_ind=f"{EXAMPLE2_DIR}/indomethacin_individual.png"
             )
-            
+
             plt.show()
 
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"✗ Error: {e}")
 
     return concentration, time, subject
 
 
-def indomethacin_model(phi, t, dose=None):
+def indomethacin_model(phi, t, _dose=None):
     """
-    One-compartment model with first-order absorption for indomethacin.
+    Bi-exponential model for indomethacin as used in MATLAB documentation.
 
-    C(t) = (F*D*ka)/(V*(ka-k)) * (exp(-k*t) - exp(-ka*t))
+    MATLAB model: model = @(phi,t)(phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t));
+    With ParamTransform=[0 1 0 1], meaning phi(2) and phi(4) are log-transformed.
 
-    Where:
-    - ka = absorption rate constant (phi[0])
-    - V = volume of distribution (exp(phi[1]))
-    - Cl = clearance (exp(phi[2]))
-    - k = elimination rate constant = Cl/V
-    - F = bioavailability (assumed = 1)
-    - D = dose
+    So the actual model is:
+    C(t) = phi[0] * exp(-exp(phi[1]) * t) + phi[2] * exp(-exp(phi[3]) * t)
+
+    This represents a sum of two exponential decay processes.
 
     Parameters
     ----------
     phi : array_like
-        Parameters [ka, log(V), log(Cl), ...]
+        Parameters [A1, log(lambda1), A2, log(lambda2)]
+        - phi[0]: amplitude of first exponential (no transform)
+        - phi[1]: log of first rate constant (log-transformed)
+        - phi[2]: amplitude of second exponential (no transform)
+        - phi[3]: log of second rate constant (log-transformed)
     t : array_like
         Time points
-    dose : float, optional
-        Dose amount
+    _dose : float, optional
+        Dose amount (unused but kept for API consistency)
 
     Returns
     -------
     concentration : ndarray
         Predicted concentration
     """
-    if dose is None:
-        dose = 1.0  # Default dose
+    # Handle both 1D and 2D input (some backends pass 2D arrays)
+    if hasattr(t, 'ndim') and t.ndim == 2:
+        t = t.flatten()
 
-    ka = phi[0]  # Absorption rate constant
-    V = np.exp(phi[1])  # Volume of distribution
-    Cl = np.exp(phi[2])  # Clearance
-    k = Cl / V  # Elimination rate constant
+    # Apply parameter transformations as done by MATLAB
+    A1 = phi[0]              # amplitude 1 (no transform)
+    lambda1 = np.exp(phi[1]) # rate constant 1 (log-transformed)
+    A2 = phi[2]              # amplitude 2 (no transform)
+    lambda2 = np.exp(phi[3]) # rate constant 2 (log-transformed)
 
-    # Avoid division by zero
-    if abs(ka - k) < 1e-10:
-        ka = k + 1e-10
-
-    # One-compartment model with first-order absorption
-    concentration = (dose * ka) / (V * (ka - k)) * (np.exp(-k * t) - np.exp(-ka * t))
+    # Bi-exponential model: C(t) = A1*exp(-lambda1*t) + A2*exp(-lambda2*t)
+    concentration = A1 * np.exp(-lambda1 * t) + A2 * np.exp(-lambda2 * t)
 
     return concentration
 
@@ -630,7 +649,7 @@ def indomethacin_model(phi, t, dose=None):
 def run_all_examples(create_plots=True):
     """
     Run all MATLAB documentation examples.
-    
+
     Parameters:
     -----------
     create_plots : bool, optional
@@ -647,89 +666,6 @@ def run_all_examples(create_plots=True):
     example_2_transform_and_plot(create_plots=create_plots)
 
 
-def example_3_output_function_demo(create_plots=True):
-    """
-    Example 3: Output Function Demo
-    
-    This example demonstrates creating a custom output function
-    to track parameter convergence during optimization.
-    
-    Parameters:
-    -----------
-    create_plots : bool, optional
-        Whether to create and save the output function plot
-    """
-    print("Example 3: Output Function Demo")
-    print("-" * 30)
-    
-    # Use the same data from example 1 (just for context - not actually needed for this demo)
-    _ = example_1_specify_group(create_plots=False)
-    
-    print("Creating output function visualization...")
-    print("This demonstrates tracking parameter convergence in real-time")
-    
-    if create_plots:
-        # Create a figure showing how an output function would work
-        fig = plt.figure(figsize=(10, 8))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Generate realistic parameter trajectory 
-        n_iter = 100
-        iterations = np.arange(n_iter)
-        
-        # Simulate parameter evolution (similar to MATLAB example)
-        beta1_traj = []
-        beta2_traj = []
-        
-        for i in range(n_iter):
-            progress = i / (n_iter - 1)
-            
-            # Beta1: starts at 1, jumps to ~3.3, then converges to ~1
-            if i < 20:
-                beta1 = 1.0 + 0.1 * np.random.normal(0, 0.1)
-            elif i < 40:
-                beta1 = 1.0 + 2.3 * (i - 20) / 20 + 0.2 * np.random.normal(0, 0.1)
-            else:
-                beta1 = 3.3 - 2.3 * (i - 40) / (n_iter - 40) + 0.15 * np.random.normal(0, 0.1)
-            
-            # Beta2: starts at 1, converges to ~5
-            beta2 = 1.0 + 4.0 * progress**1.5 + 0.3 * np.sin(progress * 8 * np.pi) * (1 - progress) + 0.1 * np.random.normal(0, 0.1)
-            
-            beta1_traj.append(beta1)
-            beta2_traj.append(beta2)
-        
-        # Plot the trajectory
-        ax.plot(iterations, beta2_traj, beta1_traj, 'mo-', markersize=2, linewidth=1, alpha=0.7)
-        
-        # Highlight key points
-        ax.scatter([0], [beta2_traj[0]], [beta1_traj[0]], c='green', s=100, label='Start')
-        ax.scatter([n_iter-1], [beta2_traj[-1]], [beta1_traj[-1]], c='red', s=100, label='End')
-        
-        ax.set_xlabel('Iteration')
-        ax.set_ylabel('beta(2)')
-        ax.set_zlabel('beta(1)')
-        ax.set_title('Parameter Trajectory During nlmefitsa Optimization\n(Output Function Visualization)')
-        ax.legend()
-        ax.view_init(elev=10, azim=12)
-        
-        # Add text annotation
-        ax.text2D(0.02, 0.98, 
-                 "β₁ starts at 1, jumps to ~3.3, then converges to 1\nβ₂ starts at 1 and converges to 5", 
-                 transform=ax.transAxes, fontsize=10, verticalalignment='top',
-                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-        
-        plt.tight_layout()
-        
-        if create_plots:
-            save_path = f"{EXAMPLE3_DIR}/output_function_demo.png"
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-            print(f"Output function demo plot saved to: {save_path}")
-        
-        plt.show()
-    
-    return fig if create_plots else None
-
-
 def create_comprehensive_demo():
     """
     Create a comprehensive demo showing all the MATLAB documentation plots.
@@ -741,16 +677,12 @@ def create_comprehensive_demo():
     print("1. Parameter convergence plots (nlmefitsa)")
     print("2. 3D parameter trajectory")
     print("3. Pharmacokinetic concentration-time plots")
-    print("4. Output function demonstration")
     print()
-    
+
     # Run all examples with plotting
     run_all_examples(create_plots=True)
     print()
-    
-    # Add the output function demo
-    example_3_output_function_demo(create_plots=True)
-    
+
     print()
     print("=" * 48)
     print("All plots have been generated and saved to subfolders:")
@@ -760,18 +692,16 @@ def create_comprehensive_demo():
     print("  example1_group_predictors/")
     print("    - group_predictors_convergence.png")
     print("    - group_predictors_3d_trajectory.png")
-    print("  example2_indomethacin/") 
+    print("  example2_indomethacin/")
     print("    - indomethacin_population.png")
     print("    - indomethacin_individual.png")
-    print("  example3_output_function/")
-    print("    - output_function_demo.png")
     print("=" * 48)
 
 
 # ...existing code...
 if __name__ == "__main__":
     import sys
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == "demo":
         # Run comprehensive demo
         create_comprehensive_demo()
