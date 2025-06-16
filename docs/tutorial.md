@@ -50,6 +50,70 @@ Where:
 2. **Random Effects (b_i)**: Individual deviations from population
 3. **Error Model**: Describes residual variation
 
+## Data Input Formats
+
+PyNLME supports two data input formats to accommodate different data organization preferences:
+
+### Traditional Stacked Format (MATLAB-compatible)
+
+In the traditional format, all measurements are stacked into single arrays:
+
+```python
+# All time points stacked together
+time_stacked = np.array([0, 1, 2, 4, 0, 1, 2, 4, 0, 1, 2, 4])  # 3 subjects, 4 obs each
+
+# All concentration measurements stacked  
+conc_stacked = np.array([10, 7, 5, 3, 12, 8, 6, 4, 11, 8, 6, 3])
+
+# Group indicators (which subject each measurement belongs to)
+subject_stacked = np.array([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2])
+```
+
+### Multi-Dimensional Format (New!)
+
+In the new format, each row represents a subject:
+
+```python
+# Time points organized by subject (each row = one subject)
+time_grouped = np.array([
+    [0, 1, 2, 4],  # Subject 1 time points
+    [0, 1, 2, 4],  # Subject 2 time points  
+    [0, 1, 2, 4],  # Subject 3 time points
+])
+
+# Concentrations organized by subject
+conc_grouped = np.array([
+    [10, 7, 5, 3],  # Subject 1 concentrations
+    [12, 8, 6, 4],  # Subject 2 concentrations
+    [11, 8, 6, 3],  # Subject 3 concentrations
+])
+
+# No group parameter needed!
+```
+
+### Using Both Formats
+
+Both formats work identically with all PyNLME functions:
+
+```python
+# Traditional stacked format
+beta1, psi1, stats1, b1 = nlmefit(
+    time_stacked.reshape(-1, 1), conc_stacked, subject_stacked, 
+    None, model_function, initial_params
+)
+
+# Multi-dimensional format - no group parameter needed!
+beta2, psi2, stats2, b2 = nlmefit(
+    time_grouped, conc_grouped, None,
+    None, model_function, initial_params  
+)
+
+# Results are identical
+assert np.allclose(beta1, beta2)
+```
+
+The system automatically detects the input format and handles the conversion internally, so you can use whichever format is more convenient for your data organization.
+
 ## Tutorial 1: One-Compartment Pharmacokinetic Model
 
 Let's fit a simple PK model: `C(t) = Dose/V * exp(-CL/V * t)`

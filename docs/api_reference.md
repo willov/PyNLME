@@ -281,3 +281,67 @@ cov_pattern = np.eye(2)  # 2x2 diagonal
 options = NLMEOptions(cov_pattern=cov_pattern)
 beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, **options.__dict__)
 ```
+
+---
+
+## Utility Functions
+
+### `stack_grouped_data(X_grouped, y_grouped, group_ids=None)`
+
+Convert multi-dimensional grouped data to stacked format.
+
+**Parameters:**
+- `X_grouped` (ndarray): Grouped predictor data, shape `(n_groups, n_obs_per_group, n_features)` or `(n_groups, n_obs_per_group)`
+- `y_grouped` (ndarray): Grouped response data, shape `(n_groups, n_obs_per_group)`
+- `group_ids` (array_like, optional): Custom group identifiers. If None, uses consecutive integers starting from 0.
+
+**Returns:**
+- `X_stacked` (ndarray): Stacked predictor data, shape `(n_groups * n_obs_per_group, n_features)`
+- `y_stacked` (ndarray): Stacked response data, shape `(n_groups * n_obs_per_group,)`
+- `group_stacked` (ndarray): Group indicators, shape `(n_groups * n_obs_per_group,)`
+
+**Example:**
+```python
+from pynlme import stack_grouped_data
+
+# Data where each row represents a subject
+X_grouped = np.array([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]])  # 3 subjects, 4 obs each
+y_grouped = np.array([[10, 7, 5, 3], [12, 8, 6, 4], [11, 8, 6, 3]])
+
+# Convert to stacked format
+X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped)
+
+# Use with custom group IDs
+X_stacked, y_stacked, group_stacked = stack_grouped_data(
+    X_grouped, y_grouped, group_ids=['Patient_A', 'Patient_B', 'Patient_C']
+)
+```
+
+---
+
+### `detect_data_format(X, y, group=None)`
+
+Detect whether data is in stacked or grouped format.
+
+**Parameters:**
+- `X` (ndarray): Predictor variables
+- `y` (ndarray): Response variables
+- `group` (array_like, optional): Group identifiers (only relevant for stacked format)
+
+**Returns:**
+- `format` (str): Either 'stacked' or 'grouped'
+
+**Example:**
+```python
+from pynlme import detect_data_format
+
+# Detect format automatically
+format_type = detect_data_format(X, y, group)
+print(f"Data format: {format_type}")
+
+# Works with both formats
+if format_type == 'grouped':
+    print("Data is organized with rows representing subjects")
+else:
+    print("Data is in traditional stacked format")
+```

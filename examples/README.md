@@ -35,6 +35,20 @@ Simple examples to get started with PyNLME:
 - Basic MLE and SAEM fitting
 - Essential statistics and diagnostics
 
+### [`multidimensional_input_demo.py`](multidimensional_input_demo.py)
+**New!** Demonstrates the multi-dimensional input format feature:
+- Traditional vs. new grouped data formats
+- Pharmacokinetic modeling example
+- Multiple predictor variables
+- Automatic format detection and conversion
+
+### [`grouped_vs_stacked_comparison.py`](grouped_vs_stacked_comparison.py)
+**New!** Compares grouped vs stacked data formats using a concrete example
+(3 subjects with 4 measurements each):
+- Traditional stacked vs. new grouped format comparison
+- Data format equivalence verification  
+- Cleaner code examples
+
 ### [`advanced_usage.py`](advanced_usage.py)  
 Complex modeling scenarios:
 - Multiple error models

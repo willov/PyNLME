@@ -68,6 +68,13 @@ uv run maturin develop
 
 ## 🔧 Core Features
 
+### **Multi-Dimensional Input Support (New!)**
+- **Grouped Format**: Provide data where each row represents a subject/group
+- **Stacked Format**: Traditional MATLAB-style stacked arrays with group indicators
+- **Automatic Detection**: System automatically detects and converts between formats
+- **Utility Functions**: `stack_grouped_data()` and `detect_data_format()` for manual conversion
+- **Complete Compatibility**: Both formats produce identical results
+
 ### **Algorithms**
 - **`fit_nlme()`** - Unified interface with method parameter ('MLE' or 'SAEM')
 - **`fit_mle()`** - Direct Maximum Likelihood Estimation interface

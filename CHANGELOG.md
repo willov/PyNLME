@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-06-16
+
+### Added
+- **Multi-Dimensional Input Format**: New support for grouped data format where each row represents a subject/group
+  - `stack_grouped_data()` function to convert grouped format to stacked format
+  - `detect_data_format()` function to automatically detect input format
+  - Automatic format detection and conversion in `validate_inputs()`
+  - Support for both 2D (single predictor) and 3D (multiple predictors) grouped input
+  - Complete backwards compatibility with existing stacked format
+  - New utility functions exported in main package API
+- **Enhanced User Experience**: Users can now provide data in natural matrix format instead of manually stacking
+- **Comprehensive Testing**: Added `test_multidimensional_input.py` with 7 test cases covering all scenarios
+- **Documentation**: Added detailed documentation and examples for multi-dimensional input format
+- **Examples**: Added demonstration scripts showing both traditional and new input formats
+
+### Fixed
+- **SAEM Numerical Stability**: Fixed overflow warning in Metropolis-Hastings acceptance probability calculation
+  - Implemented numerically stable log-space computation to avoid `exp()` overflow
+  - Ensures robust SAEM algorithm performance with extreme parameter values
+
 ## [0.2.7] - 2025-06-15
 
 ### Fixed

@@ -1,6 +1,13 @@
 # PyNLME - Nonlinear Mixed-Effects Models for Python
 
-[![Tests](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-48%2F48%20passing-brightgr## 🎯 Features
+
+- **🚀 Multi-Dimensional Input**: Supports both stacked and grouped data formats
+- **🐍 Pythonic API**: Modern `fit_nlme()` interface with method parameter
+- **🔄 MATLAB Compatible**: Drop-in replacement for `nlmefit`/`nlmefitsa`
+- **🔥 Fast**: Rust backend with automatic fallback to Python
+- **🧪 Robust**: 48/48 tests passing, comprehensive error handling
+- **📊 Complete**: Full diagnostics, residuals, and model statistics
 [![Rust Backend](https://img.shields.io/badge/rust%20backend-enabled-orange)]()
 [![MATLAB Compatible](https://img.shields.io/badge/MATLAB-compatible-blue)]()
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
@@ -37,6 +44,27 @@ beta, psi, stats, b = fit_nlme(
 )
 ```
 
+### 🎯 Multi-Dimensional Input Format (New!)
+
+PyNLME now supports both traditional "stacked" format and an intuitive "grouped" format:
+
+```python
+# Traditional stacked format (MATLAB-style)
+X_stacked = np.array([[1], [2], [3], [4], [1], [2], [3], [4]])  # All measurements
+y_stacked = np.array([10, 7, 5, 3, 12, 8, 6, 4])               # All responses  
+group = np.array([0, 0, 0, 0, 1, 1, 1, 1])                     # Group indicators
+
+# New grouped format (each row = one subject)
+X_grouped = np.array([[1, 2, 3, 4], [1, 2, 3, 4]])  # Row per subject
+y_grouped = np.array([[10, 7, 5, 3], [12, 8, 6, 4]]) # Row per subject
+# No group parameter needed!
+
+# Both work identically
+beta1, psi1, _, _ = fit_nlme(X_stacked, y_stacked, group, None, model, beta0)
+beta2, psi2, _, _ = fit_nlme(X_grouped, y_grouped, None, None, model, beta0)
+# Results are identical: np.allclose(beta1, beta2) == True
+```
+
 ### MATLAB Compatibility
 
 For users migrating from MATLAB, PyNLME provides identical function signatures:
@@ -59,23 +87,23 @@ beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, [10.0, 0.5
 Pre-built wheels are available for easy installation without requiring Rust:
 
 ```bash
-# Latest release (v0.2.5+):
+# Latest release (v0.3.0+):
 # Choose the appropriate wheel for your platform:
 
 # Linux (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-linux_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-linux_x86_64.whl
 
 # Windows (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-win_amd64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-win_amd64.whl
 
 # macOS (Intel):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-macosx_10_12_x86_64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-macosx_10_12_x86_64.whl
 
 # macOS (Apple Silicon):
-uv add https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-macosx_11_0_arm64.whl
+uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-macosx_11_0_arm64.whl
 
 # Or using pip instead of uv:
-pip install https://github.com/willov/PyNLME/releases/download/v0.2.5/pynlme-0.2.5-cp311-abi3-linux_x86_64.whl
+pip install https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-linux_x86_64.whl
 
 # Or browse releases to find the exact wheel for your platform:
 # https://github.com/willov/PyNLME/releases/latest
@@ -144,6 +172,7 @@ MIT License - see LICENSE file for details.
 
 ## ✅ Current Features (Working)
 
+- **Multi-Dimensional Input Format**: Support for both traditional stacked format and intuitive grouped format where each row represents a subject
 - **Modern Python API**: `fit_nlme()`, `fit_mle()`, and `fit_saem()` functions with clean interfaces
 - **MATLAB-Compatible API**: Identical interface to MATLAB's `nlmefit` and `nlmefitsa`
 - **High-Performance Rust Backend**: Core algorithms implemented in Rust with automatic Python fallback

@@ -91,7 +91,7 @@ class MLEFitter:
             stats.dfe = n_obs - n_params
             stats.logl = logl
             stats.aic, stats.bic = compute_information_criteria(
-                logl, n_params, n_groups, n_obs
+                logl, n_params, n_groups
             )
             stats.rmse = np.sqrt(
                 np.mean((y - self._predict_population(X, V, modelfun, beta)) ** 2)
@@ -245,18 +245,27 @@ class SAEMFitter:
         b = np.zeros((n_groups, n_params))
 
         # SAEM algorithm phases
+        total_iterations = sum(self.n_iterations)
+        completed_iterations = 0
+
         for phase, (n_iter, n_mcmc) in enumerate(
             zip(self.n_iterations, self.n_mcmc_iterations, strict=False)
         ):
+            phase_name = ["Burn-in", "Stochastic", "Smoothing"][phase]
+            phase_emoji = ["🔥", "🎲", "✨"][phase]
+
             if self.options.verbose > 0:
                 print(
-                    f"SAEM Phase {phase + 1}: {n_iter} iterations, {n_mcmc} MCMC steps"
+                    f"{phase_emoji} SAEM {phase_name} Phase: {n_iter} iterations, {n_mcmc} MCMC steps"
                 )
 
             for iteration in range(n_iter):
+                # Overall progress
+                overall_progress = (completed_iterations + iteration + 1) / total_iterations * 100
+
                 if self.options.verbose > 1:
                     print(
-                        f"  Phase {phase + 1}, Iter {iteration}: beta={beta}, sigma={sigma:.3f}"
+                        f"  [{overall_progress:5.1f}%] Phase {phase + 1}, Iter {iteration + 1}/{n_iter}: β={beta.round(3)}, σ={sigma:.3f}"
                     )
 
                 # E-step: Sample random effects using MCMC
@@ -265,7 +274,7 @@ class SAEMFitter:
                 )
 
                 if self.options.verbose > 1:
-                    print(f"    After E-step: b_mean={np.mean(b, axis=0)}")
+                    print(f"            After E-step: b_mean={np.mean(b, axis=0).round(3)}")
 
                 # M-step: Update parameters
                 step_size = 1.0 / (iteration + 1) if phase == 0 else 0.1
@@ -273,14 +282,32 @@ class SAEMFitter:
                     X, y, group, V, modelfun, b, beta, psi, sigma, step_size
                 )
 
-                if iteration % 10 == 0 and self.options.verbose > 0:
-                    print(f"  Iter {iteration}: beta={beta}, sigma={sigma:.3f}")
+                # Progress indicators every 10 iterations or at end
+                if (iteration + 1) % 10 == 0 or iteration + 1 == n_iter:
+                    if self.options.verbose > 0:
+                        phase_progress = (iteration + 1) / n_iter * 100
+                        print(f"  ⏳ [{overall_progress:5.1f}%] {phase_name}: {phase_progress:.0f}% | β={beta.round(3)} | σ={sigma:.3f}")
+
+                # Quick progress for very verbose mode
+                elif self.options.verbose > 1:
+                    print(f"            Updated: β={beta.round(3)}, σ={sigma:.3f}")
+
+            completed_iterations += n_iter
+
+            if self.options.verbose > 0:
+                print(f"✅ {phase_name} phase completed")
+                print(f"   Final estimates: β={beta.round(3)}, σ={sigma:.3f}")
+                print("")
 
         # Compute final statistics
         stats = self._compute_stats(X, y, group, V, modelfun, beta, psi, sigma, b)
 
         if self.options.verbose > 0:
-            print(f"SAEM completed with {self.n_iterations} iterations")
+            total_iter = sum(self.n_iterations)
+            print("🎉 SAEM algorithm completed!")
+            print(f"   Total iterations: {total_iter}")
+            print(f"   Final log-likelihood: {stats.logl:.2f}")
+            print(f"   Final parameter estimates: β={beta.round(3)}")
 
         return beta, psi, stats, b
 
@@ -328,8 +355,17 @@ class SAEMFitter:
                         X_g, y_g, modelfun, beta, b_prop, psi, sigma, V, g
                     )
 
-                    # Accept/reject
-                    alpha = min(1.0, np.exp(log_p_proposal - log_p_current))
+                    # Numerically stable accept/reject calculation
+                    # Avoid overflow in exp() by handling large positive log_alpha separately
+                    log_alpha = log_p_proposal - log_p_current
+
+                    # Avoid overflow: if log_alpha > 0, always accept
+                    if log_alpha >= 0:
+                        alpha = 1.0
+                    else:
+                        # Only compute exp for negative values to avoid overflow
+                        alpha = np.exp(log_alpha)
+
                     if self.rng.random() < alpha:
                         b_g = b_prop
                         if self.options.verbose > 1:
@@ -405,18 +441,18 @@ class SAEMFitter:
             try:
                 # Try to estimate phi_g from the data for this group
                 v_group = V[g] if V is not None and len(V) > g else None
-                
+
                 # Use current phi as starting point for optimization
                 phi_current = beta_old + b_g
                 phi_optimal = self._optimize_individual_params(
                     X_g, y_g, v_group, modelfun, phi_current
                 )
-                
+
                 # The optimal beta contribution from this group would be phi_optimal - b_g
                 beta_contribution = phi_optimal - b_g
                 weighted_sum += weight * beta_contribution
                 total_weight += weight
-                
+
             except (ValueError, RuntimeError, np.linalg.LinAlgError):
                 # Fallback: use the current estimate
                 weighted_sum += weight * beta_old
@@ -525,12 +561,12 @@ class SAEMFitter:
     def _optimize_individual_params(self, X_g, y_g, v_group, modelfun, phi_init):
         """
         Optimize individual parameters for a single group.
-        
+
         This is a simplified optimization that tries to find the best phi_g
         for group g given the current data.
         """
         from scipy.optimize import minimize
-        
+
         def objective(phi):
             try:
                 y_pred = modelfun(phi, X_g, v_group)
@@ -540,7 +576,7 @@ class SAEMFitter:
                 return np.sum(residuals**2)
             except (ValueError, RuntimeError):
                 return 1e10  # Large penalty for invalid parameters
-        
+
         try:
             # Simple optimization with bounds to avoid extreme values
             bounds = [(-10, 10) for _ in phi_init]

@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
 title: "PyNLME: Nonlinear Mixed-Effects Models for Python"
-version: 0.2.7
-date-released: 2025-06-15
+version: 0.3.0
+date-released: 2025-06-16
 url: "https://github.com/willov/PyNLME"
 repository-code: "https://github.com/willov/PyNLME"
 license: MIT
