@@ -15,6 +15,7 @@ use pyo3::prelude::*;
 
 mod errors;
 mod mle;
+mod mle_batched;
 mod nlme;
 mod saem;
 mod utils;
