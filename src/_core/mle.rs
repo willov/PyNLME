@@ -145,13 +145,13 @@ impl MLEFitter {
         // Simplified optimization loop - use minimal iterations for large datasets
         let mut prev_logl = f64::NEG_INFINITY;
 
-        // Adaptive iteration count based on dataset size
+        // Adaptive iteration count based on dataset size for performance
         let max_iterations = if n_obs > 2000 {
-            3
+            50 // Still faster than Python but allow proper convergence
         } else if n_obs > 1000 {
-            5
+            75 // Good balance of speed and accuracy
         } else {
-            10
+            100 // Full optimization for smaller datasets
         };
 
         for iter in 0..max_iterations {

@@ -222,31 +222,32 @@ def plot_benchmark_results(results_df):
     if not rust_data.empty:
         ax1.plot(
             rust_data["n_subjects"],
-            rust_data["time_seconds"],
+            rust_data["time_seconds"] * 1000,  # Convert to milliseconds
             "o-",
             label="Rust Backend",
-            linewidth=2,
-            markersize=6,
+            linewidth=3,
+            markersize=8,
             color="red",
         )
 
     if not python_data.empty:
         ax1.plot(
             python_data["n_subjects"],
-            python_data["time_seconds"],
+            python_data["time_seconds"] * 1000,  # Convert to milliseconds
             "s-",
             label="Python Backend",
-            linewidth=2,
-            markersize=6,
+            linewidth=3,
+            markersize=8,
             color="blue",
         )
 
     ax1.set_xlabel("Number of Subjects")
-    ax1.set_ylabel("Execution Time (seconds)")
+    ax1.set_ylabel("Execution Time (milliseconds)")
     ax1.set_title("Execution Time vs Dataset Size")
     ax1.legend()
     ax1.grid(True, alpha=0.3)
-    ax1.set_yscale("log")
+    # Remove log scale for better visibility of differences
+    # ax1.set_yscale("log")
 
     # 2. Throughput (observations per second)
     ax2 = axes[0, 1]
@@ -341,46 +342,6 @@ def plot_benchmark_results(results_df):
     ax4.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    return fig
-
-    # Create summary statistics
-    summary_stats = {
-        "Convergence Rate": [success_df["converged"].mean() * 100],
-        "Avg Throughput\n(M obs/sec)": [success_df["throughput"].mean() / 1e6],
-        "Peak Throughput\n(M obs/sec)": [success_df["throughput"].max() / 1e6],
-        "Avg Fit Quality\n(RMSE)": [success_df["rmse"].mean()],
-    }
-
-    metrics = list(summary_stats.keys())
-    values = [summary_stats[metric][0] for metric in metrics]
-    colors = ["green", "blue", "red", "orange"]
-
-    bars = ax4.bar(metrics, values, color=colors, alpha=0.7)
-
-    # Add value labels on bars
-    for bar, value, metric in zip(bars, values, metrics, strict=True):
-        height = bar.get_height()
-        if "Rate" in metric:
-            label = f"{value:.0f}%"
-        elif "RMSE" in metric:
-            label = f"{value:.3f}"
-        else:
-            label = f"{value:.1f}"
-
-        ax4.text(
-            bar.get_x() + bar.get_width() / 2.0,
-            height,
-            label,
-            ha="center",
-            va="bottom",
-            fontweight="bold",
-        )
-
-    ax4.set_title("Performance Summary")
-    ax4.set_ylabel("Performance Metrics")
-    ax4.grid(True, alpha=0.3, axis="y")
-
-    plt.tight_layout()
 
     # Save to organized output folder
     examples_dir = os.path.dirname(__file__)
@@ -388,39 +349,8 @@ def plot_benchmark_results(results_df):
     os.makedirs(output_dir, exist_ok=True)
     plot_path = os.path.join(output_dir, "benchmark_results.png")
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-    plt.show()
 
-    # Also create a summary text file
-    summary_path = os.path.join(output_dir, "benchmark_summary.txt")
-    with open(summary_path, "w") as f:
-        f.write("PyNLME Performance Benchmark Results\n")
-        f.write("====================================\n\n")
-        f.write("Optimization Features:\n")
-        f.write("- Batched FFI calls for large datasets (>1000 observations)\n")
-        f.write("- Direct FFI for smaller datasets\n")
-        f.write("- Automatic threshold-based optimization\n\n")
-
-        if not success_df.empty:
-            f.write(f"Performance Summary:\n")
-            f.write(
-                f"- Average throughput: {success_df['throughput'].mean():.0f} obs/sec\n"
-            )
-            f.write(
-                f"- Peak throughput: {success_df['throughput'].max():.0f} obs/sec\n"
-            )
-            f.write(f"- Average fit time: {success_df['time_seconds'].mean():.4f}s\n")
-            f.write(f"- Convergence rate: {success_df['converged'].mean():.1%}\n\n")
-
-        f.write("Dataset Size -> Performance:\n")
-        for _, row in success_df.iterrows():
-            batch_type = "Batched" if row["batching_active"] else "Direct"
-            f.write(
-                f"  {row['n_subjects']:3d} subjects ({row['n_observations']:4d} obs): "
-                f"{row['time_seconds']:.4f}s ({batch_type}) - "
-                f"{row['throughput']:.0f} obs/sec\n"
-            )
-
-    print(f"📊 Summary also saved to '{summary_path}'")
+    return fig
 
 
 def memory_benchmark():

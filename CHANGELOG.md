@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Test Suite**: Fixed backend consistency test to properly compare Rust vs Python backends
+  - Corrected pharmacokinetic model function signature to be static method
+  - Fixed backend switching mechanism using module-level RUST_AVAILABLE flag
+  - Adjusted tolerance for backend comparison to account for optimization differences
+
+
 ## [0.4.0] - 2025-06-17
 
 ### Added
