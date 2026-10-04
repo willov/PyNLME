@@ -130,6 +130,29 @@ MATLAB scripts.
   3, and one 0.003 lower in log-likelihood. R failed to converge on 42 datasets;
   pynlme returned an estimate for all of them. The Lindstrom-Bates iteration can
   have several fixed points, so small differences are expected.
+- **Known issue: a worse fixed point on some oral-absorption datasets** (found
+  2026-10-04). A further 800 datasets (seeds 1001-1020, `PYNLME_RANDOM_N=10`) gave
+  one failure, and a routine CI-style run another:
+
+  | Seed / dataset | m, n | LB logl pynlme / R | Exact (IS) logl difference | log ka pynlme / R | Var(log ka) pynlme / R |
+  |---|---|---|---|---|---|
+  | 657630818 / `oral_0` (N=5) | 39, 324 | -442.871 / -441.852 | -0.87 | 0.318 / 0.381 | 0.253 / 0.207 |
+  | 1007 / `oral_7` (N=10) | 17, 152 | -131.682 / -129.791 | -1.54 | 0.294 / 0.512 | 0.185 / 0.084 |
+
+  R's fit is genuinely better: its exact log-likelihood (importance sampling,
+  `tests/validation/likelihood.py`) is higher, not only the linearised one. R's
+  solution is also a fixed point of pynlme's iteration (started there, pynlme stays
+  there to 1e-5), so the algorithms agree; from the common start values pynlme's
+  path reaches a different fixed point with a lower log ka and a larger ka
+  variance. Starting pynlme at R's estimates of beta alone (b = 0, covariance from
+  the initial LME step) still leads to pynlme's point, so the difference arises
+  in the first LME/PNLS steps. Both cases are the oral model, where ka is weakly
+  identified. Reproduce with
+  `PYNLME_RANDOM_SEED=1007 PYNLME_RANDOM_N=10 uv run pytest tests/validation/test_random_vs_r.py`.
+  Not yet fixed; possible remedies are comparing nlme's exact first iterations
+  with pynlme's, or restarting from a second state (e.g. a smaller initial
+  covariance) and keeping the better fixed point. Rate so far: 2 of ~1450
+  datasets.
 - **Robustness fixes found by the randomized comparison**: the LME step is
   computed with QR decompositions (cross-products cancel catastrophically for
   large random-effects scales), uses a log-Cholesky parameterisation, restarts
