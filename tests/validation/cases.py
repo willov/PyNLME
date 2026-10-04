@@ -63,6 +63,50 @@ def linear(phi, x):
     return phi[0] + phi[1] * x
 
 
+# Models defined by an ODE, solved per subject: these cannot be vectorised.
+ODE_TOL = {"rtol": 1e-10, "atol": 1e-12}
+
+
+def _solve(rhs, y0, t):
+    from scipy.integrate import solve_ivp
+
+    t = np.ravel(t)
+    order = np.argsort(t)
+    sol = solve_ivp(rhs, (0.0, float(t.max())), y0, t_eval=t[order], method="LSODA", **ODE_TOL)
+    out = np.empty_like(t, dtype=float)
+    out[order] = sol.y[-1]
+    return out
+
+
+def michaelis_menten_ode(phi, t, dose):
+    ka, V, vmax, km = phi
+    return _solve(lambda _, s: [-ka * s[0], ka * s[0] / V - vmax * s[1] / (km + s[1])], [float(dose[0]), 0.0], t)
+
+
+def one_compartment_oral_ode(phi, t, dose):
+    """The closed-form one_compartment_oral model, solved as an ODE."""
+    ke, ka, cl = phi
+    V = cl / ke
+    return _solve(lambda _, s: [-ka * s[0], ka * s[0] / V - ke * s[1]], [float(dose[0]), 0.0], t)
+
+
+def _mm_rhs(t, y, phi, dose):
+    ka, V, vmax, km = phi.T
+    gut, c = y.T
+    return np.column_stack([-ka * gut, ka * gut / V - vmax * c / (km + c)])
+
+
+def michaelis_menten_batched():
+    """michaelis_menten_ode via pynlme.ode_model: works with Vectorization="Full"."""
+    from pynlme import ode_model
+
+    return ode_model(
+        _mm_rhs,
+        y0=lambda phi, dose: np.column_stack([dose[:, 0], np.zeros(len(dose))]),
+        output=lambda y, phi, dose: y[:, 1],
+    )
+
+
 # Vectorised versions (Vectorization="Full"): phi has one row per observation,
 # x is (n, h) and v is (n, g). Indexing the last axis also works for a single
 # parameter vector.
@@ -140,6 +184,20 @@ def linear_sim() -> Case:
         "linear", d["x"], d["y"], d["id"], None, linear,
         np.array([1.0, 1.0]), {"CovPattern": np.ones((2, 2))},
     )
+
+
+def mm_pk() -> Case:
+    d = load_csv("mm_pk.csv")
+    return Case(
+        "mm_pk", d["time"], d["conc"], d["subject"], per_group(d["dose"], d["subject"]),
+        michaelis_menten_ode, np.log([0.8, 12.0, 2.5, 1.0]),
+        {"ParamTransform": [1, 1, 1, 1], "REParamsSelect": [2, 3]},
+    )
+
+
+def theoph_ode() -> Case:
+    c = theoph()
+    return Case("theoph_ode", c.X, c.y, c.group, c.V, one_compartment_oral_ode, c.beta0, c.kwargs)
 
 
 # (case factory, R reference file, extra nlmefit arguments)

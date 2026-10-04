@@ -44,6 +44,24 @@ for i = 1:numel(cases)
     end
 end
 
+% A model defined by an ODE (Michaelis-Menten elimination), solved per subject.
+d = readtable(fullfile(dataDir, 'mm_pk.csv'));
+[~, first] = unique(d.subject);
+c = struct('name', 'mm_pk', 'X', d.time, 'y', d.conc, 'group', d.subject, ...
+    'V', d.dose(first), 'model', @mmModel, 'beta0', log([0.8 12 2.5 1]), ...
+    'args', {{'ParamTransform', [1 1 1 1], 'REParamsSelect', [2 3]}});
+for optName = {'default', 'tight'}
+    args = [c.args, {'ApproximationType', 'LME'}];
+    if strcmp(optName{1}, 'tight')
+        args = [args, {'Options', tight}]; %#ok<AGROW>
+    end
+    runOne(@nlmefit, sprintf('mm_pk_lme_%s', optName{1}), c, args, 'LME', optName{1}, [], outDir);
+end
+for seed = 1:3
+    rng(seed, 'twister');
+    runOne(@nlmefitsa, sprintf('mm_pk_saem_seed%d', seed), c, c.args, 'SAEM', 'default', seed, outDir);
+end
+
 % Non-constant error models, on the datasets with positive responses.
 errorModels = {'proportional', 'combined', 'exponential'};
 for i = 1:numel(cases)
@@ -181,6 +199,26 @@ function writeJson(path, value)
 fid = fopen(path, 'w');
 fprintf(fid, '%s', jsonencode(value, 'PrettyPrint', true));
 fclose(fid);
+end
+
+function c = mmModel(phi, t, dose)
+% Oral dose, first-order absorption, Michaelis-Menten elimination (ODE).
+ka = phi(1); V = phi(2); vmax = phi(3); km = phi(4);
+rhs = @(~, s) [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
+[ts, order] = sort(t(:));
+opts = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
+if ts(1) > 0
+    [~, sol] = ode45(rhs, [0; ts], [dose(1); 0], opts);
+    sol = sol(2:end, 2);
+else
+    [~, sol] = ode45(rhs, [ts; ts(end) + 1], [dose(1); 0], opts);
+    sol = sol(1:end-1, 2);
+end
+if numel(ts) == 1
+    sol = sol(end);
+end
+c = zeros(size(t(:)));
+c(order) = sol;
 end
 
 function out = ifelse(cond, a, b)

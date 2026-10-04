@@ -22,6 +22,8 @@ For MATLAB users, nlmefit() and nlmefitsa() are also available.
 
 from .data_types import ErrorModel, NLMEOptions, NLMEStats
 from .nlmefit import fit_nlme, fit_mle, fit_saem, nlmefit, nlmefitsa
+from .ode import ode_model
+from .sund_adapter import sund_model
 from .utils import (
     detect_data_format,
     generate_design_matrix,
@@ -45,6 +47,8 @@ __all__ = [
     # MATLAB-compatible functions
     "nlmefit",
     "nlmefitsa",
+    "ode_model",
+    "sund_model",
     # Data types
     "NLMEStats",
     "NLMEOptions",

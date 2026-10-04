@@ -134,6 +134,18 @@ class _SAEM:
         self.A_R = A[:, self.R, :]  # (m, r, f)
         self.A_rows = A[self.sub]  # (M, p, f)
         self.beta = np.asarray(beta0, dtype=float).copy()
+        # Parameters without random effects but with fixed effects. During the
+        # annealing phase they are sampled too, with a pseudo-variance that
+        # shrinks to ~0 (as MATLAB and saemix do), so the sampler explores
+        # them globally; afterwards they are fixed and optimised.
+        self.Fx = self.F[np.any(A[:, self.F, :] != 0, axis=(0, 2))] if self.F.size else self.F
+        self.set_extended(False)
+
+    def set_extended(self, extended: bool) -> None:
+        self.extended = extended and self.Fx.size > 0
+        self.latent = np.concatenate([self.R, self.Fx]) if self.extended else self.R
+        self.d = len(self.latent)
+        self.A_latent = self.model.A[:, self.latent, :]
 
     # -- model evaluation ---------------------------------------------------
     def eta(self, i, phi):
@@ -144,7 +156,7 @@ class _SAEM:
     def etas(self, Phi) -> np.ndarray:
         """Transformed parameters for every row, shape (M, p)."""
         etas = self.A_rows @ self.beta
-        etas[:, self.R] = Phi
+        etas[:, self.latent] = Phi
         return etas
 
     def predict(self, Phi):
@@ -159,7 +171,7 @@ class _SAEM:
         return self.err.statistic(self.y, F)
 
     def mu(self) -> np.ndarray:
-        return self.A_R @ self.beta  # (m, r)
+        return self.A_latent @ self.beta  # (m, d)
 
     def log_prior(self, Phi, mu, omega_inv) -> np.ndarray:
         d = Phi - mu
@@ -168,7 +180,7 @@ class _SAEM:
     # -- E-step: Metropolis-Hastings ----------------------------------------
     def mcmc(self, Phi, F, omega, n_kernel, scales):
         """Update Phi and the flat predictions F in place."""
-        m, r = self.M, self.r
+        m, r = self.M, self.d
         mu = self.mu()[self.sub]
         omega_inv = np.linalg.inv(omega)
         chol = np.linalg.cholesky(omega)
@@ -214,7 +226,7 @@ class _SAEM:
         self.beta[self.cols_R] = np.linalg.lstsq(lhs, rhs, rcond=None)[0]
 
     def update_omega(self, s1, S2):
-        mu = self.mu()
+        mu = self.A_R @ self.beta
         omega = (S2 - mu.T @ s1 - s1.T @ mu + mu.T @ mu) / self.m
         omega = 0.5 * (omega + omega.T)
         if not self.full_cov:
@@ -225,13 +237,14 @@ class _SAEM:
         floor = max(1e-10 * np.max(np.abs(w)), 1e-12)
         return (V * np.maximum(w, floor)) @ V.T
 
-    def update_beta_F(self, Phi, gamma, n_steps: int = 5):
+    def update_beta_F(self, Phi, gamma, n_steps: int = 1):
         """Fixed effects of parameters without random effects.
 
-        As saemix: minimise the error-model negative log-likelihood over these
-        effects given the current samples (Gauss-Newton on the weighted
-        residuals, with step halving), then move towards the minimiser with
-        the stochastic-approximation step size.
+        Approximately minimise the error-model negative log-likelihood over
+        these effects given the current samples (Gauss-Newton on the weighted
+        residuals, with step halving; one step per iteration by default, as
+        MATLAB limits its fminsearch to 10 iterations), then move towards the
+        result with the stochastic-approximation step size.
         """
         cols = self.cols_F
         start = self.beta[cols].copy()
@@ -303,6 +316,8 @@ def fit_saem(
     s = _SAEM(model, beta0, full_cov, rng, n_chains, err)
     m, r, C = s.m, s.r, n_chains
     K1, K2, K3 = (int(k) for k in n_iterations)
+    alpha0 = 10 ** (-3 / max(K1, 1))  # pseudo-variance decay, as MATLAB/saemix
+    s.set_extended(K1 > 0)
     Phi = s.mu()[s.sub]
     F, _ = s.predict(Phi)
     if error_model in ("constant", "exponential", "proportional"):
@@ -310,13 +325,23 @@ def fit_saem(
         value = np.sqrt(s.statistic(F) / (C * s.n))
         err.a, err.b = (0.0, value) if error_model == "proportional" else (value, 0.0)
     omega = np.eye(r)  # saemix's default starting covariance
-    scales = [0.5 * np.sqrt(np.diag(omega)), 0.5 * np.sqrt(np.diag(omega))]
+    omega_F = np.ones(len(s.Fx))  # pseudo-variances of the fixed-only parameters
+    d = s.d
+    scales = [0.5 * np.ones(d), 0.5 * np.ones(d)]
+
+    def latent_omega():
+        if not s.extended:
+            return omega
+        out = np.zeros((d, d))
+        out[:r, :r] = omega
+        out[r:, r:] = np.diag(omega_F)
+        return out
 
     for _ in range(n_burn_in):
-        s.mcmc(Phi, F, omega, n_mcmc, scales)
+        s.mcmc(Phi, F, latent_omega(), n_mcmc, scales)
 
     def chain_stats():
-        P = Phi.reshape(C, m, r)
+        P = Phi.reshape(C, m, d)
         rese = s.statistic(F) / C
         return P.mean(axis=0), np.einsum("cmi,cmj->ij", P, P) / C, rese, P
 
@@ -325,7 +350,16 @@ def fit_saem(
     cm2 = np.zeros((m, r, r))
     total = K1 + K2 + K3
     for k in range(1, total + 1):
-        s.mcmc(Phi, F, omega, n_mcmc, scales)
+        if s.extended and k == K1 + 1:
+            # End of annealing: fix the parameters without random effects at
+            # their current means and drop them from the sampler.
+            s.set_extended(False)
+            d = r
+            Phi = Phi[:, :r].copy()
+            F, _ = s.predict(Phi)
+            s1, S2 = s1[:, :r].copy(), S2[:r, :r].copy()
+            scales = [scales[0][:r], scales[1][:r]]
+        s.mcmc(Phi, F, latent_omega(), n_mcmc, scales)
 
         gamma = 1.0 if k <= K1 + K2 else 1.0 / (k - K1 - K2)
         t1, t2, t3, P = chain_stats()
@@ -336,17 +370,26 @@ def fit_saem(
             cm1 += gamma * (t1 - cm1)
             cm2 += gamma * (np.einsum("cmi,cmj->mij", P, P) / C - cm2)
 
-        if s.cols_F.size:
+        if s.extended:
+            # Means of the sampled fixed-only parameters (GLS with their
+            # diagonal pseudo-covariance), then shrink the pseudo-variances.
+            X = s.A_latent[:, r:, :][:, :, s.cols_F]
+            w = 1.0 / omega_F
+            lhs = np.einsum("mif,i,mig->fg", X, w, X)
+            rhs = np.einsum("mif,i,mi->f", X, w, s1[:, r:])
+            s.beta[s.cols_F] = np.linalg.lstsq(lhs, rhs, rcond=None)[0]
+            omega_F = omega_F * alpha0
+        elif s.cols_F.size:
             s.update_beta_F(Phi, gamma)
             F, _ = s.predict(Phi)
-        s.update_beta_R(s1, omega)
-        omega_new = s.update_omega(s1, S2)
+        s.update_beta_R(s1[:, :r], omega)
+        omega_new = s.update_omega(s1[:, :r], S2[:r, :r])
         if k <= K1:
             # Simulated annealing: variances may shrink by at most TAU per
             # iteration. Only the diagonal is raised (as saemix does), which
             # also pulls correlations towards zero while exploring.
-            d = np.maximum(np.diag(omega_new), TAU * np.diag(omega))
-            omega_new = omega_new - np.diag(np.diag(omega_new)) + np.diag(d)
+            dg = np.maximum(np.diag(omega_new), TAU * np.diag(omega))
+            omega_new = omega_new - np.diag(np.diag(omega_new)) + np.diag(dg)
         elif k <= K1 + K2:
             omega_new = _limit_eigenvalue_decrease(omega_new, omega)
         omega = omega_new
@@ -354,6 +397,7 @@ def fit_saem(
         if verbose > 1:
             print(f"SAEM iteration {k}: beta={s.beta} diag(psi)={np.diag(omega)} error={err.errorparam}")
 
+    s.set_extended(False)
     mu = s.mu()
     b = (cm1 - mu).T
     cond_cov = cm2 - np.einsum("mi,mj->mij", cm1, cm1)

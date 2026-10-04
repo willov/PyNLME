@@ -1,0 +1,24 @@
+########## NAME
+mm_pk
+########## METADATA
+time_unit = h
+Description = """Oral dose (initial gut amount), first-order absorption, Michaelis-Menten elimination."""
+Authors = """pynlme validation"""
+########## MACROS
+########## STATES
+ddt_gut = -ka*gut
+ddt_C = ka*gut/V - vmax*C/(km + C)
+gut(0) = 0
+C(0) = 0
+########## PARAMETERS
+ka = 1
+V = 10
+vmax = 2
+km = 1.5
+########## VARIABLES
+########## FUNCTIONS
+########## EVENTS
+########## OUTPUTS
+########## INPUTS
+########## FEATURES
+conc = C

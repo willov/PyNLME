@@ -341,6 +341,25 @@ class LinearizedLME:
         return results[best].x, helped
 
 
+def _stagnated(history, tol, window: int = 8) -> bool:
+    """True when the last iterations only jitter rather than drift.
+
+    Jitter: the estimates stay within tol of each other, and the net change
+    over the window is at most half of the range covered (a slow but steady
+    drift, e.g. while error-model weights are still settling, moves about as
+    far as its range).
+    """
+    if len(history) < window:
+        return False
+    betas = np.array([h[0] for h in history[-window:]])
+    logls = np.array([h[1] for h in history[-window:]])
+    scale = np.maximum(np.abs(betas).mean(axis=0), 1e-8)
+    span = np.ptp(betas, axis=0)
+    net = np.abs(betas[-1] - betas[0])
+    jitter_only = np.all(net <= 0.5 * span + 1e-15) and abs(logls[-1] - logls[0]) <= 0.5 * np.ptp(logls) + 1e-15
+    return bool(np.max(span / scale) < tol and jitter_only)
+
+
 def initial_factor(model: GroupedModel, J: list[np.ndarray]) -> np.ndarray:
     """Starting relative covariance factor, as nlme's Initialize.reStruct.
 
@@ -401,6 +420,7 @@ def fit_lindstrom_bates(
     theta, _ = lme0.maximize(factor, factor.from_matrix(initial_factor(model, J0)), tight=False)
     prev = None
     near = False  # estimates close to converged: use strict tolerances
+    history = []
     skip_restart = 0  # iterations to skip the collapsed-variance restart
     best = None
     converged = False
@@ -449,6 +469,12 @@ def fit_lindstrom_bates(
                 converged = True
                 break
             near = near or max(beta_change, psi_change) < 1e-3
+            history.append((beta.copy(), logl))
+            if _stagnated(history, 100 * tol_x):
+                # Changes are at the model's numerical noise level (e.g. an
+                # ODE solved to finite tolerance): the best state is converged.
+                best.converged = True
+                return best
         prev = (beta.copy(), psi.copy(), logl)
         # Start the next PNLS step from the LME step's GLS estimates and the
         # conditional modes under the new covariance.

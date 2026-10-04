@@ -30,6 +30,7 @@ with full covariance, Emax) are defined in
 | `reference/matlab_docs.json` | Values printed in the MATLAB nlmefit/nlmefitsa documentation |
 | `reference/r_saemix_*.json` | R `saemix` fits (10 seeds per case), from `r/saemix_references.R` |
 | `reference/matlab_*.json` | MATLAB R2023b fits, from `matlab/run_references.m`: `nlmefit` with LME, RELME, FO and FOCE (default and tight tolerances) and `nlmefitsa` (5 seeds) |
+| `datasets/mm_pk.csv`, `make_mm_dataset.py`, `models/mm_pk_sund.txt` | Michaelis-Menten PK data simulated from known parameters, and the model in SUND format |
 | `r/fit_manifest.R` | Fits simulated datasets for the randomized comparison |
 | `r/benchmark.R` | R `nlme`/`saemix` timings (best of repeated runs) for `benchmark.py` |
 | `benchmark.py` | Times nlmefit/nlmefitsa against R and MATLAB on the validation cases |
@@ -81,6 +82,16 @@ MATLAB scripts.
   observed concentrations are positive, so proportional and exponential error
   models are ill-posed with those rows (MATLAB returns error SDs of ~1e7 and
   ~110). The error-model references drop time 0.
+- **ODE models**: on the Michaelis-Menten case (no closed form) `nlmefit` with a
+  SciPy ODE, the batched `ode_model` or a compiled SUND model reproduces
+  MATLAB's ode45-based fit to ~1e-4 (solver noise), and Theophylline solved as
+  an ODE reproduces its closed-form fit. With ODE models the Lindstrom-Bates
+  iteration stops when changes only jitter at the solver's noise level.
+- **SAEM for parameters without random effects**: MATLAB and saemix sample them
+  during the annealing phase with a pseudo-variance shrinking by 10^-3 over
+  that phase, then fix and optimise them. pynlme does the same; optimising
+  them from the start (as pynlme first did) got stuck on the Vmax/Km ridge of
+  the Michaelis-Menten model.
 - **MATLAB R2023b reproduces the current (2026) documentation's values exactly**,
   so a newer MATLAB is not needed for references.
 - **SAEM on small datasets**: with one MCMC chain the covariance estimate can

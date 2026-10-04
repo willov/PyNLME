@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stats.rmse` follows MATLAB: sqrt(sum(ires^2)/dfe). The error standard deviation is in `stats.errorparam`. For RELME, psi, the error variance and covb are reported as MATLAB does (RSS/N scaling) and BIC uses log(m - f).
 
 ### Added
+- ODE models: `pynlme.sund_model` (compiled SUND models; optional extra `pynlme[sund]`) and `pynlme.ode_model` (SciPy, batched over subjects with `Vectorization="Full"`); Michaelis-Menten validation case with MATLAB references; `examples/sund_ode_model.py`.
+- SAEM samples parameters without random effects during annealing (MATLAB/saemix scheme); the Lindstrom-Bates loop stops when changes only jitter at the model's numerical noise level.
 - `nlmefit` ApproximationType "FO" and "FOCE" (direct maximisation of the linearised marginal likelihood; FOCE with conditional modes).
 - Error models "proportional", "combined" and "exponential" for `nlmefit` (LME/RELME) and `nlmefitsa`, and `ErrorParameters`, following MATLAB's implementation.
 - `stats.pwres` and `stats.cwres`, and MATLAB's definitions for all weighted residuals.

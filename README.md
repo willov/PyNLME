@@ -16,6 +16,15 @@ Everything below is checked by the tests in [tests/validation/](tests/validation
 - **Implemented options**: `ApproximationType` (`LME`, `RELME`, `FO`, `FOCE`), `ErrorModel`, `ErrorParameters`, `ParamTransform`, `CovPattern` (diagonal or full), `FEParamsSelect`/`FEConstDesign`/`FEGroupDesign` (and `RE*` equivalents for `nlmefit`; `REParamsSelect` for `nlmefitsa`), `RefineBeta0`, `Vectorization` (`SinglePhi`, `SingleGroup`, `Full`), `Options` (`MaxIter`, `TolFun`, `TolX`, `Display`), and for `nlmefitsa` `NIterations`, `NMCMCIterations`, `NBurnIn`, `NChains`, `LogLikMethod` (`is`, `lin`), `ComputeStdErrors`. Anything else raises `NotImplementedError` rather than being ignored.
 - **Not implemented yet**: non-constant error models with `FO`/`FOCE`, `LogLikMethod="gq"`, `Replicates`, `FEObsDesign`/`REObsDesign`, `OutputFcn`.
 
+### ODE models (SUND or SciPy)
+
+Models defined by differential equations work as any other model function:
+
+- **SUND** (recommended): compile the model with the [SUND toolbox](https://isbgroup.eu/sund-toolbox) and wrap the simulation with `pynlme.sund_model(simulation, feature, parameters, v_states=[...])`. Group predictors such as the dose can set initial states or parameters. Install with `pip install "pynlme[sund]"`. See [examples/sund_ode_model.py](examples/sund_ode_model.py).
+- **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a right-hand side vectorised over systems; with `Vectorization="Full"` all subjects are solved in one `solve_ivp` call.
+
+On the Michaelis-Menten validation model (no closed form) both reproduce MATLAB's `ode45`-based `nlmefit` fit. One SUND simulation takes ~40 µs (SciPy ~1.6 ms per subject); `nlmefit` LME takes ~3 s with either SUND or the batched SciPy model (MATLAB 3-5 s), `nlmefitsa` ~110 s with SUND (MATLAB ~325 s). The integrator tolerance dominates the cost: `nlmefit` differentiates the model numerically, so the adapters default to rtol 1e-10.
+
 ### Speed
 
 Pure Python/NumPy so far (the Rust extension is not used). With `Vectorization="Full"` (the model function accepts one parameter row per observation, as in MATLAB), from `uv run python validation/benchmark.py`:
