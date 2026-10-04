@@ -359,6 +359,7 @@ def _build_stats(model, y, beta, psi, b, logl, full_cov, error_model, sigma2, ab
         aic=None if logl is None else -2 * logl + 2 * num_param,
         bic=None if logl is None else -2 * logl + np.log(bic_groups) * num_param,
         rmse=float(np.sqrt(res["ires"] @ res["ires"] / dfe)),
+        mse=None if sigma2 is None else float(sigma2),
         errorparam=errorparam,
         ires=res["ires"],
         pres=res["pres"],

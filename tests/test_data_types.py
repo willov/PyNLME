@@ -5,7 +5,7 @@ Tests for PyNLME data types and structures.
 import numpy as np
 import pytest
 
-from pynlme.data_types import ErrorModel, NLMEOptions, NLMEStats, SAEMOptions
+from pynlme.data_types import NLMEOptions, NLMEStats, SAEMOptions
 
 
 class TestNLMEStats:
@@ -20,12 +20,12 @@ class TestNLMEStats:
         assert stats.dfe is None
         assert stats.mse is None
         assert stats.rmse is None
-        assert stats.sse is None
+        assert stats.cwres is None
 
     def test_creation_with_values(self):
         """Test creating NLMEStats with specific values."""
         stats = NLMEStats(
-            logl=-100.5, aic=205.0, bic=210.2, dfe=50, mse=0.25, rmse=0.5, sse=12.5
+            logl=-100.5, aic=205.0, bic=210.2, dfe=50, mse=0.25, rmse=0.5
         )
         assert stats.logl == -100.5
         assert stats.aic == 205.0
@@ -33,18 +33,6 @@ class TestNLMEStats:
         assert stats.dfe == 50
         assert stats.mse == 0.25
         assert stats.rmse == 0.5
-        assert stats.sse == 12.5
-
-    def test_residuals_initialization(self):
-        """Test residuals are properly initialized."""
-        stats = NLMEStats()
-        assert stats.residuals is None
-
-        residuals = {"pres": np.array([1, 2, 3]), "ires": np.array([0.5, 1.0, 1.5])}
-        stats = NLMEStats(residuals=residuals)
-        assert "pres" in stats.residuals
-        assert "ires" in stats.residuals
-        np.testing.assert_array_equal(stats.residuals["pres"], [1, 2, 3])
 
 
 class TestNLMEOptions:
@@ -109,61 +97,3 @@ class TestSAEMOptions:
         assert options.n_mcmc_iterations == (3, 3, 3)
         assert options.n_burn_in == 10
         assert options.loglik_method == "is"
-
-
-class TestErrorModel:
-    """Test ErrorModel functionality."""
-
-    def test_constant_error_model(self):
-        """Test constant error model evaluation."""
-        model = ErrorModel("constant", np.array([0.1]))
-        y_pred = np.array([1.0, 2.0, 3.0])
-        theta = np.array([0.2])
-
-        variance = model.evaluate(y_pred, theta)
-        expected = np.full_like(y_pred, 0.2**2)
-        np.testing.assert_array_almost_equal(variance, expected)
-
-    def test_proportional_error_model(self):
-        """Test proportional error model evaluation."""
-        model = ErrorModel("proportional", np.array([0.1]))
-        y_pred = np.array([1.0, 2.0, 3.0])
-        theta = np.array([0.2])
-
-        variance = model.evaluate(y_pred, theta)
-        expected = (0.2 * np.abs(y_pred)) ** 2
-        np.testing.assert_array_almost_equal(variance, expected)
-
-    def test_combined_error_model(self):
-        """Test combined error model evaluation."""
-        model = ErrorModel("combined", np.array([0.1, 0.2]))
-        y_pred = np.array([1.0, 2.0, 3.0])
-        theta = np.array([0.1, 0.2])
-
-        variance = model.evaluate(y_pred, theta)
-        expected = (0.1 + 0.2 * np.abs(y_pred)) ** 2
-        np.testing.assert_array_almost_equal(variance, expected)
-
-    def test_exponential_error_model(self):
-        """Test exponential error model evaluation."""
-        model = ErrorModel("exponential", np.array([0.1]))
-        y_pred = np.array([1.0, 2.0, 3.0])
-        theta = np.array([0.5])
-
-        variance = model.evaluate(y_pred, theta)
-        expected = np.exp(2 * 0.5 * np.log(np.abs(y_pred)))
-        np.testing.assert_array_almost_equal(variance, expected)
-
-    def test_invalid_error_model(self):
-        """Test that invalid error model raises error."""
-        model = ErrorModel("invalid", np.array([0.1]))
-        y_pred = np.array([1.0, 2.0, 3.0])
-        theta = np.array([0.1])
-
-        with pytest.raises(ValueError, match="Unknown error model"):
-            model.evaluate(y_pred, theta)
-
-
-if __name__ == "__main__":
-    # Run tests if script is executed directly
-    pytest.main([__file__])

@@ -20,8 +20,7 @@ class NLMEStats:
     aic: float | None = None  # Akaike Information Criterion
     bic: float | None = None  # Bayesian Information Criterion
     rmse: float | None = None  # Root mean squared error
-    mse: float | None = None  # Mean squared error
-    sse: float | None = None  # Sum of squared errors
+    mse: float | None = None  # Estimated error variance (MATLAB's undocumented stats.mse)
     errorparam: np.ndarray | None = None  # Error model parameters
     sebeta: np.ndarray | None = None  # Standard errors of fixed effects
     covb: np.ndarray | None = None  # Covariance matrix of fixed effects
@@ -32,7 +31,6 @@ class NLMEStats:
     iwres: np.ndarray | None = None  # Individual weighted residuals
     pwres: np.ndarray | None = None  # Population weighted residuals
     cwres: np.ndarray | None = None  # Conditional weighted residuals
-    residuals: dict[str, np.ndarray] | None = None  # All residuals in a dict
 
 
 @dataclass
@@ -100,27 +98,6 @@ class SAEMOptions:
     n_burn_in: int = 5  # NBurnIn
     loglik_method: str = "none"  # LogLikMethod: "none", "is", "lin"
     n_chains: int | None = None  # NChains; None: max(1, round(100 / m)) as MATLAB
-
-
-@dataclass
-class ErrorModel:
-    """Error model specification."""
-
-    model_type: str  # "constant", "proportional", "combined", "exponential"
-    parameters: np.ndarray
-
-    def evaluate(self, y_pred: np.ndarray, theta: np.ndarray) -> np.ndarray:
-        """Evaluate error model variance."""
-        if self.model_type == "constant":
-            return np.full_like(y_pred, theta[0] ** 2)
-        elif self.model_type == "proportional":
-            return (theta[0] * np.abs(y_pred)) ** 2
-        elif self.model_type == "combined":
-            return (theta[0] + theta[1] * np.abs(y_pred)) ** 2
-        elif self.model_type == "exponential":
-            return np.exp(2 * theta[0] * np.log(np.abs(y_pred)))
-        else:
-            raise ValueError(f"Unknown error model: {self.model_type}")
 
 
 # Type aliases for better readability

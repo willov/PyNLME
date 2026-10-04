@@ -361,10 +361,9 @@ def plot_results(results):
         ax1.set_yscale("log")
 
         # Residuals plot
-        if stats.residuals is not None:
-            y_pred_pop = exponential_decay_model(beta, X)
-            residuals = y - y_pred_pop
-            ax2.scatter(y_pred_pop, residuals, alpha=0.6)
+        if stats.pres is not None:
+            y_pred_pop = y - stats.pres
+            ax2.scatter(y_pred_pop, stats.pres, alpha=0.6)
             ax2.axhline(y=0, color="k", linestyle="--")
             ax2.set_xlabel("Population Predictions")
             ax2.set_ylabel("Residuals")

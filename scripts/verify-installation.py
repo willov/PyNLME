@@ -21,23 +21,6 @@ def test_import():
         return False
 
 
-def test_rust_backend():
-    """Test if the Rust backend is available."""
-    print("\n🦀 Testing Rust backend availability...")
-    try:
-        from pynlme.nlmefit import RUST_AVAILABLE
-
-        if RUST_AVAILABLE:
-            print("✅ Rust backend is available")
-            return True
-        else:
-            print("⚠️  Rust backend not available - using Python fallback")
-            return True  # This is still okay
-    except Exception as e:
-        print(f"❌ Error checking Rust backend: {e}")
-        return False
-
-
 def test_basic_functionality():
     """Test basic functionality with a simple example."""
     print("\n🧪 Testing basic functionality...")
@@ -75,7 +58,6 @@ def main():
 
     tests = [
         ("Import Test", test_import),
-        ("Rust Backend Test", test_rust_backend),
         ("Basic Functionality Test", test_basic_functionality),
     ]
 
