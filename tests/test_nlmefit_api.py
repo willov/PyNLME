@@ -85,7 +85,7 @@ def test_model_requiring_third_argument_gets_none():
 @pytest.mark.parametrize(
     "option",
     [
-        {"ErrorModel": "proportional", "ApproximationType": "FOCE"},
+        {"REObsDesign": np.zeros((3, 1, 35))},
         {"FEObsDesign": np.zeros((3, 3, 35))},
         {"CovPattern": np.array([[1, 1, 0], [1, 1, 0], [0, 0, 1]])},
     ],
