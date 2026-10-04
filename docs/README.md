@@ -7,8 +7,9 @@ Where to start:
 
 - **MATLAB users**: [tutorial.md](tutorial.md) follows MATLAB's own documentation
   examples; options and outputs carry MATLAB's names and definitions.
-- **Python users**: [api_reference.md](api_reference.md) (snake_case options, 0-based
-  indices, `fit_nlme`, `Vectorization="Full"`, ODE models).
+- **Python users**: [`fit`](api_reference.md#fitmodel-data-response-group-start-predictors-group_predictors-transformnone-randomnone-methodlme-options)
+  with named parameters, dict/Polars data and dict results; or
+  [api_reference.md](api_reference.md) for snake_case options, 0-based indices, `fit_nlme`, `Vectorization="Full"`, ODE models).
 - **R (nlme/saemix) users**: `compat="r"` and the translation table in the
   [main README](../README.md#r-users-nlme-saemix-who-would-rather-not-use-r);
   differences from R in [troubleshooting.md](troubleshooting.md#results-differ-from-r).

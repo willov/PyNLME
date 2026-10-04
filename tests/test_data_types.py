@@ -3,7 +3,6 @@ Tests for PyNLME data types and structures.
 """
 
 import numpy as np
-import pytest
 
 from pynlme.data_types import NLMEOptions, NLMEStats, SAEMOptions
 

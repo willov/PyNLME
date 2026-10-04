@@ -7,8 +7,8 @@ higher exact likelihood are the better ones.
 import numpy as np
 
 import pynlme.saem as saem
-from pynlme.nlmefit import _build_model, _parse_options
 from pynlme.data_types import NLMEOptions
+from pynlme.nlmefit import _build_model, _parse_options
 from pynlme.utils import validate_inputs
 
 

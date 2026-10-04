@@ -20,9 +20,10 @@ Quick Start
 For MATLAB users, nlmefit() and nlmefitsa() are also available.
 """
 
+from .api import fit
 from .data_types import NLMEOptions, NLMEStats
-from .nlmefit import fit_nlme, fit_mle, fit_saem, nlmefit, nlmefitsa
 from .model import with_jacobian
+from .nlmefit import fit_mle, fit_nlme, fit_saem, nlmefit, nlmefitsa
 from .ode import ode_model
 from .sund_adapter import sund_model
 from .utils import (
@@ -41,7 +42,9 @@ except (ImportError, ModuleNotFoundError):
     __version__ = "unknown"
 
 __all__ = [
-    # Primary Python interface (recommended)
+    # Named parameters, dict data and results
+    "fit",
+    # Python interface with arrays
     "fit_nlme",
     "fit_mle",
     "fit_saem",

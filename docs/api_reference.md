@@ -112,6 +112,52 @@ Supports `ParamTransform`, `CovPattern`, `ErrorModel`, `ErrorParameters`,
 With `LogLikMethod="none"`, `stats.logl`, `aic` and `bic` are `None`, as in MATLAB. `b`
 holds the conditional means of the random effects.
 
+## `fit(model, data, response, group, start, predictors=(), group_predictors=(), transform=None, random=None, method="LME", **options)`
+
+Named parameters, data as a dict of arrays or a dataframe (Polars, or anything indexed
+by column name), results as a plain dict. Runs `nlmefit`/`nlmefitsa` with
+`Vectorization="Full"`.
+
+```python
+import numpy as np
+from pynlme import fit
+
+def model(p, x, v):  # dicts of arrays, one entry per observation
+    ke, ka, cl, t = p["ke"], p["ka"], p["cl"], x["time"]
+    return v["dose"] * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
+
+result = fit(model, data, response="conc", group="subject",
+             predictors=["time"], group_predictors=["dose"],
+             start={"ke": 0.08, "ka": 1.6, "cl": 0.04},          # natural scale
+             transform={"ke": "log", "ka": "log", "cl": "log"},
+             random=["ka", "cl"], method="LME")
+result["typical"]["cl"]   # 0.040 (natural scale)
+```
+
+- `start`: initial values on the natural scale; its key order is the parameter order.
+- `transform`: `"log"`, `"logit"`, `"probit"` or `"identity"` (default) per parameter.
+- `random`: parameters with random effects (default all).
+- `group_predictors`: columns constant within a group, passed to the model as `v`
+  (an error is raised if they vary within a group).
+- `method`: `"LME"`, `"RELME"`, `"FO"`, `"FOCE"` or `"SAEM"`.
+- `**options`: any `nlmefit`/`nlmefitsa` option by its Python name
+  (`error_model="proportional"`, `cov_pattern=...`, `random_state=1`, `compat="r"`).
+- A `model.jacobian(p, x[, v])` returning d f/d phi (columns in parameter order) is used
+  if present.
+
+The result:
+
+| Key | Contents |
+|---|---|
+| `fixed` | `{name: estimate}` on the transformed scale |
+| `typical` | the same on the natural scale |
+| `se` | `{name: standard error}` of `fixed` |
+| `psi` | `{"names": [...], "matrix": array, "variances": {name: variance}}` |
+| `random_effects` | `{group label: {name: b}}` |
+| `error` | `{"model": ..., "parameters": ...}` |
+| `stats` | all `stats` fields of `nlmefit` as a dict |
+| `transform`, `method` | as used |
+
 ## `fit_nlme(X, y, group, V, modelfun, beta0, method="MLE", **options)`
 
 `method="MLE"` (or `"ML"`) calls `nlmefit`, `method="SAEM"` calls `nlmefitsa`.

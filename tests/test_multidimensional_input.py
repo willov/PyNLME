@@ -135,7 +135,7 @@ class TestMultiDimensionalInput:
             noise = np.random.normal(0, 0.1, len(time_points))
             response = A * np.exp(-k * time_points) + noise
             subjects_responses.append(response)
-        
+
         y_grouped = np.array(subjects_responses)  # Shape: (3, 5)
 
         # Test with grouped format
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     test_suite = TestMultiDimensionalInput()
 
     print("Testing multi-dimensional input functionality...")
-    
+
     print("1. Testing basic stacking functionality...")
     test_suite.test_stack_grouped_data_basic()
     print("✓ Basic stacking test passed!")

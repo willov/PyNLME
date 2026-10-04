@@ -32,20 +32,24 @@ Start with the [tutorial](docs/tutorial.md).
 
 ### Python users
 
-Snake_case options with 0-based indices, data stacked (a group per observation) or
-grouped (one row per subject):
+Named parameters, data as a dict of arrays or a Polars DataFrame, results as a dict:
 
 ```python
-from pynlme import fit_nlme
+from pynlme import fit
 
-beta, psi, stats, b = fit_nlme(t, y, group, None, model, beta0,
-                               param_transform=[0, 1, 0, 1], re_params_select=[1, 3],
-                               method="SAEM", random_state=1)
+def model(p, x, v):
+    ke, ka, cl, t = p["ke"], p["ka"], p["cl"], x["time"]
+    return v["dose"] * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
+
+result = fit(model, data, response="conc", group="subject", predictors=["time"],
+             group_predictors=["dose"], start={"ke": 0.08, "ka": 1.6, "cl": 0.04},
+             transform={"ke": "log", "ka": "log", "cl": "log"}, random=["ka", "cl"])
+result["typical"]["cl"], result["psi"]["variances"], result["stats"]["aic"]
 ```
 
-The model is a plain function `f(phi, x)` (or `f(phi, x, v)` with group-level
-predictors). Write it for `vectorization="full"` to have it evaluated for many subjects
-at once. See the [API reference](docs/api_reference.md).
+The model receives one value per observation, so it is evaluated for all subjects at
+once. For arrays and positional parameters, `fit_nlme` takes snake_case options with
+0-based indices. See the [API reference](docs/api_reference.md).
 
 ### R users (nlme, saemix) who would rather not use R
 

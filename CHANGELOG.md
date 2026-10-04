@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pynlme.fit`: named parameters, data as a dict or Polars DataFrame, results as a
+  dict (natural-scale estimates, named random effects).
+
 ## [0.5.0] - 2026-10-04
 
 Rewrite: `nlmefit` and `nlmefitsa` are now real implementations, validated against
