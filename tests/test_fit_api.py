@@ -71,5 +71,5 @@ def test_errors(theoph):
     with pytest.raises(KeyError, match="weight"):
         fit(one_compartment, theoph, "conc", "subject", START, ["weight"], ["dose"])
     bad = dict(theoph, dose=theoph["dose"] + np.arange(len(theoph["dose"])))
-    with pytest.raises(ValueError, match="constant within groups"):
+    with pytest.raises(ValueError, match="not constant within groups"):
         fit(one_compartment, bad, "conc", "subject", START, ["time"], ["dose"])

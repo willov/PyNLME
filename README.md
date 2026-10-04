@@ -53,20 +53,42 @@ once. For arrays and positional parameters, `fit_nlme` takes snake_case options 
 
 ### R users (nlme, saemix) who would rather not use R
 
-The same algorithms, with R's reporting conventions via `compat="r"`:
+`pynlme.r` takes R's `nlme()` call almost verbatim, with formulas as strings, and
+prints R's `summary()`:
+
+```python
+import polars as pl
+from pynlme.r import nlme, pdDiag, summary, fixef, ranef, VarCorr
+
+theo = pl.read_csv("theoph.csv").with_columns(wtc=pl.col("wt") - 70)
+fit = nlme("conc ~ SSfol(dose, time, lKe, lKa, lCl)", data=theo,
+           fixed=["lKe ~ 1", "lKa ~ 1", "lCl ~ wtc"],
+           random=pdDiag("lKa + lCl ~ 1"), groups="~subject",
+           start=[-2.5, 0.5, -3.2, 0])
+print(summary(fit))      # same layout and numbers as R
+fixef(fit)["lCl.wtc"]; ranef(fit)[1]; VarCorr(fit)["Residual"]["StdDev"]
+```
+
+`fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`, `BIC`, `fitted`, `resid` work
+as in R; the fit itself is a dict. R's defaults are kept (`method="ML"`, `pdSymm` for a
+plain `random` formula), and the results match R `nlme` to ~1e-4 or closer. Not yet
+supported: `weights=` (use `error_model=`), random effects with covariates, and
+transformed covariates in `fixed` (compute a column instead). See
+[the API reference](docs/api_reference.md#r-style-pynlmer).
+
+Lower-level equivalents of R's arguments:
 
 | R | pynlme |
 |---|---|
 | `nlme(..., method="ML")` / `"REML"` | `nlmefit(..., ApproximationType="LME")` / `"RELME"`, `compat="r"` |
-| `fixed = a + b ~ 1`, `start = c(...)` | `beta0` (one per fixed effect) |
-| `fixed = list(a ~ 1, b ~ wt)` | `FEGroupDesign` (covariates per group) |
+| `fixed = list(a ~ 1, b ~ wt)` | `fit(..., covariates={"b": ["wt"]})` or `FEGroupDesign` |
 | `random = pdDiag(a ~ 1)` / `pdSymm(...)` | `REParamsSelect`, `CovPattern` diagonal / full |
 | `saemix`: `transform.par`, `covariance.model` | `ParamTransform` (same codes), `CovPattern` |
 | `saemix(...)` | `nlmefitsa(..., compat="r")` (one chain, as saemix) |
 
-R's `nlme` matches to ~1e-6. One difference: for nonlinear models R's
-`nlme(method="REML")` is not a restricted-likelihood fit; pynlme's `RELME` is (and equals
-`lme`'s REML on linear models). See [docs/troubleshooting.md](docs/troubleshooting.md).
+For nonlinear models R's `nlme(method="REML")` is not a restricted-likelihood fit;
+pynlme's REML is (and equals `lme`'s REML on linear models). See
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## What is validated
 

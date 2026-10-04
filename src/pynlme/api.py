@@ -51,6 +51,7 @@ def fit(
     group_predictors: Sequence[str] = (),
     transform: Mapping[str, str] | None = None,
     random: Sequence[str] | None = None,
+    covariates: Mapping[str, Sequence[str]] | None = None,
     method: str = "LME",
     **options,
 ) -> dict:
@@ -80,6 +81,11 @@ def fit(
         Estimation is on the transformed scale.
     random : list of str, optional
         Parameters with random effects (default: all).
+    covariates : dict, optional
+        Group-level covariate models: ``{"cl": ["wt"]}`` makes the
+        transformed ``cl`` equal ``beta_cl + beta_cl.wt * wt`` (plus the random
+        effect). The coefficients are named ``"cl.wt"``; they start at 0 unless
+        given in ``start`` (on the transformed scale).
     method : str
         "LME" (default), "RELME", "FO", "FOCE" or "SAEM".
     **options
@@ -90,14 +96,19 @@ def fit(
     Returns
     -------
     dict
-        ``fixed`` (estimates on the transformed scale), ``typical`` (the same
-        on the natural scale), ``se`` (standard errors of ``fixed``),
+        ``fixed`` (estimates on the transformed scale, covariate coefficients
+        included), ``typical`` (parameters on the natural scale, at covariate
+        values 0), ``se`` (standard errors of ``fixed``),
         ``psi`` (random-effects covariance: ``names``, ``matrix``,
         ``variances``), ``random_effects`` ({group: {parameter: b}}),
         ``error`` (error-model parameters), ``stats`` (all of nlmefit's
         statistics as a dict), ``method``.
     """
-    names = list(start)
+    covariates = {n: list(c) for n, c in (covariates or {}).items()}
+    effects = {f"{n}.{c}" for n, cs in covariates.items() for c in cs}
+    names = [n for n in start if n not in effects]
+    if set(covariates) - set(names):
+        raise ValueError(f"covariates names unknown parameters: {sorted(set(covariates) - set(names))}")
     method = method.upper()
     if method not in _METHODS:
         raise ValueError(f"method must be one of {sorted(_METHODS)}, not '{method}'")
@@ -111,7 +122,14 @@ def fit(
         if kind not in _TRANSFORMS:
             raise ValueError(f"unknown transform '{kind}' for '{name}'")
         codes.append(_TRANSFORMS[kind])
-    beta0 = np.array([_FORWARD[c](float(start[n])) for n, c in zip(names, codes, strict=True)])
+    fixed_names, beta0 = [], []
+    for n, c in zip(names, codes, strict=True):
+        fixed_names.append(n)
+        beta0.append(_FORWARD[c](float(start[n])))
+        for cov in covariates.get(n, ()):
+            fixed_names.append(f"{n}.{cov}")
+            beta0.append(float(start.get(f"{n}.{cov}", 0.0)))
+    beta0 = np.array(beta0)
 
     random = names if random is None else list(random)
     missing = set(random) - set(names)
@@ -124,13 +142,15 @@ def fit(
     X = np.column_stack([_column(data, c).astype(float) for c in predictors]) if predictors else np.zeros((len(y), 0))
     V = None
     if group_predictors:
-        labels, first = np.unique(groups, return_index=True)
-        V = np.column_stack([_column(data, c).astype(float)[first] for c in group_predictors])
-        for c in group_predictors:
-            values = _column(data, c).astype(float)
-            per_obs = V[np.searchsorted(labels, groups), list(group_predictors).index(c)]
-            if not np.allclose(values, per_obs, equal_nan=True):
-                raise ValueError(f"group predictor '{c}' is not constant within groups")
+        V = np.column_stack([_per_group(data, groups, c) for c in group_predictors])
+    if covariates:
+        m = len(np.unique(groups))
+        A = np.zeros((len(names), len(fixed_names), m))
+        for k, n in enumerate(names):
+            A[k, fixed_names.index(n)] = 1
+            for cov in covariates.get(n, ()):
+                A[k, fixed_names.index(f"{n}.{cov}")] = _per_group(data, groups, cov)
+        options = {"fe_group_design": A, **options}
 
     def wrapped(phi, x, v=None):
         phi = np.asarray(phi)
@@ -163,9 +183,9 @@ def fit(
     se = stats.sebeta
     return {
         "method": method,
-        "fixed": {n: float(v) for n, v in zip(names, beta, strict=True)},
-        "typical": {n: float(_INVERSE[c](v)) for n, c, v in zip(names, codes, beta, strict=True)},
-        "se": None if se is None else {n: float(s) for n, s in zip(names, se, strict=True)},
+        "fixed": dict(zip(fixed_names, map(float, beta), strict=True)),
+        "typical": {n: float(_INVERSE[c](beta[fixed_names.index(n)])) for n, c in zip(names, codes, strict=True)},
+        "se": None if se is None else dict(zip(fixed_names, map(float, se), strict=True)),
         "transform": {n: _NAMES[c] for n, c in zip(names, codes, strict=True)},
         "psi": {
             "names": random,
@@ -178,6 +198,16 @@ def fit(
         "error": {"model": options.get("error_model", "constant"), "parameters": stats.errorparam},
         "stats": dict(vars(stats)),
     }
+
+
+def _per_group(data, groups: np.ndarray, column: str) -> np.ndarray:
+    """A group-level column, one value per group (groups in sorted order)."""
+    labels, first = np.unique(groups, return_index=True)
+    values = _column(data, column).astype(float)
+    per_group = values[first]
+    if not np.allclose(values, per_group[np.searchsorted(labels, groups)], equal_nan=True):
+        raise ValueError(f"'{column}' is not constant within groups")
+    return per_group
 
 
 def _label(value):

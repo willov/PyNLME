@@ -10,7 +10,8 @@ Where to start:
 - **Python users**: [`fit`](api_reference.md#fitmodel-data-response-group-start-predictors-group_predictors-transformnone-randomnone-methodlme-options)
   with named parameters, dict/Polars data and dict results; or
   [api_reference.md](api_reference.md) for snake_case options, 0-based indices, `fit_nlme`, `Vectorization="Full"`, ODE models).
-- **R (nlme/saemix) users**: `compat="r"` and the translation table in the
+- **R (nlme/saemix) users**: `pynlme.r.nlme` with R's formulas, `summary()`, `fixef()`,
+  ... ([API reference](api_reference.md#r-style-pynlmer)); `compat="r"` and the translation table in the
   [main README](../README.md#r-users-nlme-saemix-who-would-rather-not-use-r);
   differences from R in [troubleshooting.md](troubleshooting.md#results-differ-from-r).
 

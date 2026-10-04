@@ -137,6 +137,9 @@ result["typical"]["cl"]   # 0.040 (natural scale)
 - `start`: initial values on the natural scale; its key order is the parameter order.
 - `transform`: `"log"`, `"logit"`, `"probit"` or `"identity"` (default) per parameter.
 - `random`: parameters with random effects (default all).
+- `covariates`: group-level covariate models, `{"cl": ["wt"]}` makes the transformed
+  `cl` equal `beta_cl + beta_cl.wt * wt`; the coefficient `"cl.wt"` starts at 0 unless
+  given in `start` (transformed scale).
 - `group_predictors`: columns constant within a group, passed to the model as `v`
   (an error is raised if they vary within a group).
 - `method`: `"LME"`, `"RELME"`, `"FO"`, `"FOCE"` or `"SAEM"`.
@@ -157,6 +160,35 @@ The result:
 | `error` | `{"model": ..., "parameters": ...}` |
 | `stats` | all `stats` fields of `nlmefit` as a dict |
 | `transform`, `method` | as used |
+
+## R-style: `pynlme.r`
+
+```python
+from pynlme.r import nlme, pdDiag, pdSymm, summary, fixef, ranef, VarCorr, vcov, logLik, AIC, BIC, fitted, resid
+fit = nlme("conc ~ SSfol(dose, time, lKe, lKa, lCl)", data=theo,
+           fixed=["lKe ~ 1", "lKa ~ 1", "lCl ~ wtc"], random=pdDiag("lKa + lCl ~ 1"),
+           groups="~subject", start=[-2.5, 0.5, -3.2, 0])
+```
+
+`nlme(model, data, fixed, random=None, groups=None, start, method="ML", **options)`:
+
+- `model`: `"response ~ expression"`. The expression may use data columns, the
+  parameters, `exp`, `log`, `sqrt`, `^` and other R math functions, R's `SSfol`,
+  `SSlogis`, `SSbiexp`, `SSasymp`, `SSmicmen` (without self-starting), and any Python
+  function visible where `nlme` is called. It is evaluated on all rows at once.
+- `fixed`: `"a + b ~ 1"` or a list `["a ~ 1", "b ~ wt"]` (group-level covariates by
+  column name; coefficients named `b.(Intercept)`, `b.wt` as in R).
+- `random`: `"a + b ~ 1"` (general covariance, R's default `pdSymm`), `pdDiag(...)`,
+  `pdSymm(...)`; optionally `"... ~ 1 | subject"`. Default: all parameters.
+- `groups`: `"~subject"` (or via `| subject` in `random`).
+- `start`: dict by coefficient name or list in R's coefficient order; required.
+- `method`: `"ML"` (R's default) or `"REML"` (true REML, unlike R's nlme).
+- `**options`: `nlmefit` options by Python name, e.g. `error_model="proportional"`.
+
+Runs `fit` with `compat="r"`. The result is `fit`'s dict plus `fixef`, `se_fixef`,
+`ranef` (`{group: {name: b}}`), `sigma`, `logLik`, `AIC`, `BIC`, `vcov`, `fitted`,
+`residuals` and `call`, read by the R-named functions. `summary(fit)` returns R's
+printout (DF = observations - groups - fixed effects + 1, as nlme reports).
 
 ## `fit_nlme(X, y, group, V, modelfun, beta0, method="MLE", **options)`
 

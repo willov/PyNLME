@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `pynlme.fit`: named parameters, data as a dict or Polars DataFrame, results as a
-  dict (natural-scale estimates, named random effects).
+  dict (natural-scale estimates, named random effects), with `covariates=` for
+  group-level covariate models.
+- `pynlme.r`: R's `nlme()` with string formulas, `pdDiag`/`pdSymm`, `SSfol` and other
+  `SS*` models, and `summary`, `fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`,
+  `BIC`, `fitted`, `resid`; matches R nlme on the validation cases.
 
 ## [0.5.0] - 2026-10-04
 
