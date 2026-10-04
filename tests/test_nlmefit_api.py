@@ -195,3 +195,11 @@ class TestDataFormat:
             nlmefit(X, y, None, None, self.model, [10.0, 0.5], DataFormat="stacked")
         with pytest.raises(ValueError, match="DataFormat"):
             nlmefit(X, y, None, None, self.model, [10.0, 0.5], DataFormat="wide")
+
+
+def test_empty_v_means_no_group_predictors():
+    """MATLAB code passes [] for V; the model is then called with two arguments."""
+    c = orange()
+    a = nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs)
+    b = nlmefit(c.X, c.y, c.group, [], c.modelfun, c.beta0, **c.kwargs)
+    np.testing.assert_allclose(b[0], a[0], rtol=1e-12)

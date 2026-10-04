@@ -220,6 +220,8 @@ def validate_inputs(
 
     if V is not None:
         V = np.asarray(V, dtype=float)
+        if V.size == 0:  # MATLAB code passes [] for "no group predictors"
+            V = None
 
     data_format = resolve_data_format(y, data_format)
 

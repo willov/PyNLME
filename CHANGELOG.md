@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-04
+
+Rewrite: `nlmefit` and `nlmefitsa` are now real implementations, validated against
+MATLAB R2023b, R nlme and R saemix. The earlier versions did not fit mixed-effects
+models correctly.
+
 ### Changed
 - **nlmefit rewritten** as a Lindstrom-Bates implementation (LME step via QR decompositions with a log-Cholesky covariance parameterisation and an analytic gradient; restarts for collapsed variance components; damping for cycling iterations) for `ApproximationType` "LME" and "RELME", the algorithm used by MATLAB nlmefit and R nlme. The previous Rust and Python MLE code did not estimate random effects (psi was fixed at 0.1*I and b at zero) and has been removed.
 - MATLAB name-value arguments are accepted directly (`ParamTransform=...`, `REParamsSelect=[2, 3]`, `FEGroupDesign=...`, `CovPattern=...`, `Options={...}`), with MATLAB's 1-based indices. `modelfun` is called with two arguments when `V` is empty, as in MATLAB. `b` is returned r-by-m.
@@ -16,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stats.rmse` follows MATLAB: sqrt(sum(ires^2)/dfe). The error standard deviation is in `stats.errorparam`. For RELME, psi, the error variance and covb are reported as MATLAB does (RSS/N scaling) and BIC uses log(m - f).
 
 ### Added
+- An empty `V` (`[]`, as in MATLAB code) means no group-level predictors.
+- Documentation rewritten around three audiences: MATLAB users, Python users, and R users.
 - Proportional, combined and exponential error models for FO/FOCE (reweighting as MATLAB does); with `compat="matlab"` the exponential FO/FOCE log-likelihood follows MATLAB in omitting -sum(log y).
 - Analytic model derivatives: a model function with a `jacobian` attribute (or `pynlme.with_jacobian(f, jac)`) is differentiated analytically in all methods instead of by finite differences; prepares for SUND sensitivities.
 - `DataFormat="stacked"|"grouped"`. Without it the layout follows from the shape of y only; the previous X-based guess (which treated small stacked datasets without a group as grouped) is no longer used.

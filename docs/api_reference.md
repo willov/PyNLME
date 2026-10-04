@@ -1,347 +1,164 @@
-# PyNLME API Reference
-
-## Core Functions
-
-### `nlmefit(X, y, group, V, modelfun, beta0, **kwargs)`
-
-Maximum Likelihood Estimation for nonlinear mixed-effects models.
-
-**Parameters:**
-- `X` (ndarray): Predictor variables, shape `(n_obs, n_predictors)`
-- `y` (ndarray): Response variable, shape `(n_obs,)`
-- `group` (ndarray): Grouping variable (0-based indices), shape `(n_obs,)`
-- `V` (ndarray, optional): Group-level predictors, shape `(n_groups, n_covariates)`
-- `modelfun` (callable): Model function with signature `f(phi, X, V=None)`
-- `beta0` (ndarray): Initial parameter estimates, shape `(n_params,)`
-
-**Keyword Arguments:**
-- `max_iter` (int): Maximum iterations (default: 200)
-- `tol_fun` (float): Function tolerance (default: 1e-6)
-- `tol_x` (float): Parameter tolerance (default: 1e-6)
-- `verbose` (int): Verbosity level (default: 0)
-- `approximation_type` (str): "LME", "RELME", "FO", "FOCE" (default: "LME")
-- `error_model` (str): "constant", "proportional", "combined", "exponential"
-- `compute_std_errors` (bool): Whether to compute standard errors (default: True)
-
-**Returns:**
-- `beta` (ndarray): Fixed-effects estimates
-- `psi` (ndarray): Random-effects covariance matrix  
-- `stats` (NLMEStats): Fitting statistics and diagnostics
-- `b` (ndarray): Individual random effects estimates
-
-**Example:**
-```python
-def exponential_model(phi, x, v=None):
-    return phi[0] * np.exp(-phi[1] * x.ravel())
-
-beta, psi, stats, b = nlmefit(X, y, group, None, exponential_model, [10, 0.5])
-```
-
----
-
-### `nlmefitsa(X, y, group, V, modelfun, beta0, **kwargs)`
-
-Stochastic Approximation EM for nonlinear mixed-effects models.
-
-**Parameters:**
-Same as `nlmefit()`.
-
-**Additional Keyword Arguments:**
-- `n_iterations` (tuple): SAEM phase iterations (burn-in, stochastic, smooth)
-- `n_mcmc_iterations` (tuple): MCMC iterations per phase
-- `n_burn_in` (int): Additional burn-in iterations
-- `tol_sa` (float): Stochastic approximation tolerance (default: 1e-4)
-- `step_size_sequence` (str): "auto" or custom sequence
-
-**Returns:**
-Same as `nlmefit()`.
-
-**Example:**
-```python
-beta, psi, stats, b = nlmefitsa(X, y, group, None, exponential_model, [10, 0.5],
-                                n_iterations=(100, 100, 50), verbose=1)
-```
-
----
-
-### `fit_nlme(X, y, group, V, modelfun, beta0, method="ML", **kwargs)`
-
-Unified Python-style interface for nonlinear mixed-effects models.
-
-**Parameters:**
-- `X` (ndarray): Predictor variables, shape `(n_obs, n_predictors)`
-- `y` (ndarray): Response variable, shape `(n_obs,)`
-- `group` (ndarray): Grouping variable (0-based indices), shape `(n_obs,)`
-- `V` (ndarray, optional): Group-level predictors, shape `(n_groups, n_covariates)`
-- `modelfun` (callable): Model function with signature `f(phi, X, V=None)`
-- `beta0` (ndarray): Initial parameter estimates, shape `(n_params,)`
-- `method` (str): Fitting method - "ML" or "SAEM" (default: "ML")
-
-**Keyword Arguments:**
-Same as `nlmefit()` and `nlmefitsa()` depending on the method selected.
-
-**Returns:**
-Same as `nlmefit()` and `nlmefitsa()`.
-
-**Example:**
-```python
-# Maximum Likelihood Estimation
-beta, psi, stats, b = fit_nlme(X, y, group, None, exponential_model, [10, 0.5], method="ML")
-
-# Stochastic Approximation EM  
-beta, psi, stats, b = fit_nlme(X, y, group, None, exponential_model, [10, 0.5], method="SAEM")
-```
-
----
-
-## Data Types
-
-### `NLMEStats`
-
-Container for model fitting statistics and diagnostics.
-
-**Attributes:**
-- `dfe` (int): Degrees of freedom for error
-- `logl` (float): Log-likelihood value
-- `aic` (float): Akaike Information Criterion
-- `bic` (float): Bayesian Information Criterion  
-- `rmse` (float): Root mean squared error
-- `mse` (float): Mean squared error
-- `sse` (float): Sum of squared errors
-- `sebeta` (ndarray): Standard errors of fixed effects
-- `covb` (ndarray): Covariance matrix of fixed effects
-- `ires` (ndarray): Individual residuals
-- `pres` (ndarray): Population residuals
-- `iwres` (ndarray): Individual weighted residuals
-- `pwres` (ndarray): Population weighted residuals
-- `cwres` (ndarray): Conditional weighted residuals
-
----
-
-### `NLMEOptions`
-
-General options for NLME fitting.
-
-**Attributes:**
-- `approximation_type` (str): Approximation method
-- `optim_fun` (str): Optimization algorithm
-- `param_transform` (ndarray): Parameter transformations
-- `error_model` (str): Error model specification
-- `cov_pattern` (ndarray): Covariance pattern matrix
-- `cov_parametrization` (str): "logm" or "chol"
-- `vectorization` (str): "SinglePhi", "SingleGroup", "Full"
-- `compute_std_errors` (bool): Compute standard errors
-- `refine_beta0` (bool): Refine initial estimates
-- `max_iter` (int): Maximum iterations
-- `tol_fun` (float): Function tolerance
-- `tol_x` (float): Parameter tolerance
-- `verbose` (int): Verbosity level
-- `random_state` (int): Random seed
-
----
-
-### `SAEMOptions`
-
-SAEM-specific algorithm options.
-
-**Attributes:**
-- `n_iterations` (tuple): Phase iterations (burn-in, stochastic, smooth)
-- `n_mcmc_iterations` (tuple): MCMC iterations per phase
-- `n_burn_in` (int): Additional burn-in
-- `step_size_sequence` (str): Step size schedule
-- `tol_ll` (float): Log-likelihood tolerance
-- `tol_sa` (float): Stochastic approximation tolerance
-- `verbose` (int): Verbosity level
-- `random_state` (int): Random seed
-- `algorithm` (str): Algorithm identifier
-
----
-
-### `ErrorModel`
-
-Error model specification and evaluation.
-
-**Attributes:**
-- `model_type` (str): "constant", "proportional", "combined", "exponential"
-- `parameters` (ndarray): Error model parameters
-
-**Methods:**
-- `evaluate(y_pred, theta)`: Evaluate error variance given predictions
-
-**Error Model Types:**
-- **Constant**: `σ² = θ₁²`
-- **Proportional**: `σ² = (θ₁ × |y_pred|)²`
-- **Combined**: `σ² = (θ₁ + θ₂ × |y_pred|)²`
-- **Exponential**: `σ² = exp(2 × θ₁ × log(|y_pred|))`
-
----
-
-## Model Function Interface
-
-Your model function should follow this signature:
+# API reference
 
 ```python
-def your_model(phi, X, V=None):
-    """
-    Nonlinear model function.
-    
-    Parameters:
-    -----------
-    phi : ndarray
-        Parameter vector for this group/individual
-    X : ndarray  
-        Predictor variables for this group
-    V : ndarray, optional
-        Group-level covariates
-        
-    Returns:
-    --------
-    ndarray
-        Predicted values, same length as observations
-    """
-    # Your model implementation
-    return predictions
+from pynlme import nlmefit, nlmefitsa, fit_nlme, ode_model, sund_model, with_jacobian
 ```
 
-**Examples:**
+## `nlmefit(X, y, group, V, modelfun, beta0, **options)`
+
+Maximum-likelihood fit, as MATLAB's `nlmefit`. The model for group i is
+
+```
+y_ij = f(phi_i, x_ij[, v_i]) + error
+phi_i = g^-1(A_i beta + B_i b_i),   b_i ~ N(0, PSI)
+```
+
+where `g` is the parameter transform (`ParamTransform`), and `A_i`, `B_i` are the fixed-
+and random-effects designs (by default identity: every parameter has a fixed and a
+random effect).
+
+| Argument | Description |
+|---|---|
+| `X` | Predictors, one row per observation (n x h). A vector is one column. |
+| `y` | Responses. Stacked: a vector. Grouped: one row per group (see `DataFormat`). |
+| `group` | Group of each observation (any labels; groups are ordered by sorted label). Required for stacked data; optional row labels for grouped data. |
+| `V` | Group-level predictors, one row per group (m x g), or `None`. A vector is one value per group. |
+| `modelfun` | `modelfun(phi, x)` if `V` is `None`, else `modelfun(phi, x, v)`. `phi` is the parameter vector of one group, `x` that group's rows of `X` (n_i x h), `v` its row of `V`. Returns n_i predictions. With `Vectorization="Full"`, see below. |
+| `beta0` | Starting values of the fixed effects. |
+
+**Returns** `beta, psi, stats, b`:
+
+| Output | Shape | Contents |
+|---|---|---|
+| `beta` | (f,) | Fixed effects (on the transformed scale) |
+| `psi` | (r, r) | Random-effects covariance |
+| `stats` | `NLMEStats` | See below |
+| `b` | (r, m) | Random effects, one column per group (MATLAB layout) |
+
+### Options
+
+Pass MATLAB name-value arguments as keyword arguments (`ParamTransform=[0, 1]`), or the
+snake_case names (`param_transform=[0, 1]`). **Indices given under MATLAB names are
+1-based, as in MATLAB; under Python names they are 0-based.** Logical masks work under
+both.
+
+| MATLAB name | Python name | Default | Notes |
+|---|---|---|---|
+| `ApproximationType` | `approximation_type` | `"LME"` | `"LME"`, `"RELME"`, `"FO"`, `"FOCE"` |
+| `ErrorModel` | `error_model` | `"constant"` | `"constant"`, `"proportional"`, `"combined"`, `"exponential"` |
+| `ErrorParameters` | `error_parameters` | MATLAB's | Starting value(s); `[a, b]` for combined |
+| `ParamTransform` | `param_transform` | none | Per parameter: 0 identity, 1 log, 2 probit, 3 logit |
+| `CovPattern` | `cov_pattern` | diagonal | Diagonal or full (`np.ones((r, r))`) |
+| `FEParamsSelect`, `FEConstDesign`, `FEGroupDesign` | `fe_params_select`, ... | all parameters | `FEGroupDesign` is p x f x m (covariate models) |
+| `REParamsSelect`, `REConstDesign`, `REGroupDesign` | `re_params_select`, ... | all parameters | |
+| `RefineBeta0` | `refine_beta0` | `"on"` | Pooled fit of `beta0` first |
+| `Vectorization` | `vectorization` | `"SinglePhi"` | `"SinglePhi"`, `"SingleGroup"`, `"Full"` |
+| `Options` | | | dict with `MaxIter` (200), `TolFun` and `TolX` (1e-6; MATLAB's default is 1e-4), `Display` (`"off"`, `"final"`, `"iter"`) |
+| `CovParameterization`, `OptimFun` | | | Accepted for compatibility; no effect on the result |
+| `DataFormat` | `data_format` | from `y` | `"stacked"` or `"grouped"` |
+| | `compat` | `"matlab"` | `"matlab"` or `"r"` reporting conventions (below) |
+
+Options that are not implemented (`FEObsDesign`, `REObsDesign`, block `CovPattern`)
+raise `NotImplementedError`; unknown options raise `TypeError`. Nothing is silently
+ignored.
+
+### `stats`
+
+| Field | MATLAB definition |
+|---|---|
+| `dfe` | N - (fixed effects + covariance parameters + error parameters) |
+| `logl`, `aic`, `bic` | Maximised (approximate) log-likelihood; `aic = -2 logl + 2 k`, `bic = -2 logl + log(m) k` |
+| `rmse` | `sqrt(sum(ires^2) / dfe)` |
+| `mse` | Estimated error variance |
+| `errorparam` | Error-model parameters: `a` (constant, exponential), `b` (proportional), `[a, b]` (combined) |
+| `sebeta`, `covb` | Standard errors and covariance of `beta` |
+| `ires`, `pres` | `y - f(beta, b)`, `y - f(beta, 0)` |
+| `iwres`, `pwres`, `cwres` | Weighted residuals as MATLAB's `nlmeres` (error SD at the population prediction); `None` when an error variance is zero |
+
+For the exponential error model the model is fitted on the log scale and residuals are
+on that scale, as in MATLAB.
+
+### `compat`: MATLAB or R conventions
+
+Estimates are the same; defaults and reported statistics differ.
+
+| | `compat="matlab"` | `compat="r"` (nlme) |
+|---|---|---|
+| `RefineBeta0` default | on | off |
+| ML standard errors | unadjusted | x sqrt(N / (N - f)) |
+| BIC | log(groups) | log(observations) (N - f for REML) |
+| RELME error variance, `psi`, `covb` | RSS / N | RSS / (N - f) |
+| FO/FOCE exponential-model log-likelihood | without `-sum(log y)` (as MATLAB) | full likelihood |
+
+Explicit options override the convention set.
+
+## `nlmefitsa(X, y, group, V, modelfun, beta0, **options)`
+
+Stochastic Approximation EM, as MATLAB's `nlmefitsa`: same arguments and outputs.
+Supports `ParamTransform`, `CovPattern`, `ErrorModel`, `ErrorParameters`,
+`FEParamsSelect`/`FEConstDesign`/`FEGroupDesign`, `REParamsSelect`, `Vectorization`,
+`DataFormat`, `compat`, and:
+
+| MATLAB name | Python name | Default |
+|---|---|---|
+| `NIterations` | `n_iterations` | `[150, 150, 100]` (annealing, full step, decreasing step) |
+| `NMCMCIterations` | `n_mcmc_iterations` | `[2, 2, 2]` (prior draws, single-coordinate, full-vector random walk) |
+| `NBurnIn` | `n_burn_in` | 5 |
+| `NChains` | `n_chains` | `max(1, round(100 / m))` (MATLAB's); 1 with `compat="r"` (saemix's) |
+| `LogLikMethod` | `loglik_method` | `"none"`; `"is"` (importance sampling) or `"lin"` (linearisation) |
+| `ComputeStdErrors` | `compute_std_errors` | `False` |
+| | `random_state` | seed for reproducible results |
+
+With `LogLikMethod="none"`, `stats.logl`, `aic` and `bic` are `None`, as in MATLAB. `b`
+holds the conditional means of the random effects.
+
+## `fit_nlme(X, y, group, V, modelfun, beta0, method="MLE", **options)`
+
+`method="MLE"` (or `"ML"`) calls `nlmefit`, `method="SAEM"` calls `nlmefitsa`.
+`fit_mle` and `fit_saem` are aliases.
+
+## `Vectorization="Full"`
+
+The model is called once for many groups: `phi` has one row per observation (n x p),
+`x` is n x h and `v` n x g. Write the model by indexing the last axis so that it works
+for a single parameter vector too:
 
 ```python
-# Exponential decay
-def exponential_decay(phi, X, V=None):
-    A, k = phi
-    return A * np.exp(-k * X.ravel())
-
-# Michaelis-Menten kinetics  
-def michaelis_menten(phi, X, V=None):
-    Vmax, Km = phi
-    return Vmax * X.ravel() / (Km + X.ravel())
-
-# Logistic growth
-def logistic_growth(phi, X, V=None):
-    A, t0, tau = phi
-    t = X.ravel()
-    return A / (1 + np.exp(-(t - t0) / tau))
-
-# Sigmoid dose-response
-def sigmoid_dose_response(phi, X, V=None):
-    Emax, ED50, hill = phi
-    dose = X.ravel()
-    return Emax * dose**hill / (ED50**hill + dose**hill)
+def model(phi, t, dose):
+    ke, ka, cl = phi[..., 0], phi[..., 1], phi[..., 2]
+    t, dose = t[:, 0], dose[..., 0]
+    return dose * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
 ```
 
----
+Results are identical to `"SinglePhi"`; fits are several times faster.
 
-## Error Handling
+## Analytic derivatives: `with_jacobian(modelfun, jacobian)`
 
-The package provides comprehensive error handling:
+`jacobian` takes the same arguments as the model and returns d f / d phi (one row per
+observation, one column per parameter, phi on the model's scale). All methods then use
+it instead of finite differences; the chain rule through `ParamTransform` is applied by
+pynlme. Equivalently, set a `jacobian` attribute on the model function.
 
-**Common Exceptions:**
-- `ValueError`: Invalid input dimensions or parameters
-- `TypeError`: Incorrect parameter types
-- `RuntimeError`: Optimization failures
-- `ConvergenceWarning`: Algorithm didn't converge
+## ODE models
 
-**Example Error Handling:**
-```python
-try:
-    beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0)
-except ValueError as e:
-    print(f"Input validation error: {e}")
-except RuntimeError as e:
-    print(f"Optimization failed: {e}")
-    # Perhaps try different initial values or SAEM
-    beta, psi, stats, b = nlmefitsa(X, y, group, None, model, beta0)
-```
+### `sund_model(model, feature, parameters, v_states=(), v_parameters=(), ...)`
 
----
+A compiled [SUND](https://isbgroup.eu/sund-toolbox) model as a model function
+(`pip install "pynlme[sund]"`). `model` is the name of an installed SUND model (or a
+`sund.Simulation`); `parameters` are the SUND parameters set from `phi`, in order; the
+columns of `V` set the initial states `v_states`, then the parameters `v_parameters`.
+With `Vectorization="Full"` it simulates `batch_size` (16) parameter sets per SUND call
+using containers. Integrator tolerances default to rel 1e-10, abs 1e-12, because the
+model is differentiated numerically. See `examples/sund_ode_model.py`.
 
-## Advanced Usage
+### `ode_model(rhs, y0, output, t0=0, method="DOP853", rtol=1e-10, atol=1e-12)`
 
-### Parameter Transformations
+A SciPy ODE model: `rhs(t, y, phi, v)` vectorised over K systems (y is K x states),
+`y0(phi, v)`, `output(y, phi, v)`. With `Vectorization="Full"` all subjects are solved
+in one `solve_ivp` call.
 
-```python
-# Log transformation for positive parameters
-options = NLMEOptions(param_transform=np.array([1, 1]))  # Log transform both params
-beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, **options.__dict__)
-```
+## Data helpers
 
-### Custom Error Models
-
-```python
-# Proportional error model
-beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, 
-                              error_model="proportional")
-```
-
-### Covariance Patterns
-
-```python
-# Diagonal covariance (no correlations)
-cov_pattern = np.eye(2)  # 2x2 diagonal
-options = NLMEOptions(cov_pattern=cov_pattern)
-beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, **options.__dict__)
-```
-
----
-
-## Utility Functions
-
-### `stack_grouped_data(X_grouped, y_grouped, group_ids=None)`
-
-Convert multi-dimensional grouped data to stacked format.
-
-**Parameters:**
-- `X_grouped` (ndarray): Grouped predictor data, shape `(n_groups, n_obs_per_group, n_features)` or `(n_groups, n_obs_per_group)`
-- `y_grouped` (ndarray): Grouped response data, shape `(n_groups, n_obs_per_group)`
-- `group_ids` (array_like, optional): Custom group identifiers. If None, uses consecutive integers starting from 0.
-
-**Returns:**
-- `X_stacked` (ndarray): Stacked predictor data, shape `(n_groups * n_obs_per_group, n_features)`
-- `y_stacked` (ndarray): Stacked response data, shape `(n_groups * n_obs_per_group,)`
-- `group_stacked` (ndarray): Group indicators, shape `(n_groups * n_obs_per_group,)`
-
-**Example:**
-```python
-from pynlme import stack_grouped_data
-
-# Data where each row represents a subject
-X_grouped = np.array([[1, 2, 3, 4], [1, 2, 3, 4], [1, 2, 3, 4]])  # 3 subjects, 4 obs each
-y_grouped = np.array([[10, 7, 5, 3], [12, 8, 6, 4], [11, 8, 6, 3]])
-
-# Convert to stacked format
-X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped)
-
-# Use with custom group IDs
-X_stacked, y_stacked, group_stacked = stack_grouped_data(
-    X_grouped, y_grouped, group_ids=['Patient_A', 'Patient_B', 'Patient_C']
-)
-```
-
----
-
-### `detect_data_format(X, y, group=None)`
-
-Detect whether data is in stacked or grouped format.
-
-**Parameters:**
-- `X` (ndarray): Predictor variables
-- `y` (ndarray): Response variables
-- `group` (array_like, optional): Group identifiers (only relevant for stacked format)
-
-**Returns:**
-- `format` (str): Either 'stacked' or 'grouped'
-
-**Example:**
-```python
-from pynlme import detect_data_format
-
-# Detect format automatically
-format_type = detect_data_format(X, y, group)
-print(f"Data format: {format_type}")
-
-# Works with both formats
-if format_type == 'grouped':
-    print("Data is organized with rows representing subjects")
-else:
-    print("Data is in traditional stacked format")
-```
+- `stack_grouped_data(X_grouped, y_grouped, group_ids=None)`: grouped to stacked arrays.
+- `transform_parameters(phi, codes)`: apply `ParamTransform` codes.
+- `detect_data_format(X, y, group)`: a heuristic guess, not used by the fitting functions.

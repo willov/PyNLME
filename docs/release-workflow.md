@@ -1,135 +1,30 @@
-# PyNLME Release Workflow
+# Release workflow
 
-This document shows the **manual version control** workflow for PyNLME releases.
+Releases are created automatically when the version in `pyproject.toml` changes on
+`main`.
 
-## 🎯 Release Process Overview
+1. Update `version` in `pyproject.toml` and move the `[Unreleased]` notes in
+   `CHANGELOG.md` under a heading `## [x.y.z] - YYYY-MM-DD`.
+2. Commit and push (or merge) to `main`.
+3. GitHub Actions (`.github/workflows/main.yml`):
+   - runs the tests on Linux, Windows and macOS with Python 3.11-3.13, and the
+     validation tests against R (`validation` job);
+   - if the version changed and the tag does not exist yet, tags `vx.y.z`, builds the
+     wheel and sdist (`uv build`; pynlme is pure Python, so one `py3-none-any` wheel
+     works everywhere) and creates a GitHub release (marked pre-release) with them and
+     the changelog section.
 
-PyNLME uses **manual version setting** combined with **automatic release creation**:
+No release is made if the version is unchanged, the tag exists, or tests fail.
 
-1. **Developer manually sets version** in `pyproject.toml`
-2. **GitHub Actions detects change** and creates release automatically
-3. **Users get pre-built wheels** without needing Rust
-
-## 📋 Step-by-Step Release
-
-### 1. Prepare for Release
-
-```bash
-# The automated workflow will:
-# - Run comprehensive tests across all platforms
-# - Validate code formatting and builds
-# - Test examples and functionality
-# - Only create releases if everything passes
-```
-
-### 2. Update Version Manually
-
-Edit `pyproject.toml`:
-
-```toml
-[project]
-name = "pynlme"
-version = "0.1.1"  # <- Change this manually (was 0.1.0)
-```
-
-### 3. Update Changelog
-
-Edit `CHANGELOG.md`:
-
-```markdown
-## [0.1.1] - 2025-06-11
-
-### Added
-- New feature X
-- Enhanced Y functionality
-
-### Fixed
-- Bug Z in algorithm
-- Documentation updates
-```
-
-### 4. Commit and Push
+Users install from the release:
 
 ```bash
-git add pyproject.toml CHANGELOG.md
-git commit -m "Release v0.1.1: Add feature X, fix bug Z"
-git push origin main
+pip install https://github.com/willov/PyNLME/releases/download/vx.y.z/pynlme-x.y.z-py3-none-any.whl
+# with SUND models:
+pip install "pynlme[sund] @ https://github.com/willov/PyNLME/releases/download/vx.y.z/pynlme-x.y.z-py3-none-any.whl"
 ```
 
-### 5. GitHub Actions Magic ✨
+or from source: `pip install git+https://github.com/willov/PyNLME`.
 
-GitHub Actions automatically:
-- **Detects** version change (`0.1.0` → `0.1.1`)
-- **Validates** that tag `v0.1.1` doesn't exist
-- **Runs tests** to ensure everything works
-- **Creates git tag** `v0.1.1`
-- **Builds wheels** for Linux, Windows, macOS
-- **Creates GitHub release** with all wheels attached
-- **Marks as pre-release** (proof-of-concept status)
-
-### 6. Users Install Easily
-
-Users can now install without Rust:
-
-```bash
-# Install latest wheel from GitHub releases (using uv)
-uv add https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
-
-# Or using pip
-pip install https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
-
-# Or browse releases and pick specific wheel
-# https://github.com/willov/PyNLME/releases
-```
-
-## 🔍 What GitHub Actions Checks
-
-The auto-release workflow (`auto-release.yml`) checks:
-
-- ✅ **Version changed** in `pyproject.toml`
-- ✅ **Tag doesn't exist** yet
-- ✅ **Valid version format** (e.g., `1.2.3` or `1.2.3-alpha`)
-- ✅ **Tests pass**
-- ✅ **Code builds successfully**
-
-## 🚫 When Releases Don't Happen
-
-No release is created if:
-- Version unchanged (e.g., just documentation updates)
-- Tag already exists (prevents duplicate releases)
-- Version format invalid (must be semantic versioning)
-- Tests fail
-
-## 💡 Benefits of This Approach
-
-- ✅ **Manual control** - You decide when to release
-- ✅ **Automatic execution** - No manual tag/release creation
-- ✅ **Safe** - Won't create duplicate or broken releases
-- ✅ **User-friendly** - Pre-built wheels, no Rust required
-- ✅ **Clear history** - Git tags match release versions
-
-## 🎯 Example Workflow
-
-```bash
-# Working on features...
-git commit -m "Add new algorithm"
-git commit -m "Fix edge case"
-git commit -m "Update docs"
-
-# Ready to release!
-# The automated workflow will handle validation
-
-# Edit pyproject.toml: version = "0.2.0"
-# Edit CHANGELOG.md: ## [0.2.0] - 2025-06-11
-
-git add pyproject.toml CHANGELOG.md
-git commit -m "Release v0.2.0: Major algorithm improvements"
-git push origin main
-
-# 🤖 GitHub Actions automatically:
-# 1. Detects version change and runs comprehensive tests
-# 2. Creates v0.2.0 release with wheels if tests pass
-# ✅ Users can install: uv add <wheel-url>
-```
-
-This workflow gives you full control over versioning while automating the tedious parts of release creation!
+Reference results in `validation/reference/` are regenerated separately (see
+[validation/README.md](../validation/README.md)); they need R and MATLAB, not CI.

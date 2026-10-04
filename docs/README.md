@@ -1,251 +1,41 @@
-# PyNLME - Nonlinear Mixed-Effects Models for Python
+# pynlme documentation
 
-> **Out of date.** This page describes the original prototype, whose fitting algorithms did not work. See the main [README](../README.md) status section and [validation/](../validation/README.md) for the current state.
+pynlme fits nonlinear mixed-effects models in Python with the call syntax of MATLAB's
+`nlmefit` and `nlmefitsa`, validated against MATLAB R2023b, R `nlme` and R `saemix`.
 
-A high-performance Python implementation of nonlinear mixed-effects (NLME) models with a MATLAB-compatible API and Rust backend.
+Where to start:
 
-## 🧪 Status: **FUNCTIONAL - PROOF OF CONCEPT** ⚠️
+- **MATLAB users**: [tutorial.md](tutorial.md) follows MATLAB's own documentation
+  examples; options and outputs carry MATLAB's names and definitions.
+- **Python users**: [api_reference.md](api_reference.md) (snake_case options, 0-based
+  indices, `fit_nlme`, `Vectorization="Full"`, ODE models).
+- **R (nlme/saemix) users**: `compat="r"` and the translation table in the
+  [main README](../README.md#r-users-nlme-saemix-who-would-rather-not-use-r);
+  differences from R in [troubleshooting.md](troubleshooting.md#results-differ-from-r).
 
-✅ **48/48 tests passing**  
-✅ **Rust backend integrated and working**  
-✅ **MATLAB-compatible API**  
-⚠️ **Requires validation for production use**
+| Page | Contents |
+|---|---|
+| [tutorial.md](tutorial.md) | From a MATLAB example to covariates, error models, SAEM, faster fits and ODE models |
+| [api_reference.md](api_reference.md) | Functions, options (MATLAB and Python names), outputs, MATLAB vs R conventions |
+| [multidimensional_input.md](multidimensional_input.md) | Stacked and grouped data layouts |
+| [troubleshooting.md](troubleshooting.md) | Warnings, differences from MATLAB, speed |
+| [implementation.md](implementation.md) | Algorithms and code structure, for developers |
+| [../validation/README.md](../validation/README.md) | How the package is validated, and what was found |
+| [sund-wishlist.md](sund-wishlist.md) | Features requested from the SUND toolbox |
+| [release-workflow.md](release-workflow.md) | Making a release |
 
-## 🚀 Quick Start
+## What is implemented
 
-```python
-import numpy as np
-from pynlme import fit_nlme
+- `nlmefit`: `ApproximationType` `"LME"`, `"RELME"`, `"FO"`, `"FOCE"`; error models
+  `"constant"`, `"proportional"`, `"combined"`, `"exponential"`; parameter transforms,
+  fixed- and random-effects designs (including group-specific covariate designs),
+  diagonal or full covariance; all `stats` fields including weighted residuals.
+- `nlmefitsa`: SAEM with MATLAB's defaults (iterations, MCMC kernels, chains), all error
+  models, importance-sampling and linearised log-likelihoods, standard errors.
+- `Vectorization="Full"` for batched model evaluation; analytic derivatives via
+  `with_jacobian`; ODE models via SUND (`sund_model`) or SciPy (`ode_model`).
+- `compat="matlab"` (default) or `compat="r"` reporting conventions.
 
-# Define your nonlinear model
-def exponential_decay(phi, t, v=None):
-    return phi[0] * np.exp(-phi[1] * t.ravel())
-
-# Prepare data
-t = np.array([[1], [2], [3], [4]])  # Time points
-y = np.array([10, 7, 5, 3])         # Observations
-group = np.array([0, 0, 1, 1])      # Subject grouping
-beta0 = np.array([10.0, 0.5])       # Initial estimates
-
-# Fit model with Python API (recommended)
-beta, psi, stats, b = fit_nlme(t, y, group, None, exponential_decay, beta0)
-
-# Alternative: specify algorithm explicitly
-beta, psi, stats, b = fit_nlme(
-    t, y, group, None, exponential_decay, beta0, method='SAEM'
-)
-
-print(f"Fixed effects: {beta}")
-print(f"Log-likelihood: {stats.logl}")
-print(f"AIC: {stats.aic}")
-```
-
-### MATLAB Compatibility
-
-For users migrating from MATLAB:
-
-```python
-from pynlme import nlmefit, nlmefitsa
-
-# Maximum Likelihood (same as fit_nlme with method='MLE')
-beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, beta0)
-
-# SAEM Algorithm (same as fit_nlme with method='SAEM')
-beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, beta0)
-```
-
-## 📦 Installation
-
-```bash
-# Install from source (recommended for development)
-git clone https://github.com/willov/PyNLME
-cd PyNLME
-uv sync
-uv run maturin develop
-
-# For end users - install from releases (when available)
-# Download wheel from https://github.com/willov/PyNLME/releases
-# and install with: uv add downloaded_wheel.whl
-```
-
-## 🔧 Core Features
-
-### **Multi-Dimensional Input Support (New!)**
-- **Grouped Format**: Provide data where each row represents a subject/group
-- **Stacked Format**: Traditional MATLAB-style stacked arrays with group indicators
-- **Automatic Detection**: System automatically detects and converts between formats
-- **Utility Functions**: `stack_grouped_data()` and `detect_data_format()` for manual conversion
-- **Complete Compatibility**: Both formats produce identical results
-
-### **Algorithms**
-- **`fit_nlme()`** - Unified interface with method parameter ('MLE' or 'SAEM')
-- **`fit_mle()`** - Direct Maximum Likelihood Estimation interface
-- **`fit_saem()`** - Direct SAEM (Stochastic Approximation EM) interface
-- **`nlmefit()`** - MATLAB-compatible MLE function (alias for fit_mle)
-- **`nlmefitsa()`** - MATLAB-compatible SAEM function (alias for fit_saem)
-- **Rust backend** - High-performance optimization (automatic fallback to Python)
-
-### **MATLAB Compatibility**
-- Same function names and parameter conventions
-- Compatible return types: `(beta, psi, stats, b)`
-- Similar options and configuration parameters
-
-### **Robust Type System**
-- `NLMEStats` - Statistics and diagnostics
-- `NLMEOptions` - General fitting options  
-- `SAEMOptions` - SAEM-specific parameters
-- `ErrorModel` - Different error model types
-
-### **Advanced Features**
-- Multiple error models (constant, proportional, combined, exponential)
-- Parameter transformations (identity, log, probit, logit)
-- Flexible covariance structures
-- Comprehensive residual diagnostics
-
-## 🎯 Use Cases
-
-**Pharmacokinetics/Pharmacodynamics**
-
-```python
-# PK model: Concentration = Dose * exp(-ke * t) / V
-def pk_model(phi, t, dose):
-    ke, V = phi
-    return dose * np.exp(-ke * t) / V
-
-# Using Python API (recommended)
-beta, psi, stats, b = fit_nlme(time, concentration, subject_id, dose, pk_model, [0.1, 50])
-
-# Using MATLAB-compatible API
-beta, psi, stats, b = nlmefit(time, concentration, subject_id, dose, pk_model, [0.1, 50])
-```
-
-**Growth Models**
-
-```python  
-# Logistic growth: y = A / (1 + exp(-(t - t0)/tau))
-def logistic_growth(phi, t, v=None):
-    A, t0, tau = phi
-    return A / (1 + np.exp(-(t - t0) / tau))
-
-# Using Python API with SAEM
-beta, psi, stats, b = fit_nlme(
-    time, size, organism_id, None, logistic_growth, [100, 10, 2], method='SAEM'
-)
-
-# Using MATLAB-compatible API
-beta, psi, stats, b = nlmefitsa(time, size, organism_id, None, logistic_growth, [100, 10, 2])
-```
-
-**Dose-Response**
-
-```python
-# Sigmoid: y = Emax * dose^n / (ED50^n + dose^n)  
-def sigmoid_model(phi, dose, v=None):
-    Emax, ED50, n = phi
-    return Emax * dose**n / (ED50**n + dose**n)
-
-# Using Python API
-beta, psi, stats, b = fit_nlme(dose, response, subject_id, None, sigmoid_model, [100, 10, 1])
-```
-
-## 📊 Performance
-
-The Rust backend provides significant performance improvements:
-
-- **Fast convergence**: Optimized numerical algorithms
-- **Memory efficient**: Minimal memory footprint
-- **Parallel ready**: Multi-threaded optimization (planned)
-- **Automatic fallback**: Uses Python implementation if Rust fails
-
-Example convergence output:
-```
-Iteration 1: logl = -12.454, beta_change = 9.041
-Iteration 2: logl = -11.816, beta_change = 0.937
-...
-Converged after 22 iterations
-```
-
-## 🔍 Model Diagnostics
-
-```python
-# Comprehensive model statistics
-print(f"Degrees of freedom: {stats.dfe}")
-print(f"Log-likelihood: {stats.logl}")
-print(f"AIC: {stats.aic}")  
-print(f"BIC: {stats.bic}")
-print(f"RMSE: {stats.rmse}")
-
-# Residual analysis
-residuals = stats.ires  # Individual residuals
-pred_res = stats.pres   # Population residuals  
-wt_res = stats.iwres    # Individual weighted residuals
-```
-
-## 🧪 Testing
-
-```bash
-# Run full test suite
-uv run pytest tests/ -v
-
-# Run specific test categories
-uv run pytest tests/test_algorithms.py -v  # Algorithm tests
-uv run pytest tests/test_basic.py -v       # Integration tests
-uv run pytest tests/test_data_types.py -v  # Type system tests
-```
-
-## 📚 Documentation
-
-- **[API Reference](api_reference.md)** - Complete function documentation
-- **[Tutorial](tutorial.md)** - Step-by-step learning guide
-- **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
-- **[Examples](../examples/)** - Usage examples and tutorials
-- **[Implementation Details](implementation.md)** - Technical details
-- **[Changelog](../CHANGELOG.md)** - Version history and release notes
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make changes and add tests
-4. Run tests: `uv run pytest`
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
-## 🏗️ Architecture
-
-```
-PyNLME Package
-├── Python API Layer     # MATLAB-compatible interface
-├── Algorithm Layer      # MLE/SAEM implementations  
-├── Rust Backend        # High-performance optimization
-└── Utilities           # Validation, diagnostics, etc.
-```
-
-The package is designed for:
-- **Ease of use**: MATLAB-like interface
-- **Performance**: Rust backend for speed
-- **Reliability**: Comprehensive testing and error handling
-- **Extensibility**: Modular architecture for new features
-
-## Function Interface
-
-PyNLME provides both modern Python and MATLAB-compatible interfaces:
-
-### Primary Python Interface (Recommended)
-
-- **`fit_nlme(method='MLE'|'SAEM')`** - Unified interface with method parameter
-- **`fit_mle()`** - Direct Maximum Likelihood Estimation
-- **`fit_saem()`** - Direct SAEM (Stochastic Approximation EM)
-
-### MATLAB-Compatible Functions (Legacy)
-
-- **`nlmefit()`** - Maximum Likelihood Estimation (alias for `fit_mle`)
-- **`nlmefitsa()`** - Stochastic Approximation EM (alias for `fit_saem`)
-
-All functions provide access to the same underlying algorithms and produce
-identical results for the same method. The Python interface offers more
-flexibility and follows Python conventions, while the MATLAB interface
-ensures seamless migration from existing MATLAB code.
+Not implemented: `FEObsDesign`/`REObsDesign`, block-structured `CovPattern`,
+`LogLikMethod="gq"`, `Replicates`, `OutputFcn`. These raise errors rather than being
+ignored.

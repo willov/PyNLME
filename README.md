@@ -1,195 +1,142 @@
-# PyNLME - Nonlinear Mixed-Effects Models for Python
+# pynlme: nonlinear mixed-effects models in Python
 
-A Python implementation of MATLAB's `nlmefit` and `nlmefitsa`, with the same call syntax, so that MATLAB users can move their nonlinear mixed-effects models to Python.
+Fit nonlinear mixed-effects models (population PK/PD, growth curves, systems-biology
+models) in Python. The algorithms are those of MATLAB's `nlmefit`/`nlmefitsa` and R's
+`nlme`/`saemix`, and the results are validated against all of them.
 
 ## AI Disclaimer
 
 I (willov) asked Claude Sonnet 4 in GitHub Copilot agent mode to "create a Python NLME implementation with a rust backend with a similar call syntax to MATLAB's nlmefitsa". Please use the package with caution, it is very likely that the AI have hallucinated quirks not tested. If you find it useful, please assist in creating tests to test the reliability of the package.
 
-## ⚠️ Current Status
+## Pick your starting point
 
-Everything below is checked by the tests in [tests/validation/](tests/validation/); see [validation/](validation/README.md) for details and findings.
+### Coming from MATLAB
 
-- **`nlmefit`** matches MATLAB R2023b `nlmefit` to about 1e-6 on every output (estimates, covariance, log-likelihood, AIC/BIC, standard errors, `rmse`, `errorparam`, all five residual types, random effects) for `"LME"` and `"RELME"`, with constant, proportional, combined and exponential error models. `"FOCE"` reaches MATLAB's optimum or a better one, also with the non-constant error models; `"FO"` reaches far better optima than MATLAB's, whose FO collapses all variances to zero on these datasets. On 640 randomly simulated datasets `nlmefit` reaches R `nlme`'s solution or a better one in all but one case, and it returns estimates where R fails to converge.
-- **`nlmefitsa`** (SAEM) agrees with MATLAB `nlmefitsa` and R `saemix` within Monte Carlo error, for all four error models, reaches the exact maximum-likelihood estimates on a linear model, and removes the linearisation bias of `nlmefit` in simulation studies (log absorption rate: +1% vs -15%).
-- **MATLAB or R conventions**: `compat="matlab"` (default) or `compat="r"` selects defaults and reporting conventions (standard-error scaling, BIC, REML variance, `RefineBeta0`, SAEM chains). Estimates are the same either way; explicit options override.
-- **Implemented options**: `ApproximationType` (`LME`, `RELME`, `FO`, `FOCE`), `ErrorModel`, `ErrorParameters`, `ParamTransform`, `CovPattern` (diagonal or full), `FEParamsSelect`/`FEConstDesign`/`FEGroupDesign` (and `RE*` equivalents for `nlmefit`; `REParamsSelect` for `nlmefitsa`), `RefineBeta0`, `Vectorization` (`SinglePhi`, `SingleGroup`, `Full`), `Options` (`MaxIter`, `TolFun`, `TolX`, `Display`), and for `nlmefitsa` `NIterations`, `NMCMCIterations`, `NBurnIn`, `NChains`, `LogLikMethod` (`is`, `lin`), `ComputeStdErrors`. Anything else raises `NotImplementedError` rather than being ignored.
-- **Not implemented yet**: `LogLikMethod="gq"`, `Replicates`, `FEObsDesign`/`REObsDesign`, `OutputFcn`.
-
-### ODE models (SUND or SciPy)
-
-Models defined by differential equations work as any other model function:
-
-- **SUND** (recommended): compile the model with the [SUND toolbox](https://isbgroup.eu/sund-toolbox) and wrap it with `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`. Group predictors such as the dose can set initial states or parameters. With `Vectorization="Full"` it simulates 16 subjects per SUND call using containers. Install with `pip install "pynlme[sund]"`. See [examples/sund_ode_model.py](examples/sund_ode_model.py).
-- **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a right-hand side vectorised over systems; with `Vectorization="Full"` all subjects are solved in one `solve_ivp` call.
-
-On the Michaelis-Menten validation model (no closed form) all three reproduce MATLAB's `ode45`-based `nlmefit` fit. Full fits (tight integrator tolerances, since `nlmefit` differentiates the model numerically):
-
-| Model | `nlmefit` LME | `nlmefitsa` (50/50/50 iterations) |
-|---|---|---|
-| SUND (`sund_model`, batched with containers) | 1.0 s | 15 s |
-| SUND, one simulation per subject | 9.7 s | 43 s |
-| SciPy batched (`ode_model`, `Vectorization="Full"`) | 3.6 s | 27 s |
-| SciPy, one solve per subject | 45 s | 429 s |
-| MATLAB `ode45` per subject | 3-5 s | ~325 s (default iterations) |
-
-Batches beyond a few dozen SUND containers get slower again (the integrator's dense linear algebra over the stacked system); 16 per batch was fastest here.
-
-### Speed
-
-Pure Python/NumPy so far (the Rust extension is not used). With `Vectorization="Full"` (the model function accepts one parameter row per observation, as in MATLAB), from `uv run python validation/benchmark.py`:
-
-| | pynlme | R | MATLAB R2023b |
-|---|---|---|---|
-| `nlmefit` LME (4 datasets) | 0.006-0.056 s | `nlme` 0.007-0.044 s | 0.02-0.23 s |
-| `nlmefit` FOCE | 0.4-3.7 s | – | 14-49 s |
-| `nlmefitsa`, MATLAB's default chains | 0.23-0.57 s | – | 1.3-3.7 s |
-| `nlmefitsa`, 1 chain | 0.15-0.34 s | `saemix` 0.45-1.32 s | – |
-
-SAEM is faster than both R and MATLAB on identical problems; LME is at parity with R `nlme` (slightly slower on one dataset). With the default `Vectorization="SinglePhi"` everything is correct but slower, because the model is called once per group.
-
-## 🚀 Quick Start
-
-The MATLAB documentation example, in pynlme:
+Same functions, same arguments, same outputs, same option names:
 
 ```python
 import numpy as np
-from pynlme import nlmefit
+from pynlme import nlmefit, nlmefitsa
 
 # MATLAB: model = @(phi,t)(phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t));
 def model(phi, t):
     return phi[0] * np.exp(-phi[1] * t) + phi[2] * np.exp(-phi[3] * t)
 
-# time, concentration, subject: the indomethacin data (validation/datasets/indometh.csv)
-beta, psi, stats, b = nlmefit(time, concentration, subject, None, model,
-                              [1, 1, 1, 1], ParamTransform=[0, 1, 0, 1])
+beta, psi, stats, b = nlmefit(time, concentration, subject, [], model, [1, 1, 1, 1],
+                              ParamTransform=[0, 1, 0, 1])
 ```
 
-Name-value arguments use MATLAB's names (`ParamTransform=...`, `REParamsSelect=[2, 3]`), and parameter indices given under MATLAB names are 1-based, as in MATLAB. The equivalent snake_case names (`param_transform`, `re_params_select`) use 0-based indices. Data can be stacked (MATLAB's layout: `y` a vector and `group` per observation) or grouped (`y` with one row per group, `group` optional); the layout follows from the shape of `y` or is set with `DataFormat="stacked"`/`"grouped"`. As in MATLAB, `modelfun` is called as `modelfun(phi, x)` when `V` is empty and `modelfun(phi, x, v)` otherwise, `psi` is r-by-r and `b` is r-by-m.
+Indices in MATLAB-named options are 1-based (`REParamsSelect=[2, 3]`); `b` is r-by-m;
+`stats` has MATLAB's fields and definitions. Results match MATLAB R2023b to ~1e-6.
+Start with the [tutorial](docs/tutorial.md).
 
-### 🎯 Multi-Dimensional Input Format (New!)
+### Python users
 
-PyNLME now supports both traditional "stacked" format and an intuitive "grouped" format:
+Snake_case options with 0-based indices, data stacked (a group per observation) or
+grouped (one row per subject):
 
 ```python
-# Traditional stacked format (MATLAB-style)
-X_stacked = np.array([[1], [2], [3], [4], [1], [2], [3], [4]])  # All measurements
-y_stacked = np.array([10, 7, 5, 3, 12, 8, 6, 4])               # All responses  
-group = np.array([0, 0, 0, 0, 1, 1, 1, 1])                     # Group indicators
+from pynlme import fit_nlme
 
-# New grouped format (each row = one subject)
-X_grouped = np.array([[1, 2, 3, 4], [1, 2, 3, 4]])  # Row per subject
-y_grouped = np.array([[10, 7, 5, 3], [12, 8, 6, 4]]) # Row per subject
-# No group parameter needed!
-
-# Both work identically
-beta1, psi1, _, _ = fit_nlme(X_stacked, y_stacked, group, None, model, beta0)
-beta2, psi2, _, _ = fit_nlme(X_grouped, y_grouped, None, None, model, beta0)
-# Results are identical: np.allclose(beta1, beta2) == True
+beta, psi, stats, b = fit_nlme(t, y, group, None, model, beta0,
+                               param_transform=[0, 1, 0, 1], re_params_select=[1, 3],
+                               method="SAEM", random_state=1)
 ```
 
-### MATLAB Compatibility
+The model is a plain function `f(phi, x)` (or `f(phi, x, v)` with group-level
+predictors). Write it for `vectorization="full"` to have it evaluated for many subjects
+at once. See the [API reference](docs/api_reference.md).
 
-For users migrating from MATLAB, PyNLME provides identical function signatures:
+### R users (nlme, saemix) who would rather not use R
 
-```python
-# MATLAB-style usage (compatibility aliases)
-from pynlme import nlmefit, nlmefitsa
+The same algorithms, with R's reporting conventions via `compat="r"`:
 
-# Maximum Likelihood Estimation (same as fit_nlme with method='MLE')
-beta, psi, stats, b = nlmefit(t, y, group, None, exponential_decay, [10.0, 0.5])
+| R | pynlme |
+|---|---|
+| `nlme(..., method="ML")` / `"REML"` | `nlmefit(..., ApproximationType="LME")` / `"RELME"`, `compat="r"` |
+| `fixed = a + b ~ 1`, `start = c(...)` | `beta0` (one per fixed effect) |
+| `fixed = list(a ~ 1, b ~ wt)` | `FEGroupDesign` (covariates per group) |
+| `random = pdDiag(a ~ 1)` / `pdSymm(...)` | `REParamsSelect`, `CovPattern` diagonal / full |
+| `saemix`: `transform.par`, `covariance.model` | `ParamTransform` (same codes), `CovPattern` |
+| `saemix(...)` | `nlmefitsa(..., compat="r")` (one chain, as saemix) |
 
-# SAEM Algorithm (same as fit_nlme with method='SAEM') 
-beta, psi, stats, b = nlmefitsa(t, y, group, None, exponential_decay, [10.0, 0.5])
-```
+R's `nlme` matches to ~1e-6. One difference: for nonlinear models R's
+`nlme(method="REML")` is not a restricted-likelihood fit; pynlme's `RELME` is (and equals
+`lme`'s REML on linear models). See [docs/troubleshooting.md](docs/troubleshooting.md).
 
-## 📦 Installation
+## What is validated
 
-### Option 1: Install from GitHub Release (Recommended)
+Every claim here is a test in [tests/validation/](tests/validation/); the details and
+findings are in [validation/README.md](validation/README.md).
 
-Pre-built wheels are available for easy installation without requiring Rust:
+- **`nlmefit`**: matches MATLAB R2023b on every output (estimates, covariance,
+  log-likelihood, AIC/BIC, standard errors, error parameters, all residual types,
+  random effects) for LME and RELME with all four error models. FOCE reaches MATLAB's
+  optimum or a better one; FO reaches far better optima than MATLAB's (whose FO
+  collapses the variances to zero). Matches R `nlme` on fixed datasets, and on 640
+  freshly simulated datasets reaches R's solution or a better one in all but one case.
+- **`nlmefitsa`** (SAEM): agrees with MATLAB and R `saemix` within Monte Carlo error;
+  reaches the exact maximum likelihood on a linear model; removes the linearisation
+  bias of `nlmefit` in simulation studies.
+- **ODE models** (SciPy, or compiled with SUND): reproduce MATLAB's `ode45`-based fits.
+
+Supported: `ApproximationType` LME/RELME/FO/FOCE; error models constant, proportional,
+combined, exponential; `ParamTransform`; fixed- and random-effects designs including
+covariate models; diagonal or full covariance; SAEM options and log-likelihoods. Not
+yet: `FEObsDesign`/`REObsDesign`, block `CovPattern`, `LogLikMethod="gq"`,
+`Replicates`. Unsupported options raise errors; none are silently ignored.
+
+## Speed
+
+Pure Python/NumPy. With `Vectorization="Full"` (`uv run python validation/benchmark.py`):
+
+| | pynlme | R | MATLAB R2023b |
+|---|---|---|---|
+| `nlmefit` LME | 0.006-0.056 s | `nlme` 0.007-0.044 s | 0.02-0.23 s |
+| `nlmefit` FOCE | 0.4-3.7 s | – | 14-49 s |
+| `nlmefitsa`, MATLAB's chains | 0.23-0.57 s | – | 1.3-3.7 s |
+| `nlmefitsa`, 1 chain | 0.15-0.34 s | `saemix` 0.45-1.32 s | – |
+
+With the default `Vectorization="SinglePhi"` the model is called once per subject:
+same results, several times slower.
+
+## ODE models
+
+- **SUND** (recommended): compile the model with the
+  [SUND toolbox](https://isbgroup.eu/sund-toolbox) and use
+  `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`
+  (`pip install "pynlme[sund]"`); see [examples/sund_ode_model.py](examples/sund_ode_model.py).
+- **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a vectorised right-hand side.
+
+On the Michaelis-Menten validation model: `nlmefit` takes 1.0 s with SUND (batched with
+containers), 3.6 s with batched SciPy, 3-5 s in MATLAB with `ode45`. Analytic
+derivatives (`pynlme.with_jacobian`) replace finite differences when available.
+
+## Installation
 
 ```bash
-# Latest release (v0.3.0+):
-# Choose the appropriate wheel for your platform:
-
-# Linux (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-linux_x86_64.whl
-
-# Windows (x86_64):
-uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-win_amd64.whl
-
-# macOS (Intel):
-uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-macosx_10_12_x86_64.whl
-
-# macOS (Apple Silicon):
-uv add https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-macosx_11_0_arm64.whl
-
-# Or using pip instead of uv:
-pip install https://github.com/willov/PyNLME/releases/download/v0.3.0/pynlme-0.3.0-cp311-abi3-linux_x86_64.whl
-
-# Or browse releases to find the exact wheel for your platform:
-# https://github.com/willov/PyNLME/releases/latest
+pip install git+https://github.com/willov/PyNLME          # or a wheel from Releases
+pip install "pynlme[sund] @ git+https://github.com/willov/PyNLME"   # with SUND models
 ```
 
-**Platform compatibility:**
-- **Python**: 3.11, 3.12, 3.13+ (single wheel works for all)
-- **Linux**: x86_64 (Intel/AMD 64-bit)
-- **Windows**: x86_64 (Intel/AMD 64-bit)  
-- **macOS**: Intel x86_64 and Apple Silicon ARM64
+For development: `git clone`, then `uv sync --dev` and `uv run pytest`
+(`--runslow` adds the simulation studies; the randomized comparison needs R with
+`nlme` and `jsonlite`).
 
-### Option 2: Install from source (for developers)
+## Documentation
 
-```bash
-# Requires Rust toolchain for building
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
+[Tutorial](docs/tutorial.md) · [API reference](docs/api_reference.md) ·
+[Troubleshooting](docs/troubleshooting.md) · [Implementation](docs/implementation.md) ·
+[Validation](validation/README.md) · [Changelog](CHANGELOG.md)
 
-git clone https://github.com/willov/PyNLME
-cd PyNLME
-uv sync
-uv run maturin develop  # Build Rust extension
-```
+## License
 
-> **Note**: The `cp311-abi3` wheels use Python's stable ABI and work with Python 3.11+ including future versions. You don't need separate wheels for each Python version. Option 2 is for developers who want to build from source or contribute to the project.
+MIT License, see [LICENSE](LICENSE).
 
-## 📚 Documentation
+## References
 
-- **[Complete Documentation](docs/README.md)** - Full feature overview and examples
-- **[API Reference](docs/api_reference.md)** - Detailed function documentation  
-- **[Implementation Details](docs/implementation.md)** - Technical architecture
-- **[Examples](examples/)** - Usage examples and tutorials
-- **[Changelog](CHANGELOG.md)** - Version history and release notes
-
-## 🧪 Quick Test
-
-```bash
-# Run the full test suite (for developers)
-uv run pytest tests/ -v
-
-# Verify installation works (for end users)
-python -c "
-import pynlme
-print(f'PyNLME {pynlme.__version__} installed successfully!')
-"
-
-# Or use the comprehensive verification script
-curl -sSL https://raw.githubusercontent.com/willov/PyNLME/main/scripts/verify-installation.py | python3
-```
-
-## 💡 Important Note
-
-When using UV for package management, run Python scripts with `uv run python script.py` to ensure proper access to installed packages.
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
-## 📖 References
-
-This implementation is based on the following papers:
-
-1. Lindstrom, M. J., and D. M. Bates. "Nonlinear mixed-effects models for repeated measures data." Biometrics. Vol. 46, 1990, pp. 673–687.
-2. Davidian, M., and D. M. Giltinan. Nonlinear Models for Repeated Measurements Data. New York: Chapman & Hall, 1995.
-3. Pinheiro, J. C., and D. M. Bates. "Approximations to the log-likelihood function in the nonlinear mixed-effects model." Journal of Computational and Graphical Statistics. Vol. 4, 1995, pp. 12–35.
-4. Demidenko, E. Mixed Models: Theory and Applications. Hoboken, NJ: John Wiley & Sons, Inc., 2004.
+1. Lindstrom, M. J., and D. M. Bates. "Nonlinear mixed-effects models for repeated measures data." Biometrics 46 (1990): 673-687.
+2. Pinheiro, J. C., and D. M. Bates. Mixed-Effects Models in S and S-PLUS. Springer, 2000.
+3. Kuhn, E., and M. Lavielle. "Maximum likelihood estimation in nonlinear mixed effects models." Computational Statistics & Data Analysis 49 (2005): 1020-1038.
+4. Delyon, B., M. Lavielle, and E. Moulines. "Convergence of a stochastic approximation version of the EM algorithm." Annals of Statistics 27 (1999): 94-128.
+5. Comets, E., A. Lavenu, and M. Lavielle. "Parameter estimation in nonlinear mixed effect models using saemix, an R implementation of the SAEM algorithm." Journal of Statistical Software 80 (2017).
