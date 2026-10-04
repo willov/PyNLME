@@ -179,3 +179,42 @@ def test_error_models(name, approx, error_model):
             assert getattr(stats, field) is None, field
         else:
             np.testing.assert_allclose(getattr(stats, field), s[field], atol=1e-3, err_msg=field)
+
+
+FOCE_ERROR_CASES = [(name, em) for name in ("theoph", "orange") for em in ("proportional", "combined", "exponential")]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name, error_model", FOCE_ERROR_CASES, ids=["-".join(c) for c in FOCE_ERROR_CASES])
+def test_foce_error_models_at_least_as_good_as_matlab(name, error_model):
+    """FOCE with non-constant error models: MATLAB's log-likelihood or a higher
+    one, and MATLAB's estimates where both reach the same optimum.
+
+    MATLAB's FOCE log-likelihood for the exponential model leaves out the
+    -sum(log y) term that its LME includes (FOCE +1.6 vs LME -182.6 on
+    theophylline). The default compat="matlab" reproduces that; compat="r"
+    reports the full likelihood (checked below).
+    """
+    from .cases import with_derivatives
+
+    ref = load_reference(f"matlab_{name}_foce_{error_model}_tight.json")
+    case = _positive(with_derivatives(CASES[name]()))
+    beta, psi, stats, _ = nlmefit(
+        case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
+        **case.kwargs, ApproximationType="FOCE", ErrorModel=error_model,
+    )
+    ref_logl = ref["stats"]["logl"]
+    assert stats.logl >= ref_logl - 1e-3
+    if abs(stats.logl - ref_logl) < 1e-3:
+        np.testing.assert_allclose(beta, ref["beta"], rtol=1e-4)
+        np.testing.assert_allclose(stats.errorparam, np.ravel(ref["stats"]["errorparam"]), rtol=1e-3)
+
+
+def test_exponential_foce_loglikelihood_convention():
+    """compat="r" adds the -sum(log y) term that MATLAB's FO/FOCE leave out."""
+    case = _positive(CASES["orange"]())
+    args = (case.X, case.y, case.group, case.V, case.modelfun, case.beta0)
+    kw = dict(case.kwargs, ApproximationType="FO", ErrorModel="exponential")
+    matlab = nlmefit(*args, **kw)[2].logl
+    r = nlmefit(*args, **kw, compat="r")[2].logl
+    assert r == pytest.approx(matlab - np.sum(np.log(case.y)), abs=1e-6)

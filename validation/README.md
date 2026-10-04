@@ -73,6 +73,10 @@ MATLAB scripts.
   are refitted by Nelder-Mead; exponential fits log(y) = log(f) + a e with the
   log-likelihood corrected by -sum(log y). All weighted residuals use the error
   SD at the population prediction. pynlme follows all of this.
+- **MATLAB's FO/FOCE log-likelihood for the exponential error model omits
+  the -sum(log y) term** that its LME/RELME include (theophylline: FOCE +1.6,
+  LME -182.6 for nearly the same fit). `compat="matlab"` reproduces this;
+  `compat="r"` reports the full likelihood for every method.
 - **MATLAB nlmefitsa runs max(1, round(100/m)) MCMC chains** by default (an
   undocumented `NChains` option); pynlme does the same (saemix uses 1).
 - **R's BIC conventions differ by package**: nlme uses log(number of
@@ -176,6 +180,5 @@ On Arch Linux, MATLAB's license service may fail to start with a
 
 ## Not covered yet
 
-- Non-constant error models with FO/FOCE (MATLAB references exist).
 - The MATLAB documentation examples that need `orangetreedata.mat` and
   `nonlineardata.mat`.

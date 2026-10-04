@@ -212,7 +212,9 @@ def nlmefit(
         and 0-based indices under the Python names. ``compat="r"`` switches
         defaults and reporting conventions to R nlme's (no RefineBeta0, BIC
         with log(N), ML standard errors scaled by sqrt(N/(N - f)), REML
-        error variance RSS/(N - f)); explicit options still override.
+        error variance RSS/(N - f), and the full likelihood for the
+        exponential error model with FO/FOCE, which MATLAB reports without
+        the -sum(log y) term); explicit options still override.
         Implemented so far:
         ApproximationType "LME"/"RELME"/"FO"/"FOCE", ParamTransform, CovPattern (diagonal or
         full), FE/RE ParamsSelect, ConstDesign and GroupDesign, RefineBeta0 and
@@ -243,10 +245,6 @@ def nlmefit(
     error_model = options.error_model.lower()
     _require(approx in ("LME", "RELME", "FO", "FOCE"), f"Unknown ApproximationType '{options.approximation_type}'")
     _require(error_model in _ERROR_MODELS, f"Unknown ErrorModel '{options.error_model}'")
-    _require(
-        approx in ("LME", "RELME") or error_model == "constant",
-        f"ErrorModel '{options.error_model}' with ApproximationType '{approx}' is not implemented yet",
-    )
     _require(options.vectorization.lower() in _VECTORIZATIONS, f"Unknown Vectorization '{options.vectorization}'")
     _require(options.fe_obs_design is None and options.re_obs_design is None, "FEObsDesign/REObsDesign are not implemented yet")
 
@@ -262,7 +260,10 @@ def nlmefit(
         "verbose": options.verbose,
     }
     if approx in ("FO", "FOCE"):
-        result = fit_first_order(model, beta0, conditional=approx == "FOCE", **fit_args)
+        result = fit_first_order(
+            model, beta0, conditional=approx == "FOCE", error_model=error_model,
+            error_param0=options.error_parameters, **fit_args,
+        )
     else:
         result = fit_lindstrom_bates(
             model, beta0, reml=approx == "RELME", error_model=error_model,
@@ -292,6 +293,10 @@ def nlmefit(
         bic_groups = model.n_groups - f
     else:
         bic_groups = model.n_groups
+    if compat == "matlab" and approx in ("FO", "FOCE"):
+        # MATLAB's FO/FOCE log-likelihood for the exponential error model
+        # leaves out the -sum(log y) term that its LME/RELME include.
+        logl_offset = 0.0
     stats = _build_stats(model, y, result.beta, psi, result.b, result.logl + logl_offset,
                          full_cov, error_model, sigma2, result.error_param, bic_groups)
     stats.sebeta = np.sqrt(np.diag(covb))
