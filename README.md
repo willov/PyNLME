@@ -20,19 +20,20 @@ Everything below is checked by the tests in [tests/validation/](tests/validation
 
 Models defined by differential equations work as any other model function:
 
-- **SUND** (recommended): compile the model with the [SUND toolbox](https://isbgroup.eu/sund-toolbox) and wrap the simulation with `pynlme.sund_model(simulation, feature, parameters, v_states=[...])`. Group predictors such as the dose can set initial states or parameters. Install with `pip install "pynlme[sund]"`. See [examples/sund_ode_model.py](examples/sund_ode_model.py).
+- **SUND** (recommended): compile the model with the [SUND toolbox](https://isbgroup.eu/sund-toolbox) and wrap it with `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`. Group predictors such as the dose can set initial states or parameters. With `Vectorization="Full"` it simulates 16 subjects per SUND call using containers. Install with `pip install "pynlme[sund]"`. See [examples/sund_ode_model.py](examples/sund_ode_model.py).
 - **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a right-hand side vectorised over systems; with `Vectorization="Full"` all subjects are solved in one `solve_ivp` call.
 
 On the Michaelis-Menten validation model (no closed form) all three reproduce MATLAB's `ode45`-based `nlmefit` fit. Full fits (tight integrator tolerances, since `nlmefit` differentiates the model numerically):
 
 | Model | `nlmefit` LME | `nlmefitsa` (50/50/50 iterations) |
 |---|---|---|
-| SciPy, one solve per subject | 45 s | 429 s |
+| SUND (`sund_model`, batched with containers) | 1.0 s | 15 s |
+| SUND, one simulation per subject | 9.7 s | 43 s |
 | SciPy batched (`ode_model`, `Vectorization="Full"`) | 3.6 s | 27 s |
-| SUND (`sund_model`) | 9.7 s | 43 s |
+| SciPy, one solve per subject | 45 s | 429 s |
 | MATLAB `ode45` per subject | 3-5 s | ~325 s (default iterations) |
 
-A single SUND simulation is ~40x faster than a single SciPy solve, but the batched SciPy model solves all subjects in one call. SUND would overtake it with forward sensitivities (exact Jacobians instead of finite differences, so looser tolerances) and a batched simulate call.
+Batches beyond a few dozen SUND containers get slower again (the integrator's dense linear algebra over the stacked system); 16 per batch was fastest here.
 
 ### Speed
 

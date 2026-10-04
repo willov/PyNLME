@@ -6,13 +6,20 @@ nlmefitsa model function.
     from pynlme import nlmefit, sund_model
 
     sund.install_model("mm_pk.txt")
-    sim = sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h")
-    model = sund_model(sim, feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
-    nlmefit(time, conc, subject, dose, model, beta0, ParamTransform=[1, 1, 1, 1])
+    model = sund_model("mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
+    nlmefit(time, conc, subject, dose, model, beta0, ParamTransform=[1, 1, 1, 1],
+            Vectorization="Full")
 
 phi supplies the named SUND parameters (in order); the columns of V (group
 predictors such as the dose) set the named initial states, then the named
 parameters. All other parameters and initial states keep the model's values.
+
+With Vectorization="Full" the parameter sets of a model call (subjects, MCMC
+chains, finite-difference perturbations) are simulated in batches: one SUND
+simulation holds ``batch_size`` copies of the model in separate containers.
+The integrator treats a batch as one system with a dense linear solver, so
+batches beyond a few dozen copies get slower than separate simulations; 16
+was fastest on the validation model.
 """
 
 from collections.abc import Sequence
@@ -21,7 +28,7 @@ import numpy as np
 
 
 def sund_model(
-    simulation,
+    model,
     feature: str,
     parameters: Sequence[str],
     v_states: Sequence[str] = (),
@@ -29,13 +36,17 @@ def sund_model(
     t0: float = 0.0,
     rel_tol: float = 1e-10,
     abs_tol: float = 1e-12,
+    batch_size: int = 16,
+    time_unit: str | None = None,
 ):
-    """Build a model function from a ``sund.Simulation``.
+    """Build a model function from an installed SUND model.
 
     Parameters
     ----------
-    simulation : sund.Simulation
-        The simulation object (models loaded, time unit set).
+    model : str or sund.Simulation
+        Name of an installed SUND model (enables batched simulation with
+        containers), or a ready ``sund.Simulation`` (simulated one parameter
+        set at a time).
     feature : str
         Name of the SUND feature that is observed.
     parameters : sequence of str
@@ -47,6 +58,10 @@ def sund_model(
     rel_tol, abs_tol : float
         Integrator tolerances. Tighter than SUND's defaults because nlmefit
         differentiates the model numerically.
+    batch_size : int
+        Parameter sets per batched simulation (model name only).
+    time_unit : str, optional
+        Simulation time unit; defaults to the model's.
 
     Returns
     -------
@@ -55,30 +70,51 @@ def sund_model(
         with Vectorization "SinglePhi" and "Full" (consecutive identical rows of
         phi and v are simulated once).
     """
-    simulation.set_options({"rel_tol": rel_tol, "abs_tol": abs_tol})
-    param_names = list(simulation.parameter_names)
-    state_names = list(simulation.state_names)
-    feature_index = list(simulation.feature_names).index(feature)
+    import sund
+
+    options = {"rel_tol": rel_tol, "abs_tol": abs_tol}
+    if isinstance(model, str):
+        single = sund.load_model(model)
+        model_class = sund.import_model(model)
+        unit = time_unit or single.time_unit
+        reference = sund.Simulation(models=[single], time_unit=unit)
+    else:
+        reference, model_class, unit = model, None, None
+        batch_size = 1
+    reference.set_options(options)
+
+    param_names = list(reference.parameter_names)
+    state_names = list(reference.state_names)
+    feature_names = list(reference.feature_names)
+    n_f = len(feature_names)
+    feature_index = feature_names.index(feature)
     p_idx = np.array([param_names.index(p) for p in parameters], dtype=int)
     vs_idx = np.array([state_names.index(s) for s in v_states], dtype=int)
     vp_idx = np.array([param_names.index(p) for p in v_parameters], dtype=int)
-    p_default = np.array(simulation.parameter_values, dtype=float)
-    x_default = np.array(simulation.state_values, dtype=float)
+    p_default = np.array(reference.parameter_values, dtype=float)
+    x_default = np.array(reference.state_values, dtype=float)
     n_vs = len(vs_idx)
+    batches: dict[int, object] = {1: reference}
 
-    def simulate(phi_row, v_row, times):
-        p = p_default.copy()
-        p[p_idx] = phi_row
-        x0 = x_default.copy()
-        if v_row is not None:
-            x0[vs_idx] = v_row[:n_vs]
-            p[vp_idx] = v_row[n_vs : n_vs + len(vp_idx)]
+    def simulation(k: int):
+        """A simulation holding k model copies (cached)."""
+        if k not in batches:
+            copies = [model_class(container=f"pynlme{j}") for j in range(k)]
+            sim = sund.Simulation(models=copies, time_unit=unit)
+            sim.set_options(options)
+            batches[k] = sim
+        return batches[k]
+
+    def values_for(P, X0, times):
+        """Feature values (len(times), k) for k parameter sets."""
+        k = len(P)
         grid = times if times[0] == t0 else np.concatenate([[t0], times])
-        simulation.simulate(time_vector=grid, parameter_values=p, state_values=x0)
-        values = np.asarray(simulation.feature_values)[:, feature_index]
-        return values if times[0] == t0 else values[1:]
+        sim = simulation(k)
+        sim.simulate(time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel())
+        f = np.asarray(sim.feature_values)[:, feature_index::n_f][:, :k]
+        return f if times[0] == t0 else f[1:]
 
-    def model(phi, x, v=None):
+    def model_fn(phi, x, v=None):
         t = np.asarray(x, dtype=float).reshape(len(x), -1)[:, 0]
         n = len(t)
         phi = np.asarray(phi, dtype=float)
@@ -87,14 +123,26 @@ def sund_model(
         if v is not None:
             v = np.asarray(v, dtype=float)
             v = np.broadcast_to(v.reshape(1, -1) if v.ndim <= 1 else v, (n, v.shape[-1]))
+
+        # Systems are runs of identical (phi, v) rows.
         key = phi if v is None else np.hstack([phi, v])
-        starts = np.flatnonzero(np.r_[True, np.any(key[1:] != key[:-1], axis=1)])
-        ends = np.r_[starts[1:], n]
+        new = np.r_[True, np.any(key[1:] != key[:-1], axis=1)]
+        system = np.cumsum(new) - 1
+        first = np.flatnonzero(new)
+        P = np.tile(p_default, (len(first), 1))
+        P[:, p_idx] = phi[first]
+        X0 = np.tile(x_default, (len(first), 1))
+        if v is not None:
+            X0[:, vs_idx] = v[first, :n_vs]
+            P[:, vp_idx] = v[first, n_vs : n_vs + len(vp_idx)]
+
         out = np.empty(n)
-        for a, b in zip(starts, ends, strict=True):
-            times, inverse = np.unique(t[a:b], return_inverse=True)
-            values = simulate(phi[a], None if v is None else v[a], times)
-            out[a:b] = values[inverse]
+        for start in range(0, len(first), batch_size):
+            stop = min(start + batch_size, len(first))
+            rows = (system >= start) & (system < stop)
+            times = np.unique(t[rows])
+            f = values_for(P[start:stop], X0[start:stop], times)
+            out[rows] = f[np.searchsorted(times, t[rows]), system[rows] - start]
         return out
 
-    return model
+    return model_fn

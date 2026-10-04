@@ -35,10 +35,11 @@ def load_data():
 def main():
     # Compile and load the SUND model (sund.install_model wants a relative path).
     sund.install_model(os.path.relpath(ROOT / "validation" / "models" / "mm_pk_sund.txt"))
-    simulation = sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h")
 
-    # phi = [ka, V, vmax, km]; the group predictor (dose) sets the initial gut amount.
-    model = sund_model(simulation, feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
+    # phi = [ka, V, vmax, km]; the group predictor (dose) sets the initial gut
+    # amount. Given the model name, sund_model simulates many subjects per call
+    # using SUND containers (with Vectorization="Full").
+    model = sund_model("mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
 
     time, conc, subject, dose = load_data()
     beta0 = np.log([0.8, 12.0, 2.5, 1.0])
@@ -50,8 +51,8 @@ def main():
     print("  SD of random effects on log V, log Vmax =", np.round(np.sqrt(np.diag(psi)), 3), " (0.2, 0.25)")
     print("  error SD =", np.round(stats.errorparam, 3), " (0.15)")
 
-    # SAEM uses the exact likelihood; slower (each iteration simulates every
-    # subject several times), so fewer iterations here for a quick look.
+    # SAEM uses the exact likelihood; it simulates every subject several times
+    # per iteration, so fewer iterations here for a quick look.
     beta, psi, stats, b = nlmefitsa(time, conc, subject, dose, model, beta0, **options,
                                     NIterations=[50, 50, 50], random_state=1)
     print("nlmefitsa (SAEM, shortened)")

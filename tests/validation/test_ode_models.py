@@ -70,8 +70,11 @@ def test_sund_model_matches_matlab():
 
     # sund.install_model only accepts relative paths (it globs the argument).
     sund.install_model(os.path.relpath(MODELS / "mm_pk_sund.txt"))
-    sim = sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h")
-    model = sund_model(sim, "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
     c = mm_pk()
-    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full")
-    _compare_to_matlab(beta, psi, stats)
+    # Batched with containers (model name), and one simulation at a time.
+    batched = sund_model("mm_pk", "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
+    single = sund_model(sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h"),
+                        "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
+    for model in (batched, single):
+        beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full")
+        _compare_to_matlab(beta, psi, stats)
