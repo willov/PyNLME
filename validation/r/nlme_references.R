@@ -97,6 +97,17 @@ r <- timed(nlme(theo_formula, data = theo,
 write_case("theoph_lme", r$fit, c("lKa", "lCl"), "ML", "LME", r$elapsed,
            "Random effects on lKa and lCl only (REParamsSelect = [2 3]).")
 
+# nlme's own REML: not a restricted-likelihood fit for nonlinear models (its
+# PNLS step updates the covariance by ML EM iterations), but the reference for
+# pynlme's compat = "r".
+r <- timed(nlme(theo_formula, data = theo,
+                fixed = lKe + lKa + lCl ~ 1,
+                random = pdDiag(lKa + lCl ~ 1),
+                start = c(lKe = -2.5, lKa = 0.5, lCl = -3.2),
+                method = "REML", control = ctrl))
+write_case("theoph_nlme_reml", r$fit, c("lKa", "lCl"), "REML", "RELME", r$elapsed,
+           "nlme(method = 'REML'); reference for compat = 'r' only.")
+
 # Weight (centred at 70 kg) as a covariate on log clearance (FEGroupDesign).
 r <- timed(nlme(theo_formula, data = theo,
                 fixed = list(lKe ~ 1, lKa ~ 1, lCl ~ wtc),
@@ -116,6 +127,13 @@ r <- timed(nlme(circumference ~ Asym / (1 + exp(-(age - xmid) / scal)),
                 method = "ML", control = ctrl))
 write_case("orange_lme", r$fit, "Asym", "ML", "LME", r$elapsed,
            "Random effect on Asym only (REParamsSelect = 1).")
+
+# nlme's REML on the linear model (differs from lme's true REML below).
+lin <- groupedData(y ~ x | id, data = read.csv(file.path(data_dir, "linear_sim.csv")))
+r <- timed(nlme(y ~ a + b * x, data = lin, fixed = a + b ~ 1, random = a + b ~ 1,
+                start = c(a = 1, b = 1), method = "REML", control = ctrl))
+write_case("linear_nlme_reml", r$fit, c("a", "b"), "REML", "RELME", r$elapsed,
+           "nlme(method = 'REML') on the linear model; reference for compat = 'r' only.")
 
 # --- Linear model: nlmefit on a linear model must equal the exact lme answer --
 # This is also the reference for RELME, using lme's (true) REML.

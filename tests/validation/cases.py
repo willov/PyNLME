@@ -253,5 +253,8 @@ R_NLME_CASES = {
     "theoph_wt_lme": (theoph_wt, "r_nlme_theoph_wt_lme.json", {}),
     "orange_lme": (orange, "r_nlme_orange_lme.json", {}),
     "linear_lme": (linear_sim, "r_nlme_linear_lme.json", {}),
-    "linear_relme": (linear_sim, "r_nlme_linear_relme.json", {"ApproximationType": "RELME"}),
+    # nlme's REML (compat="r" follows it); lme's true REML is checked
+    # separately against the default RELME.
+    "theoph_nlme_reml": (theoph, "r_nlme_theoph_nlme_reml.json", {"ApproximationType": "RELME"}),
+    "linear_nlme_reml": (linear_sim, "r_nlme_linear_nlme_reml.json", {"ApproximationType": "RELME"}),
 }

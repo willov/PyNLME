@@ -48,6 +48,8 @@ __all__ = [
 ]
 
 _METHODS = {"ML": "LME", "REML": "RELME"}
+_CONTROL = {"maxIter": "max_iter", "tolerance": "tol_x", "pnlsTol": "pnls_tol", "pnlsMaxIter": "pnls_max_iter",
+            "minScale": "min_scale"}
 
 
 # --- Model functions of R's stats package (no self-starting: give `start`) ----
@@ -190,6 +192,7 @@ def nlme(
     groups: str | None = None,
     start=None,
     method: str = "ML",
+    control: Mapping | None = None,
     **options,
 ) -> dict:
     """Fit a nonlinear mixed-effects model with R nlme's arguments.
@@ -218,9 +221,12 @@ def nlme(
         (or parameter name for intercepts; covariate effects default to 0),
         or a list in R's coefficient order. Required, as in R.
     method : str
-        "ML" (default, as R's nlme) or "REML". pynlme's REML is a true
-        restricted-likelihood fit; R's nlme REML for nonlinear models is not,
-        so REML estimates differ from R's.
+        "ML" (default, as R's nlme) or "REML". The fit follows nlme's
+        iteration, so both give R's estimates; R's REML for nonlinear models
+        is not a restricted-likelihood fit, and neither is this one.
+    control : dict, optional
+        nlmeControl's ``maxIter``, ``tolerance``, ``pnlsTol``,
+        ``pnlsMaxIter``, ``minScale``. Defaults are R's.
     **options
         nlmefit options by Python name (e.g. ``error_model``, ``max_iter``).
 
@@ -236,6 +242,10 @@ def nlme(
     method = method.upper()
     if method not in _METHODS:
         raise ValueError("method must be 'ML' or 'REML'")
+    unknown = set(control or {}) - set(_CONTROL)
+    if unknown:
+        raise ValueError(f"unsupported control options: {sorted(unknown)} (supported: {sorted(_CONTROL)})")
+    options = {**{_CONTROL[k]: v for k, v in (control or {}).items()}, **options}
     response, expression = _split(model, "model")
     params = _parse_fixed(fixed)
     names = list(params)

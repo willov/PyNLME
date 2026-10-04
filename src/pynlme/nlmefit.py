@@ -8,7 +8,7 @@ import numpy as np
 
 from .data_types import ModelFunction, NLMEOptions, NLMEStats, SAEMOptions
 from .first_order import fit_first_order
-from .lindstrom_bates import fit_lindstrom_bates
+from .lindstrom_bates import fit_lindstrom_bates, fit_lindstrom_bates_nlme
 from .model import GroupedModel, build_design
 from .saem import fit_saem as _run_saem
 from .utils import validate_inputs
@@ -236,8 +236,21 @@ def nlmefit(
     """
     parsed, matlab_style = _parse_options(kwargs)
     compat = _compat(parsed)
+    approx = str(parsed.get("approximation_type", "LME")).upper()
+    # R's nlme iteration (see lindstrom_bates.fit_lindstrom_bates_nlme): for
+    # LME/RELME with the error models nlme has (constant; exponential is
+    # constant on the log scale).
+    nlme_iteration = (compat == "r" and approx in ("LME", "RELME")
+                      and str(parsed.get("error_model", "constant")).lower() in ("constant", "exponential"))
     if compat == "r":
         parsed.setdefault("refine_beta0", False)  # nlme has no pre-fit
+    if nlme_iteration:
+        parsed.setdefault("max_iter", 50)  # nlmeControl()'s maxIter and tolerance
+        parsed.setdefault("tol_x", 1e-5)
+    elif any(parsed.get(k) is not None for k in ("pnls_tol", "pnls_max_iter", "min_scale")):
+        raise NotImplementedError(
+            "pnls_tol, pnls_max_iter and min_scale apply to R's nlme iteration "
+            "(compat='r', LME/RELME, constant or exponential error model)")
     options = NLMEOptions(**parsed)
     X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
 
@@ -263,6 +276,13 @@ def nlmefit(
         result = fit_first_order(
             model, beta0, conditional=approx == "FOCE", error_model=error_model,
             error_param0=options.error_parameters, **fit_args,
+        )
+    elif nlme_iteration:
+        result = fit_lindstrom_bates_nlme(
+            model, beta0, full_cov=full_cov, reml=approx == "RELME", max_iter=options.max_iter,
+            tolerance=options.tol_x, verbose=options.verbose,
+            **{k: v for k, v in (("pnls_tol", options.pnls_tol), ("pnls_max_iter", options.pnls_max_iter),
+                                 ("min_scale", options.min_scale)) if v is not None},
         )
     else:
         result = fit_lindstrom_bates(

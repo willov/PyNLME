@@ -113,11 +113,11 @@ MATLAB scripts.
   tolerance is tightened. With `pnlsTol = 1e-6` it reproduces the MATLAB
   documentation's indomethacin estimates to all four printed decimals. With the
   default `pnlsTol = 1e-3` the estimates are off by about 2e-3.
-- **R `nlme(method = "REML")` is not a restricted-likelihood fit.** For nonlinear
-  models it returns the ML estimates with sigma² scaled by N/(N−p). This shows
-  even on a linear model, where `lme` REML gives a different psi. So `"RELME"` is
-  only checked against `lme` REML on the linear case; the nonlinear cases need
-  MATLAB results.
+- **R `nlme(method = "REML")` is not a restricted-likelihood fit.** Its PNLS step
+  updates the covariance by ML EM iterations and the reported covariance is that
+  update, so even on a linear model `lme` REML gives a different psi. pynlme's
+  default `"RELME"` is checked against `lme` REML (linear case) and MATLAB;
+  `compat="r"` reproduces `nlme(method = "REML")` (`*_nlme_reml` references, ~1e-8).
 - **Standard errors**: R's `summary()` multiplies ML standard errors by
   sqrt(N/(N−p)). pynlme reports the unadjusted asymptotic values, and the
   tests apply R's factor before comparing. Which convention MATLAB uses still
@@ -130,29 +130,34 @@ MATLAB scripts.
   3, and one 0.003 lower in log-likelihood. R failed to converge on 42 datasets;
   pynlme returned an estimate for all of them. The Lindstrom-Bates iteration can
   have several fixed points, so small differences are expected.
-- **Known issue: a worse fixed point on some oral-absorption datasets** (found
-  2026-10-04). A further 800 datasets (seeds 1001-1020, `PYNLME_RANDOM_N=10`) gave
-  one failure, and a routine CI-style run another:
-
-  | Seed / dataset | m, n | LB logl pynlme / R | Exact (IS) logl difference | log ka pynlme / R | Var(log ka) pynlme / R |
-  |---|---|---|---|---|---|
-  | 657630818 / `oral_0` (N=5) | 39, 324 | -442.871 / -441.852 | -0.87 | 0.318 / 0.381 | 0.253 / 0.207 |
-  | 1007 / `oral_7` (N=10) | 17, 152 | -131.682 / -129.791 | -1.54 | 0.294 / 0.512 | 0.185 / 0.084 |
-
-  R's fit is genuinely better: its exact log-likelihood (importance sampling,
-  `tests/validation/likelihood.py`) is higher, not only the linearised one. R's
-  solution is also a fixed point of pynlme's iteration (started there, pynlme stays
-  there to 1e-5), so the algorithms agree; from the common start values pynlme's
-  path reaches a different fixed point with a lower log ka and a larger ka
-  variance. Starting pynlme at R's estimates of beta alone (b = 0, covariance from
-  the initial LME step) still leads to pynlme's point, so the difference arises
-  in the first LME/PNLS steps. Both cases are the oral model, where ka is weakly
-  identified. Reproduce with
-  `PYNLME_RANDOM_SEED=1007 PYNLME_RANDOM_N=10 uv run pytest tests/validation/test_random_vs_r.py`.
-  Not yet fixed; possible remedies are comparing nlme's exact first iterations
-  with pynlme's, or restarting from a second state (e.g. a smaller initial
-  covariance) and keeping the better fixed point. Rate so far: 2 of ~1450
-  datasets.
+- **Several fixed points: pynlme now takes R's path** (2026-10-04). Two simulated
+  oral-PK datasets (seed 657630818 `oral_0`; seed 1007 `oral_7`) ended at a fixed point
+  0.9-1.5 lower in exact log-likelihood than R's, although R's point was also a fixed
+  point of pynlme's iteration. Tracing nlme (`verbose = TRUE`, and `pnlsMaxIter = k`
+  for the inner iterations) showed why: nlme's PNLS step is not a converged penalised
+  least-squares fit with fixed covariance but at most 7 Gauss-Newton steps, each
+  preceded by an EM + nlm update of the covariance (keeping nlm's second-to-last
+  iterate). `compat="r"` now follows this iteration (see `docs/implementation.md`);
+  the traces agree to the printed digits, and the same mechanism makes nlme's REML
+  differ from true REML. With the strict criterion (same log-likelihood to 1e-3 and
+  estimates to 1e-4), 1598 of 1600 datasets (seeds 1001-1020 and 2001-2020,
+  `PYNLME_RANDOM_N=10`; and 2399 of 2400 with seeds 3001-3020 added and the final
+  code) gave R's fit, including both former failures and five cases
+  where the old iteration had found a different (in three cases better) fixed point.
+  The other two have a variance near zero that is not identified (same likelihood
+  within 5e-4, e.g. 0.013 vs 0.019); where nlme's optimizers stop along it depends
+  on rounding in R's numerical derivatives. Further random runs found one more kind
+  of difference (seed 1770464656, `oral_1`): with a variance collapsing to zero, R's
+  LME step (nlminb, not reimplemented) stops on the nearly flat likelihood after one
+  iteration while pynlme's continues, ending 0.0017 higher in log-likelihood (likewise
+  `lme` on a linear dataset with a zero intercept variance, seed 2009 `linear_7`,
+  0.00015), or elsewhere on the ridge (seed 1005 `oral_9`, 0.0007 lower, 1 of 2400
+  datasets). The test accepts a deviation only when pynlme's likelihood is higher, or
+  when R's fit has a variance collapsed to zero and the likelihoods agree to 1e-3. The
+  LME step in `compat="r"` keeps pynlme's restart of collapsed variances (kept only if
+  it improves the likelihood): without it L-BFGS-B stalled at a zero variance on one
+  linear dataset (seed 1502491072, 18.6 below `lme`), where nlminb does not. The default (MATLAB) mode keeps its own
+  iteration and can still reach a different fixed point than R on such data.
 - **Robustness fixes found by the randomized comparison**: the LME step is
   computed with QR decompositions (cross-products cancel catastrophically for
   large random-effects scales), uses a log-Cholesky parameterisation, restarts

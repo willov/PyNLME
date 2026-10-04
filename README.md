@@ -111,9 +111,10 @@ Lower-level equivalents of R's arguments:
 | `saemix`: `transform.par`, `covariance.model` | `ParamTransform` (same codes), `CovPattern` |
 | `saemix(...)` | `nlmefitsa(..., compat="r")` (one chain, as saemix) |
 
-For nonlinear models R's `nlme(method="REML")` is not a restricted-likelihood fit;
-pynlme's REML is (and equals `lme`'s REML on linear models). See
-[docs/troubleshooting.md](docs/troubleshooting.md).
+`compat="r"` follows nlme's iteration step by step, so pynlme returns R's own fit even
+where the model has several local solutions, and R's `method="REML"` (which for
+nonlinear models is not a restricted-likelihood fit). The default `compat="matlab"`
+RELME is a true REML fit. See [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## What is validated
 

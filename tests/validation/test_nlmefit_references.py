@@ -14,6 +14,8 @@ from pynlme import nlmefit
 from .cases import R_NLME_CASES, indometh, load_reference
 
 RTOL = 1e-4
+# nlmeControl(maxIter = 200, pnlsTol = 1e-6, tolerance = 1e-7) of nlme_references.R
+R_CONTROL = {"max_iter": 200, "pnls_tol": 1e-6, "tol_x": 1e-7}
 
 
 @pytest.fixture(scope="module", params=list(R_NLME_CASES))
@@ -23,7 +25,7 @@ def fit(request):
     # compat="r": R's reporting conventions, so outputs compare directly.
     beta, psi, stats, b = nlmefit(
         case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
-        **case.kwargs, **extra, compat="r",
+        **case.kwargs, **extra, compat="r", **R_CONTROL,
     )
     return case, load_reference(ref_file), beta, psi, stats, b
 
@@ -65,6 +67,21 @@ def test_random_effects(fit):
     ref_b = np.atleast_2d(ref["b"])
     assert b.shape == ref_b.shape
     np.testing.assert_allclose(b, ref_b, atol=RTOL * np.max(np.abs(ref_b)))
+
+
+def test_default_relme_is_lmes_true_reml():
+    """Without compat="r", RELME maximises the restricted likelihood: on a
+    linear model it equals lme(method = "REML"). (MATLAB reports sigma^2 as
+    RSS/N, which scales psi by (N - f)/N.)"""
+    from .cases import linear_sim
+
+    c, ref = linear_sim(), load_reference("r_nlme_linear_relme.json")
+    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs,
+                                  ApproximationType="RELME")
+    n, f = len(c.y), len(beta)
+    np.testing.assert_allclose(beta, ref["beta"], rtol=RTOL)
+    np.testing.assert_allclose(psi * n / (n - f), np.atleast_2d(ref["psi"]), rtol=RTOL)
+    assert stats.logl == pytest.approx(ref["logl"], abs=1e-3)
 
 
 def test_matlab_doc_indomethacin():

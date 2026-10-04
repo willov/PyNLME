@@ -80,10 +80,17 @@ on that scale, as in MATLAB.
 
 ### `compat`: MATLAB or R conventions
 
-Estimates are the same; defaults and reported statistics differ.
+For `"LME"`/`"RELME"` with a constant or exponential error model, `compat="r"` also
+follows nlme's iteration step by step (its PNLS step updates the covariance by EM and
+stops after at most `pnlsMaxIter` steps), so the estimates are R's own, including where
+several fixed points exist and including nlme's REML (which, for nonlinear models, is
+not a restricted-likelihood fit). Otherwise the estimates are the same and only defaults
+and reported statistics differ.
 
 | | `compat="matlab"` | `compat="r"` (nlme) |
 |---|---|---|
+| LME/RELME iteration | Lindstrom-Bates, PNLS to convergence | nlme's (`nlmeControl` defaults: `max_iter=50`, `tol_x=1e-5` as `tolerance`, `pnls_tol=1e-3`, `pnls_max_iter=7`, `min_scale=1e-3`) |
+| RELME | restricted likelihood (equals `lme` REML on linear models) | nlme's `method="REML"` |
 | `RefineBeta0` default | on | off |
 | ML standard errors | unadjusted | x sqrt(N / (N - f)) |
 | BIC | log(groups) | log(observations) (N - f for REML) |
@@ -184,7 +191,9 @@ fit = nlme("conc ~ SSfol(dose, time, lKe, lKa, lCl)", data=theo,
   `pdSymm(...)`; optionally `"... ~ 1 | subject"`. Default: all parameters.
 - `groups`: `"~subject"` (or via `| subject` in `random`).
 - `start`: dict by coefficient name or list in R's coefficient order; required.
-- `method`: `"ML"` (R's default) or `"REML"` (true REML, unlike R's nlme).
+- `method`: `"ML"` (R's default) or `"REML"` (nlme's REML, as R).
+- `control`: `nlmeControl`'s names: `maxIter`, `tolerance`, `pnlsTol`, `pnlsMaxIter`,
+  `minScale` (others raise). Defaults are R's.
 - `**options`: `nlmefit` options by Python name, e.g. `error_model="proportional"`.
 
 Runs `fit` with `compat="r"`. The result is `fit`'s dict plus `fixef`, `se_fixef`,

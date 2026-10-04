@@ -120,5 +120,7 @@ for `ode_model` (SciPy).
 
 ## 7. R conventions
 
-`compat="r"` reports standard errors, BIC and REML variances as R's nlme does, and
-`nlmefitsa` defaults to one chain like saemix. The estimates do not change.
+`compat="r"` follows R's nlme: its iteration and default tolerances for `"LME"` and
+`"RELME"`, and its standard errors and BIC; `nlmefitsa` defaults to one chain like
+saemix. On well-behaved problems the estimates are those of the default mode to the
+convergence tolerance.

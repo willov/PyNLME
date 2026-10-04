@@ -88,6 +88,12 @@ class NLMEOptions:
     # (R nlme for nlmefit, saemix for nlmefitsa). Explicit options override.
     compat: str = "matlab"
 
+    # nlmeControl's PNLS settings (compat="r", LME/RELME): pnlsTol,
+    # pnlsMaxIter, minScale. None: nlme's defaults (1e-3, 7, 1e-3).
+    pnls_tol: float | None = None
+    pnls_max_iter: int | None = None
+    min_scale: float | None = None
+
 
 @dataclass
 class SAEMOptions:

@@ -137,15 +137,25 @@ def test_full_vectorization_saem_identical_with_seed():
     np.testing.assert_allclose(b[1], a[1], rtol=1e-6)
 
 
-def test_compat_modes_differ_only_in_conventions(theoph_fit):
+def test_compat_modes_reach_the_same_ml_fit(theoph_fit):
+    """compat="r" follows nlme's iteration (and, by default, its looser
+    tolerances); converged tightly, ML reaches the same fixed point here and
+    only the reporting conventions differ."""
     c, (beta, psi, stats, _) = theoph_fit
-    beta_r, psi_r, stats_r, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, compat="r")
+    beta_r, psi_r, stats_r, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, compat="r",
+                                        pnls_tol=1e-8, tol_x=1e-9, max_iter=200)
     np.testing.assert_allclose(beta_r, beta, rtol=1e-6)
     np.testing.assert_allclose(psi_r, psi, rtol=1e-5)
     n, f = len(c.y), len(beta)
     np.testing.assert_allclose(stats_r.sebeta, stats.sebeta * np.sqrt(n / (n - f)), rtol=1e-6)
     num_param = n - stats.dfe
     assert stats_r.bic - stats.bic == pytest.approx(num_param * (np.log(n) - np.log(12)))
+
+
+def test_pnls_options_need_the_nlme_iteration():
+    c = orange()
+    with pytest.raises(NotImplementedError, match="pnls_tol"):
+        nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, pnls_tol=1e-6)
 
 
 def test_bad_compat_raises():

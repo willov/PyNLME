@@ -40,6 +40,22 @@ nlme), restarts for variance components collapsed to zero, damping when the iter
 cycles, the best state if it does not converge, and stopping when changes only jitter at
 the model's numerical noise level (ODE models).
 
+With `compat="r"` (constant or exponential error model) `fit_lindstrom_bates_nlme`
+follows nlme 3.1's iteration instead (`src/nlme.c`, `nlme_iterate`/`nlme_increment`):
+each PNLS iteration re-linearises, updates the relative covariance factor by 20 ML EM
+iterations followed by R's `nlm` engine (`optif9`, reimplemented in `_optif9`; nlme
+keeps its second-to-last iterate, because optif9 overwrites its input vector with every
+accepted iterate but the last), and takes a step-halved Gauss-Newton step to the
+GLS/BLUP solution; PNLS stops at nls's relative-offset criterion or after 7 iterations;
+the LME step starts from the updated factor and the next PNLS from the previous PNLS
+solution; convergence compares successive PNLS factors, or accepts converged fixed
+effects when the LME step does not move (nlme: one nlminb iteration; pynlme also when
+the reported likelihood has settled, since its L-BFGS-B LME step keeps moving along a
+collapsed variance where nlminb stops). Traced against R's `verbose = TRUE` output, and
+inner PNLS iterations against `pnlsMaxIter = k`, the iterates agree to the printed
+digits. The PNLS step's ML update is also why nlme's REML is not a restricted-likelihood
+fit.
+
 Error models: weights `1/g(f)` fixed within an iteration and refreshed after each LME
 step; `sum(log w)` added to the log-likelihood; combined `(a, b)` refitted by
 Nelder-Mead; exponential by fitting `log y`.

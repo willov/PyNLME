@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conditional means), `predict` (ipred, icpred, ppred, ypred); agrees with R saemix.
 - `pynlme.predict` for `fit` results (new data, population or individual level).
 
+### Changed
+
+- `compat="r"` with `"LME"`/`"RELME"` (constant or exponential error model) now follows
+  R nlme's iteration step by step: PNLS with the covariance updated by EM and nlm
+  (`optif9`) and at most `pnlsMaxIter` steps, and nlmeControl's defaults (`max_iter=50`,
+  `tol_x=1e-5`, new options `pnls_tol=1e-3`, `pnls_max_iter=7`, `min_scale=1e-3`). The
+  fit is R's own, also where several local solutions exist (previously ~0.1% of
+  simulated oral-PK datasets ended at a different one) and for `method="REML"`, which
+  in nlme is not a restricted-likelihood fit. The default (MATLAB) mode is unchanged.
+- `pynlme.r.nlme` accepts `control={"pnlsTol": ..., "tolerance": ..., "maxIter": ...}`.
+- The randomized comparison with R now requires the same fit (log-likelihood to 1e-3,
+  estimates to 1e-4), not just one at least as good.
+
 ## [0.5.0] - 2026-10-04
 
 Rewrite: `nlmefit` and `nlmefitsa` are now real implementations, validated against

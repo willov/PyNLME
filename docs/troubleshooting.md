@@ -41,9 +41,15 @@ NumPy broadcast against `phi[k]`).
 
 ## Results differ from R
 
-Use `compat="r"`: R's nlme scales ML standard errors by sqrt(N/(N-f)) and computes BIC
-with log(observations). R's `nlme(method="REML")` is not a restricted-likelihood fit for
-nonlinear models (it returns the ML estimates with a rescaled error variance).
+Use `compat="r"` (or `pynlme.r.nlme`): it follows nlme's iteration and defaults
+(`maxIter=50`, `tolerance=1e-5`, `pnlsTol=1e-3`), so the fit is R's to ~1e-6 with the same
+controls, and the reported statistics follow R (ML standard errors scaled by
+sqrt(N/(N-f)), BIC with log(observations)). Without it, pynlme runs the PNLS step to
+convergence; usually that reaches R's fit too, but where the model has several local
+solutions (seen on ~0.1% of simulated oral-absorption datasets) it can reach a
+different one. R's `nlme(method="REML")` is not a restricted-likelihood fit for nonlinear
+models (its PNLS step updates the covariance by ML); `compat="r"` reproduces it, the
+default RELME does not.
 
 ## Speed
 

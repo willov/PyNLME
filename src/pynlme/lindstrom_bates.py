@@ -337,6 +337,7 @@ class LinearizedLME:
             for start in starts
         ]
         best = min(range(len(results)), key=lambda k: results[k].fun)
+        self.last_result = results[best]
         helped = best > 0 and results[best].fun < results[0].fun - 1e-9
         return results[best].x, helped
 
@@ -486,3 +487,360 @@ def fit_lindstrom_bates(
     # Not converged (e.g. a cycle): return the best state seen; the caller warns.
     best.iterations = iteration
     return best
+
+
+# --- R nlme's iteration (compat="r") ------------------------------------------
+#
+# nlme follows the same alternating scheme but its PNLS step differs from the
+# one above in ways that change which fixed point is reached when there are
+# several (nlme 3.1, src/nlme.c, nlme_iterate and nlme_increment):
+#
+# - Each PNLS iteration re-linearises the model at the current (beta, b),
+#   updates the relative covariance factor by 20 EM iterations on that
+#   linear model (ML), and steps towards its GLS/BLUP solution.
+# - Steps are halved until the penalised objective decreases; the step factor
+#   then grows by 4 (at most 1) for the next iteration.
+# - It stops at nls's relative-offset criterion (pnlsTol) or after
+#   pnlsMaxIter (7) iterations, i.e. usually before PNLS has converged.
+# - The next LME step starts from the EM-updated factor, and the next PNLS
+#   from the previous PNLS solution (not from the LME step's estimates).
+#
+# After EM, nlme_increment refines the factor with R's nlm() engine (optif9:
+# line search, BFGS secant updates, forward-difference gradients, at most 20
+# iterations) and then rebuilds it from optif9's *input* vector. optif9
+# overwrites that vector with each accepted iterate except the last one, so
+# the factor nlme uses is the second-to-last nlm iterate (the EM result when
+# nlm stops after its first step). Reproducing R's iterates requires the same;
+# _optif9 below implements that optimizer from Dennis & Schnabel (1983,
+# Appendix A: algorithms A6.3.1, A9.4.2, A5.6.3/A5.6.4, A7.2.1) with optif9's
+# settings in nlme.
+
+
+def _em_factor(lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20) -> np.ndarray:
+    """nlme's EM update of the relative factor (internal_EM, ML)."""
+    eye = np.eye(L.shape[0])
+    for _ in range(n_iter):
+        _, _, sigma2, _, u = lme.solve(L)
+        R_zz = lme._last[4]
+        R_inv = np.linalg.solve(R_zz, np.broadcast_to(eye, R_zz.shape))
+        cond_cov = L @ (R_inv @ np.swapaxes(R_inv, 1, 2)) @ L.T  # Var(b_i | y) / sigma^2
+        b = u @ L.T
+        psi = np.mean(cond_cov + np.einsum("mi,mj->mij", b, b) / sigma2, axis=0)
+        L = np.linalg.cholesky(psi) if full else np.diag(np.sqrt(np.diag(psi)))
+    return L
+
+
+_DBL_MAX = np.finfo(float).max
+_EPS = np.finfo(float).eps
+
+
+def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
+    """R's optif9 as called by nlme_increment (method 1, iexp 1, no analytic
+    derivatives, typsiz 1, fscale 1, ndigit 15, gradtl eps^(1/3), steptl
+    sqrt(eps), default stepmx). Returns the vector optif9 leaves in its input
+    argument: the last accepted iterate before the terminating one."""
+    x = np.asarray(x, dtype=float).copy()
+    n = x.size
+    rnf = max(1e-15, _EPS)
+    gradtl, steptl = _EPS ** (1 / 3), np.sqrt(_EPS)
+    stepmx = 1000.0 * max(np.linalg.norm(x), 1.0)
+
+    def f_safe(v):
+        value = fcn(v)
+        return value if np.isfinite(value) else _DBL_MAX
+
+    def forward_gradient(v, fv):
+        g = np.empty(n)
+        for j in range(n):
+            h = np.sqrt(rnf) * max(abs(v[j]), 1.0)
+            w = v.copy()
+            w[j] += h
+            g[j] = (f_safe(w) - fv) / h
+        return g
+
+    def central_gradient(v):
+        g = np.empty(n)
+        for j in range(n):
+            h = rnf ** (1 / 3) * max(abs(v[j]), 1.0)
+            up, down = v.copy(), v.copy()
+            up[j] += h
+            down[j] -= h
+            g[j] = (f_safe(up) - f_safe(down)) / (2 * h)
+        return g
+
+    def converged_gradient(v, fv, g):
+        return np.max(np.abs(g) * np.maximum(np.abs(v), 1.0)) / max(abs(fv), 1.0) <= gradtl
+
+    def line_search(x, f, g, p):
+        """A6.3.1: backtracking (quadratic, then cubic) with the Armijo test."""
+        sln = np.linalg.norm(p)
+        if sln > stepmx:
+            p = p * (stepmx / sln)
+            sln = stepmx
+        slp = g @ p
+        rln = np.max(np.abs(p) / np.maximum(np.abs(x), 1.0))
+        rmnlmb = steptl / rln
+        lam, first = 1.0, True
+        plam = pf = 0.0
+        while True:
+            xp = x + lam * p
+            fp = f_safe(xp)
+            if fp <= f + slp * 1e-4 * lam:
+                return xp, fp, 0, lam == 1.0 and sln > stepmx * 0.99
+            if lam < rmnlmb:
+                return xp, fp, 1, False
+            if fp >= _DBL_MAX:
+                lam *= 0.1
+                first = True
+                continue
+            if first:
+                tlam = -lam * slp / ((fp - f - slp) * 2.0)
+                first = False
+            else:
+                t1 = fp - f - lam * slp
+                t2 = pf - f - plam * slp
+                t3 = 1.0 / (lam - plam)
+                a3 = 3.0 * t3 * (t1 / lam**2 - t2 / plam**2)
+                b = t3 * (t2 * lam / plam**2 - t1 * plam / lam**2)
+                disc = b * b - a3 * slp
+                if disc > b * b:
+                    tlam = (-b + (-np.sqrt(disc) if a3 < 0 else np.sqrt(disc))) / a3
+                else:
+                    tlam = (-b + (np.sqrt(disc) if a3 < 0 else -np.sqrt(disc))) / a3
+                tlam = min(tlam, lam * 0.5)
+            plam, pf = lam, fp
+            lam = lam * 0.1 if tlam < lam * 0.1 else tlam
+
+    f = f_safe(x)
+    g = forward_gradient(x, f)
+    if converged_gradient(x, f, g):
+        return x
+    L = np.eye(n)  # Cholesky factor of the secant Hessian (hsnint)
+    central = False
+    consecutive_max = 0
+    for iteration in range(1, itnlim + 1):
+        while True:
+            p = -np.linalg.solve(L.T, np.linalg.solve(L, g))
+            xp, fp, iretcd, mxtake = line_search(x, f, g, p)
+            if iretcd == 1 and not central:
+                central = True  # retry with central differences
+                g = central_gradient(x)
+                continue
+            break
+        if iretcd == 1:
+            return x
+        gp = central_gradient(xp) if central else forward_gradient(xp, fp)
+        # Stopping rules (opt_stop): relative gradient, relative step,
+        # iteration limit, five consecutive maximal steps.
+        if converged_gradient(xp, fp, gp):
+            return x
+        if np.max(np.abs(xp - x) / np.maximum(np.abs(xp), 1.0)) <= steptl or iteration >= itnlim:
+            return x
+        if mxtake:
+            consecutive_max += 1
+            if consecutive_max >= 5:
+                return x
+        else:
+            consecutive_max = 0
+        # BFGS update of the factor (secfac), with the first-update scaling.
+        s, y = xp - x, gp - g
+        den1 = s @ y
+        if den1 >= np.sqrt(_EPS) * np.linalg.norm(s) * np.linalg.norm(y):
+            u = L.T @ s
+            den2 = u @ u
+            alp = np.sqrt(den1 / den2)
+            if iteration == 1:
+                L = alp * L
+                u = alp * u
+                den2, alp = den1, 1.0
+            w = L @ u
+            reltol = rnf if central else np.sqrt(rnf)
+            if not np.all(np.abs(y - w) < reltol * np.maximum(np.abs(g), np.abs(gp))):
+                w = y - alp * w
+                u = u * (alp / den1)
+                R = np.linalg.qr(L.T + np.outer(u, w), mode="r")
+                L = (R * np.sign(np.diag(R))[:, None]).T
+        x, f, g = xp, fp, gp
+    return x
+
+
+def _nlm_factor(lme: "LinearizedLME", L: np.ndarray, full: bool) -> np.ndarray:
+    """nlme_increment's optif9 refinement of the factor after EM."""
+    r = L.shape[0]
+    const = 0.5 * lme.n * (1.0 + np.log(2 * np.pi) - np.log(lme.n))
+    cols = [(i, j) for j in range(r) for i in range(j)]  # column-major upper part
+
+    def to_L(theta):
+        if not full:
+            return np.diag(np.exp(-theta))
+        U = np.diag(np.exp(theta[:r]))
+        for k, (i, j) in enumerate(cols):
+            U[i, j] = theta[r + k]
+        return np.linalg.cholesky(np.linalg.inv(U.T @ U))
+
+    def from_L(L):
+        if not full:
+            return -np.log(np.diag(L))
+        U = np.linalg.cholesky(np.linalg.inv(L @ L.T)).T
+        return np.concatenate([np.log(np.diag(U)), [U[i, j] for i, j in cols]])
+
+    def fcn(theta):
+        try:
+            return -(lme.solve(to_L(theta))[0] + const)
+        except np.linalg.LinAlgError:
+            return np.inf
+
+    return to_L(_optif9(fcn, from_L(L)))
+
+
+def _penalty(B: np.ndarray, L: np.ndarray) -> float:
+    """sum_i ||L^-1 b_i||^2 for B (m, r)."""
+    return float(np.sum(np.linalg.solve(L, B.T) ** 2))
+
+
+def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, min_scale: float = 1e-3,
+              tol: float = 1e-3):
+    """nlme's PNLS step. B is (m, r) random effects on the parameter scale.
+
+    Returns beta, B, the EM-updated factor L, the residuals and Jacobian at the
+    solution (padded), the penalised objective, the iterations, and whether the
+    step halving failed.
+    """
+    m, r, f = model.n_groups, model.n_random, model.n_fixed
+    n_par = m * r + f
+    nrdof = model.n_obs - n_par
+
+    def evaluate(beta, B):
+        eta = model.A @ beta + np.einsum("mpr,mr->mp", model.B, B)
+        return model.mask * (model.y_pad - model.predict_padded(eta)), eta
+
+    res, eta = evaluate(beta, B)
+    J = model.jacobian_padded(eta) * model.mask[..., None]
+    step = 1.0
+    for iteration in range(1, max_iter + 1):
+        lme = LinearizedLME(model, beta, B.T, res, J, reml=False)
+        L = _nlm_factor(lme, _em_factor(lme, L, full), full)
+        objective = float(np.sum(res * res)) + _penalty(B, L)
+        _, beta_gls, _, _, u = lme.solve(L)
+        predicted = lme._last[3]
+        d_beta, d_B = beta_gls - beta, u @ L.T - B
+        criterion = np.sqrt(nrdof * max(objective - predicted, 0.0) / (n_par * predicted))
+        if criterion < tol:
+            return beta, B, L, res, J, objective, iteration, False
+        while True:
+            if step < min_scale:
+                return beta, B, L, res, J, objective, iteration, True
+            new_beta, new_B = beta + step * d_beta, B + step * d_B
+            try:
+                new_res, new_eta = evaluate(new_beta, new_B)
+                new_objective = float(np.sum(new_res * new_res)) + _penalty(new_B, L)
+            except FloatingPointError:
+                new_objective = np.inf
+            step /= 2
+            if new_objective < objective:
+                break
+        step = min(4 * step, 1.0)
+        beta, B, res, eta = new_beta, new_B, new_res, new_eta
+        J = model.jacobian_padded(eta) * model.mask[..., None]
+    return beta, B, L, res, J, float(np.sum(res * res)) + _penalty(B, L), max_iter, False
+
+
+def _nlme_coef(L: np.ndarray, full: bool) -> np.ndarray:
+    """nlme's unconstrained reStruct coefficients (pdDiag / pdLogChol of the
+    precision factor), used only for its convergence criterion."""
+    if not full:
+        return -np.log(np.maximum(np.diag(L), 1e-300))
+    precision = np.linalg.inv(L @ L.T)
+    R = np.linalg.cholesky(precision).T
+    return np.concatenate([np.log(np.diag(R)), R[np.triu_indices(L.shape[0], 1)]])
+
+
+def fit_lindstrom_bates_nlme(
+    model: GroupedModel,
+    beta0: np.ndarray,
+    full_cov: bool = False,
+    reml: bool = False,
+    max_iter: int = 50,
+    tolerance: float = 1e-5,
+    pnls_tol: float = 1e-3,
+    pnls_max_iter: int = 7,
+    min_scale: float = 1e-3,
+    verbose: int = 0,
+) -> LBResult:
+    """Lindstrom-Bates estimation following R nlme's iteration step by step.
+
+    Defaults are nlmeControl()'s (maxIter, tolerance, pnlsTol, pnlsMaxIter,
+    minScale). Returns the fixed and random effects of the last PNLS step and
+    the likelihood of the model linearised there, as nlme does.
+    """
+    m, r = model.n_groups, model.n_random
+    factor = CovarianceFactor(r, full_cov)
+    beta = np.asarray(beta0, dtype=float).copy()
+    B = np.zeros((m, r))
+    eta = model.etas_all(beta)
+    J = model.jacobian_padded(eta) * model.mask[..., None]
+    res = model.mask * (model.y_pad - model.predict_padded(eta))
+    L = initial_factor(model, J)  # nlme's Initialize
+    converged = False
+    pnls_failed = False
+    iteration = 0
+    prev_logl = None
+    for iteration in range(1, max_iter + 1):
+        # LME step: maximise the likelihood of the model linearised at the
+        # current PNLS solution, from the current factor.
+        lme = LinearizedLME(model, beta, B.T, res, J, reml)
+        theta_start = factor.from_matrix(L)
+        logl_start = lme.solve(L)[0]
+        # restart: L-BFGS-B can stall with a variance collapsed to zero where
+        # nlminb does not (seed 1502491072, linear_2: 18.6 lower); the restart
+        # is kept only if it finds a higher likelihood.
+        theta, _ = lme.maximize(factor, theta_start, tight=True, restart=True)
+        gain = lme.solve(factor.to_matrix(theta))[0] - logl_start
+        old_coef, L_lme = _nlme_coef(L, full_cov), factor.to_matrix(theta)
+        if verbose:
+            # Laid out as nlme's verbose output (its reStruct coefficients).
+            print(f"**Iteration {iteration}\nLME step: Loglik: {lme.solve(L_lme)[0]:.7g}\n"
+                  f"reStruct parameters: {np.array2string(_nlme_coef(L_lme, full_cov), precision=7)}")
+        old_beta = beta
+        beta, B, L, res, J, objective, n_pnls, failed = pnls_nlme(
+            model, L_lme, beta, B, full_cov, pnls_max_iter, min_scale, pnls_tol)
+        pnls_failed = pnls_failed or failed
+        # nlme overwrites the reStruct with PNLS's EM-updated factor before
+        # comparing, so the criterion is the change between successive PNLS
+        # factors (with REML these differ from the LME step's optimum).
+        new_coef = _nlme_coef(L, full_cov)
+        if verbose:
+            print(f"PNLS step: RSS = {objective:.7g}\n fixed effects: {np.array2string(beta, precision=7)}\n"
+                  f" iterations: {n_pnls}")
+        conv_fixed = np.max(np.abs(old_beta - beta) / np.where(np.abs(beta) < tolerance, 1.0, np.abs(beta)))
+        conv_re = np.max(np.abs(old_coef - new_coef) / np.where(np.abs(new_coef) < tolerance, 1.0, np.abs(new_coef)),
+                         initial=0.0)
+        # The reported log-likelihood: the model linearised at this PNLS
+        # solution, with PNLS's factor.
+        logl = LinearizedLME(model, beta, B.T, res, J, reml).solve(L)[0]
+        if verbose:
+            print(f"Convergence crit.: fixed {conv_fixed:.6g} reStruct {conv_re:.6g} "
+                  f"(LME step: {lme.last_result.nit} iterations, gain {gain:.3g})")
+        # nlme stops when all criteria are met, or when the fixed effects are
+        # and its LME step (nlminb) took a single iteration. pynlme's LME step
+        # uses another optimizer: where a variance has collapsed, nlminb stops
+        # on the flat likelihood while L-BFGS-B moves on to the bound and PNLS
+        # moves the factor back, so the factor never settles. Equivalent there:
+        # the fixed effects and the reported likelihood have converged.
+        logl_settled = prev_logl is not None and abs(logl - prev_logl) <= tolerance * (abs(logl) + 1.0)
+        prev_logl = logl
+        if max(conv_fixed, conv_re) <= tolerance or (
+                conv_fixed <= tolerance and (lme.last_result.nit <= 1 or logl_settled)):
+            converged = True
+            break
+    if pnls_failed:
+        import warnings
+
+        warnings.warn("step halving factor reduced below minimum in PNLS step (as nlme's warning)",
+                      RuntimeWarning, stacklevel=3)
+    lme = LinearizedLME(model, beta, B.T, res, J, reml)
+    logl, _, sigma2, A, _ = lme.solve(L)
+    return LBResult(
+        beta=beta, psi=sigma2 * L @ L.T, sigma2=sigma2, b=B.T.copy(), logl=logl,
+        covb=sigma2 * np.linalg.inv(A), iterations=iteration, converged=converged,
+    )
