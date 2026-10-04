@@ -153,5 +153,9 @@ for K in (16, 96, 384):
 Full fits: `examples/sund_ode_model.py`; the `batch_size` argument of
 `pynlme.sund_model` controls the batch size.
 
-When an item lands, `pynlme.sund_model` can use it: sensitivities would replace the
-finite differences in `GroupedModel.jacobian_padded` for SUND models.
+When an item lands, `pynlme.sund_model` can use it. For sensitivities the hook is
+already in place: a model function with a `jacobian` attribute (d feature / d phi, one
+row per observation, one column per parameter; see `pynlme.with_jacobian`) is used by
+every fitting method instead of finite differences, including the ParamTransform
+chain rule. `sund_model` only needs to set `model_fn.jacobian` from SUND's
+sensitivities.

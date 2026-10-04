@@ -22,6 +22,7 @@ For MATLAB users, nlmefit() and nlmefitsa() are also available.
 
 from .data_types import ErrorModel, NLMEOptions, NLMEStats
 from .nlmefit import fit_nlme, fit_mle, fit_saem, nlmefit, nlmefitsa
+from .model import with_jacobian
 from .ode import ode_model
 from .sund_adapter import sund_model
 from .utils import (
@@ -48,6 +49,7 @@ __all__ = [
     "nlmefit",
     "nlmefitsa",
     "ode_model",
+    "with_jacobian",
     "sund_model",
     # Data types
     "NLMEStats",

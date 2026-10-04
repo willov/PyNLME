@@ -128,6 +128,52 @@ def linear_v(phi, x):
     return phi[..., 0] + phi[..., 1] * x[:, 0]
 
 
+# Analytic derivatives d f / d phi (one column per parameter), same calling
+# conventions as the vectorised models, for pynlme.with_jacobian.
+def biexponential_jac(phi, t):
+    t = t[:, 0]
+    e1, e2 = np.exp(-phi[..., 1] * t), np.exp(-phi[..., 3] * t)
+    return np.column_stack([e1 + 0 * t, -phi[..., 0] * t * e1, e2 + 0 * t, -phi[..., 2] * t * e2])
+
+
+def one_compartment_oral_jac(phi, t, dose):
+    ke, ka, cl, t, dose = phi[..., 0], phi[..., 1], phi[..., 2], t[:, 0], dose[..., 0]
+    e1, e2 = np.exp(-ke * t), np.exp(-ka * t)
+    k = ke * ka / (ka - ke)
+    c = dose / cl
+    f = c * k * (e1 - e2)
+    d_ke = c * (ka**2 / (ka - ke) ** 2 * (e1 - e2) - k * t * e1)
+    d_ka = c * (-(ke**2) / (ka - ke) ** 2 * (e1 - e2) + k * t * e2)
+    return np.column_stack([d_ke, d_ka, -f / cl])
+
+
+def logistic_jac(phi, t):
+    t = t[:, 0]
+    a, xmid, scal = phi[..., 0], phi[..., 1], phi[..., 2]
+    q = np.exp(-(t - xmid) / scal)
+    d = (1 + q) ** 2
+    return np.column_stack([1 / (1 + q), -a * q / (scal * d), -a * q * (t - xmid) / (scal**2 * d)])
+
+
+def linear_jac(phi, x):
+    x = x[:, 0]
+    return np.column_stack([np.ones_like(x), x])
+
+
+JACOBIANS = {biexponential_v: biexponential_jac, one_compartment_oral_v: one_compartment_oral_jac,
+             logistic_v: logistic_jac, linear_v: linear_jac}
+
+
+def with_derivatives(case: Case, full: bool = True) -> Case:
+    """The case with an analytic Jacobian attached (vectorised model)."""
+    from pynlme import with_jacobian
+
+    v = vectorized(case)
+    model = with_jacobian(v.modelfun, JACOBIANS[v.modelfun])
+    kwargs = v.kwargs if full else {k: val for k, val in v.kwargs.items() if k != "Vectorization"}
+    return Case(case.name, case.X, case.y, case.group, case.V, model, case.beta0, kwargs)
+
+
 VECTORIZED = {biexponential: biexponential_v, one_compartment_oral: one_compartment_oral_v,
               logistic: logistic_v, linear: linear_v}
 

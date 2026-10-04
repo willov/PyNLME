@@ -32,6 +32,24 @@ def inverse_transform(eta: np.ndarray, codes: np.ndarray | None) -> np.ndarray:
     return phi
 
 
+def with_jacobian(modelfun: Callable, jacobian: Callable) -> Callable:
+    """Attach analytic derivatives to a model function.
+
+    ``jacobian`` takes the same arguments as ``modelfun`` and returns
+    d f / d phi with one row per observation and one column per parameter
+    (phi on the model's scale; pynlme applies the chain rule through
+    ParamTransform). The fitting functions then use it instead of finite
+    differences.
+    """
+
+    def model(*args):
+        return modelfun(*args)
+
+    model.__signature__ = inspect.signature(modelfun)
+    model.jacobian = jacobian
+    return model
+
+
 def _accepts_third_argument(fun: Callable) -> bool:
     """Whether fun(phi, x) would fail because a third argument is required."""
     try:
@@ -162,9 +180,66 @@ class GroupedModel:
         out[self.mask] = values
         return out
 
+    @property
+    def has_jacobian(self) -> bool:
+        return callable(getattr(self.modelfun, "jacobian", None))
+
+    def _dphi_deta(self, etas: np.ndarray) -> np.ndarray:
+        """Derivative of g^{-1} (the ParamTransform) at eta, elementwise."""
+        d = np.ones_like(etas)
+        if self._exp_idx.size:
+            d[..., self._exp_idx] = np.exp(etas[..., self._exp_idx])
+        if self._probit_idx.size:
+            z = etas[..., self._probit_idx]
+            d[..., self._probit_idx] = np.exp(-0.5 * z * z) / np.sqrt(2 * np.pi)
+        if self._logit_idx.size:
+            q = expit(etas[..., self._logit_idx])
+            d[..., self._logit_idx] = q * (1 - q)
+        return d
+
+    def _call_jacobian(self, phi, x, v):
+        jac = self.modelfun.jacobian
+        if self.V is not None:
+            return jac(phi, x, v)
+        if self._pass_none:
+            return jac(phi, x, None)
+        return jac(phi, x)
+
+    def jacobian_flat(self, groups, etas) -> np.ndarray:
+        """Analytic d f / d eta for (group, eta) pairs, stacked rows (N, p).
+
+        Uses ``modelfun.jacobian`` (d f / d phi) and the chain rule through the
+        parameter transform.
+        """
+        groups = np.asarray(groups, dtype=int)
+        etas = np.asarray(etas, dtype=float)
+        lengths = self._lengths[groups]
+        scale = self._dphi_deta(etas)
+        phis = self._phi(etas)
+        if self.vectorization == "full":
+            x = np.concatenate([self.X[g] for g in groups])
+            v = None if self.V is None else np.repeat(self.V[groups], lengths, axis=0)
+            J = np.asarray(self._call_jacobian(np.repeat(phis, lengths, axis=0), x, v), dtype=float)
+            J = J.reshape(lengths.sum(), -1) * np.repeat(scale, lengths, axis=0)
+        else:
+            parts = []
+            for k, (g, phi, sc) in enumerate(zip(groups, phis, scale, strict=True)):
+                v = None if self.V is None else self.V[g]
+                Jg = np.asarray(self._call_jacobian(phi, self.X[g], v), dtype=float).reshape(lengths[k], -1)
+                parts.append(Jg * sc)
+            J = np.vstack(parts) if parts else np.zeros((0, etas.shape[1]))
+        self.n_calls += 1
+        if not np.all(np.isfinite(J)):
+            raise FloatingPointError("modelfun.jacobian returned non-finite values")
+        return J
+
     def jacobian_padded(self, etas) -> np.ndarray:
-        """Central-difference d f / d eta for all groups, shape (m, n_max, p)."""
+        """d f / d eta for all groups, shape (m, n_max, p)."""
         m, p = etas.shape
+        if self.has_jacobian:
+            out = np.zeros((m, self.n_max, p))
+            out[self.mask] = self.jacobian_flat(np.arange(m), etas)
+            return out
         h = _DERIV_STEP * np.maximum(np.abs(etas), 1.0)
         steps = h[:, :, None] * np.eye(p)[None]
         up = (etas[:, None, :] + steps).reshape(-1, p)
@@ -184,10 +259,13 @@ class GroupedModel:
         return np.swapaxes(J, 1, 2)
 
     def jacobian_many(self, groups, etas) -> list[np.ndarray]:
-        """Central-difference Jacobians d f / d eta for several (group, eta) pairs."""
+        """Jacobians d f / d eta for several (group, eta) pairs."""
         groups = np.asarray(groups, dtype=int)
         etas = np.asarray(etas, dtype=float)
         k, p = etas.shape
+        if self.has_jacobian:
+            J = self.jacobian_flat(groups, etas)
+            return np.split(J, np.cumsum(self._lengths[groups])[:-1])
         h = _DERIV_STEP * np.maximum(np.abs(etas), 1.0)  # (k, p)
         steps = h[:, :, None] * np.eye(p)[None]  # (k, p, p)
         up = (etas[:, None, :] + steps).reshape(-1, p)
@@ -246,7 +324,10 @@ class GroupedModel:
         return out
 
     def jacobian(self, i: int, eta: np.ndarray) -> np.ndarray:
-        """Central-difference Jacobian d f_i / d eta, shape (n_i, p)."""
+        """Jacobian d f_i / d eta, shape (n_i, p): analytic if the model
+        provides one, else central differences."""
+        if self.has_jacobian:
+            return self.jacobian_flat([i], eta[None, :])
         p = eta.shape[0]
         J = np.empty((len(self.y[i]), p))
         for k in range(p):

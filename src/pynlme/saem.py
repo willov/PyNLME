@@ -261,19 +261,24 @@ class _SAEM:
             # Directional derivatives along the design columns of these
             # effects only, all rows and directions in one batch.
             etas = self.etas(Phi)
-            h = 1e-6 * np.maximum(np.max(np.abs(etas), axis=1), 1.0)  # (M,)
-            batch = [etas]
-            for k in cols:
-                step = h[:, None] * self.A_rows[:, :, k]
-                batch += [etas + step, etas - step]
-            values, _ = self.model.predict_flat(np.tile(self.sub, 1 + 2 * len(cols)), np.vstack(batch))
             n_obs = len(self.y)
-            f = values[:n_obs]
-            hh = h[self.row_of_obs]
-            G = np.column_stack([
-                (values[(1 + 2 * k) * n_obs:(2 + 2 * k) * n_obs] - values[(2 + 2 * k) * n_obs:(3 + 2 * k) * n_obs]) / (2 * hh)
-                for k in range(len(cols))
-            ])
+            if self.model.has_jacobian:
+                f, _ = self.model.predict_flat(self.sub, etas)
+                J = self.model.jacobian_flat(self.sub, etas)  # (n_obs, p)
+                G = np.einsum("np,npk->nk", J, self.A_rows[self.row_of_obs][:, :, cols])
+            else:
+                h = 1e-6 * np.maximum(np.max(np.abs(etas), axis=1), 1.0)  # (M,)
+                batch = [etas]
+                for k in cols:
+                    step = h[:, None] * self.A_rows[:, :, k]
+                    batch += [etas + step, etas - step]
+                values, _ = self.model.predict_flat(np.tile(self.sub, 1 + 2 * len(cols)), np.vstack(batch))
+                f = values[:n_obs]
+                hh = h[self.row_of_obs]
+                G = np.column_stack([
+                    (values[(1 + 2 * k) * n_obs:(2 + 2 * k) * n_obs] - values[(2 + 2 * k) * n_obs:(3 + 2 * k) * n_obs]) / (2 * hh)
+                    for k in range(len(cols))
+                ])
             w = 1.0 / self.err.sd(f)
             ok = np.isfinite(f) & np.all(np.isfinite(G), axis=1)
             step = np.linalg.lstsq(w[ok, None] * G[ok], (w * (self.y - f))[ok], rcond=None)[0]

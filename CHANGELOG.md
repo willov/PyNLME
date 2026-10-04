@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `stats.rmse` follows MATLAB: sqrt(sum(ires^2)/dfe). The error standard deviation is in `stats.errorparam`. For RELME, psi, the error variance and covb are reported as MATLAB does (RSS/N scaling) and BIC uses log(m - f).
 
 ### Added
+- Analytic model derivatives: a model function with a `jacobian` attribute (or `pynlme.with_jacobian(f, jac)`) is differentiated analytically in all methods instead of by finite differences; prepares for SUND sensitivities.
 - `DataFormat="stacked"|"grouped"`. Without it the layout follows from the shape of y only; the previous X-based guess (which treated small stacked datasets without a group as grouped) is no longer used.
 - ODE models: `pynlme.sund_model` (compiled SUND models; optional extra `pynlme[sund]`) and `pynlme.ode_model` (SciPy, batched over subjects with `Vectorization="Full"`); Michaelis-Menten validation case with MATLAB references; `examples/sund_ode_model.py`.
 - SAEM samples parameters without random effects during annealing (MATLAB/saemix scheme); the Lindstrom-Bates loop stops when changes only jitter at the model's numerical noise level.
