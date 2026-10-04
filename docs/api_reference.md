@@ -143,6 +143,8 @@ result["typical"]["cl"]   # 0.040 (natural scale)
 - `group_predictors`: columns constant within a group, passed to the model as `v`
   (an error is raised if they vary within a group).
 - `method`: `"LME"`, `"RELME"`, `"FO"`, `"FOCE"` or `"SAEM"`.
+- `pynlme.predict(result, data=None, level=1)`: predictions for new rows (level 1
+  individual, NaN for unknown groups; level 0 population).
 - `**options`: any `nlmefit`/`nlmefitsa` option by its Python name
   (`error_model="proportional"`, `cov_pattern=...`, `random_state=1`, `compat="r"`).
 - A `model.jacobian(p, x[, v])` returning d f/d phi (columns in parameter order) is used
@@ -189,6 +191,32 @@ Runs `fit` with `compat="r"`. The result is `fit`'s dict plus `fixef`, `se_fixef
 `ranef` (`{group: {name: b}}`), `sigma`, `logLik`, `AIC`, `BIC`, `vcov`, `fitted`,
 `residuals` and `call`, read by the R-named functions. `summary(fit)` returns R's
 printout (DF = observations - groups - fixed effects + 1, as nlme reports).
+`predict(fit, newdata=None, level=1)`: individual predictions (NaN for groups not in the
+fit, R's NA) or `level=0` population predictions.
+
+### saemix: `saemixData`, `saemixModel`, `saemix`
+
+- `saemixData(data, name_group, name_predictors, name_response, name_covariates=())`.
+- `saemixModel(model, psi0, description="", transform_par=None, covariate_model=None,
+  covariance_model=None, error_model="constant")`. `model(psi, id, xidep)` as in R
+  (`psi[id, k]`, `xidep[:, j]`; `id` is 0-based). `psi0` is a dict
+  `{"ka": 1.0, ...}`; a list `{"CL": [0.5, 0]}` adds starting values for covariate effects
+  (R's extra psi0 rows). `covariate_model`: R's 0/1 matrix (covariates x parameters) or
+  `{"CL": ["wt"]}`. `covariance_model`: diagonal, or full among the random parameters.
+  `error_model`: constant, proportional, combined, exponential. `omega_init` and
+  `fixed_estim` are not supported (they raise).
+- `saemix(model, data, control)`. `control` uses saemix's names: `seed`,
+  `nbiter.saemix`, `nbiter.sa`, `nb.chains` (default 1), `nbiter.mcmc`, `nbiter.burn`,
+  `ll.is`, `fim`; display/save options are accepted and ignored, others raise.
+
+The result is `fit`'s dict plus `population` (natural scale) and `se_population`
+(delta method), `covariate_effects` (`"beta_wt(CL)"`, transformed scale),
+`se_covariate_effects`, `omega`, `respar` (`a.1`, `b.1`), `logLik`, `AIC`, `BIC`.
+Functions: `summary`, `coef` (fixed, population, individual `map.psi`/`cond.mean.psi`),
+`psi`/`phi`/`eta` (`type="mode"`, the default as in saemix, computed by maximising
+each subject's posterior; or `"mean"`), `predict(fit, newdata, type=)` with `"ipred"`
+(modes), `"icpred"` (conditional means), `"ppred"` (population parameters), `"ypred"`
+(mean over the random effects, Monte Carlo), `logLik`, `AIC`, `BIC`.
 
 ## `fit_nlme(X, y, group, V, modelfun, beta0, method="MLE", **options)`
 

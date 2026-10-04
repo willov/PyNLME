@@ -69,12 +69,37 @@ print(summary(fit))      # same layout and numbers as R
 fixef(fit)["lCl.wtc"]; ranef(fit)[1]; VarCorr(fit)["Residual"]["StdDev"]
 ```
 
-`fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`, `BIC`, `fitted`, `resid` work
-as in R; the fit itself is a dict. R's defaults are kept (`method="ML"`, `pdSymm` for a
+`fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`, `BIC`, `fitted`, `resid`,
+`predict(fit, newdata, level=)` work as in R; the fit itself is a dict. R's defaults are kept (`method="ML"`, `pdSymm` for a
 plain `random` formula), and the results match R `nlme` to ~1e-4 or closer. Not yet
 supported: `weights=` (use `error_model=`), random effects with covariates, and
 transformed covariates in `fixed` (compute a column instead). See
 [the API reference](docs/api_reference.md#r-style-pynlmer).
+
+saemix users write the same three calls as in R, with the model in R's
+`psi[id, k]` form:
+
+```python
+from pynlme.r import saemixData, saemixModel, saemix, summary, coef, psi, predict
+
+def model(psi, id, xidep):
+    dose, t = xidep[:, 0], xidep[:, 1]
+    ka, V, CL = psi[id, 0], psi[id, 1], psi[id, 2]
+    k = CL / V
+    return dose * ka / (V * (ka - k)) * (np.exp(-k * t) - np.exp(-ka * t))
+
+data = saemixData(theo, name_group="subject", name_predictors=["dose", "time"],
+                  name_response="conc", name_covariates=["wt"])
+smodel = saemixModel(model, psi0={"ka": [1, 0], "V": [20, 0], "CL": [0.5, 0]},
+                     transform_par=[1, 1, 1], covariate_model=[[0, 0, 1]],
+                     covariance_model=np.diag([1, 0, 1]))
+fit = saemix(smodel, data, {"seed": 632545})
+print(summary(fit))            # saemix's layout: estimates, SE, CV(%), omega2, -2LL/AIC/BIC
+psi(fit)[1]; predict(fit, type="ppred")
+```
+
+saemix's defaults are kept (one chain, `nbiter.saemix = c(300, 100)`, importance
+sampling, standard errors); results agree with R saemix within Monte Carlo error.
 
 Lower-level equivalents of R's arguments:
 

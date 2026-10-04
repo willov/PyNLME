@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group-level covariate models.
 - `pynlme.r`: R's `nlme()` with string formulas, `pdDiag`/`pdSymm`, `SSfol` and other
   `SS*` models, and `summary`, `fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`,
-  `BIC`, `fitted`, `resid`; matches R nlme on the validation cases.
+  `BIC`, `fitted`, `resid`, `predict`; matches R nlme on the validation cases.
+- `pynlme.r` saemix interface: `saemixData`, `saemixModel`, `saemix` with saemix's
+  control names and defaults, `summary`, `coef`, `psi`/`phi`/`eta` (modes or
+  conditional means), `predict` (ipred, icpred, ppred, ypred); agrees with R saemix.
+- `pynlme.predict` for `fit` results (new data, population or individual level).
 
 ## [0.5.0] - 2026-10-04
 

@@ -73,3 +73,26 @@ def test_errors(theoph):
     bad = dict(theoph, dose=theoph["dose"] + np.arange(len(theoph["dose"])))
     with pytest.raises(ValueError, match="not constant within groups"):
         fit(one_compartment, bad, "conc", "subject", START, ["time"], ["dose"])
+
+
+def test_predict(theoph):
+    from pynlme import predict
+
+    r = _fit(theoph)
+    np.testing.assert_allclose(predict(r), theoph["conc"] - r["stats"]["ires"], rtol=1e-8)
+    np.testing.assert_allclose(predict(r, level=0), theoph["conc"] - r["stats"]["pres"], rtol=1e-8)
+    new = {"subject": np.array([1.0, 99.0]), "time": np.array([2.0, 2.0]), "dose": np.array([4.0, 4.0])}
+    out = predict(r, new)
+    assert np.isfinite(out[0]) and np.isnan(out[1])  # unknown group: NaN, as R
+    assert predict(r, new, level=0)[1] == pytest.approx(
+        one_compartment(r["typical"], {"time": 2.0}, {"dose": 4.0}))
+
+
+def test_covariates(theoph):
+    d = dict(theoph, wtc=theoph["wt"] - 70)
+    r = _fit(d, covariates={"cl": ["wtc"]})
+    assert list(r["fixed"]) == ["ke", "ka", "cl", "cl.wtc"]
+    # R nlme, fixed = list(lKe ~ 1, lKa ~ 1, lCl ~ wtc): lCl.wtc = -0.00726
+    assert r["fixed"]["cl.wtc"] == pytest.approx(-0.00726, abs=2e-5)
+    from pynlme import predict
+    np.testing.assert_allclose(predict(r), d["conc"] - r["stats"]["ires"], rtol=1e-8)

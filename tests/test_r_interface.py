@@ -119,3 +119,16 @@ def test_errors():
         nlme(model, random="Asym ~ age", groups="~tree", **kw)
     with pytest.raises(NotImplementedError):
         nlme(model, random="Asym ~ 1", groups="~tree", **{**kw, "fixed": ["Asym ~ log(age)", "xmid + scal ~ 1"]})
+
+
+def test_predict():
+    from pynlme.r import predict
+
+    fit = CASES["orange_lme"]()
+    np.testing.assert_allclose(predict(fit), fitted(fit), rtol=1e-8)
+    new = {"tree": np.array([1.0, 42.0]), "age": np.array([1000.0, 1000.0])}
+    ind, pop = predict(fit, new), predict(fit, new, level=0)
+    assert np.isnan(ind[1])  # tree not in the fit: NA in R
+    f = fixef(fit)
+    assert pop[1] == pytest.approx(f["Asym"] / (1 + np.exp(-(1000 - f["xmid"]) / f["scal"])))
+    assert ind[0] == pytest.approx((f["Asym"] + ranef(fit)[1]["Asym"]) / (1 + np.exp(-(1000 - f["xmid"]) / f["scal"])))

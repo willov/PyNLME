@@ -20,7 +20,7 @@ Quick Start
 For MATLAB users, nlmefit() and nlmefitsa() are also available.
 """
 
-from .api import fit
+from .api import fit, predict
 from .data_types import NLMEOptions, NLMEStats
 from .model import with_jacobian
 from .nlmefit import fit_mle, fit_nlme, fit_saem, nlmefit, nlmefitsa
@@ -44,6 +44,7 @@ except (ImportError, ModuleNotFoundError):
 __all__ = [
     # Named parameters, dict data and results
     "fit",
+    "predict",
     # Python interface with arrays
     "fit_nlme",
     "fit_mle",

@@ -197,7 +197,61 @@ def fit(
         },
         "error": {"model": options.get("error_model", "constant"), "parameters": stats.errorparam},
         "stats": dict(vars(stats)),
+        # What predict() needs; not part of the documented result.
+        "_spec": {
+            "model": model, "data": data, "names": names, "codes": codes, "covariates": covariates,
+            "predictors": list(predictors), "group_predictors": list(group_predictors), "group": group,
+        },
     }
+
+
+def predict(result: dict, data=None, level: int = 1) -> np.ndarray:
+    """Predictions of a ``fit`` result.
+
+    Parameters
+    ----------
+    result : dict
+        The output of ``fit``.
+    data : dict of arrays or dataframe, optional
+        Rows to predict, with the predictor, group-predictor and covariate
+        columns (and the group column for ``level=1``). Default: the fitted data.
+    level : int
+        0: population predictions (random effects 0). 1: individual
+        predictions with each group's estimated random effects; NaN for groups
+        that were not in the fit.
+    """
+    spec = result["_spec"]
+    data = spec["data"] if data is None else data
+    if level not in (0, 1):
+        raise ValueError("level must be 0 or 1")
+    n = len(_column(data, spec["predictors"][0] if spec["predictors"] else spec["group"]))
+    b = None
+    if level == 1:
+        groups = [_label(g) for g in _column(data, spec["group"])]
+        re = result["random_effects"]
+        missing = dict.fromkeys(result["psi"]["names"], np.nan)
+        b = {n: np.array([re.get(g, missing)[n] for g in groups]) for n in result["psi"]["names"]}
+    return _evaluate(result, data, n, b)
+
+
+def _evaluate(result: dict, data, n: int, b: Mapping[str, np.ndarray] | None, fixed=None) -> np.ndarray:
+    """Model predictions for the rows of ``data`` with per-row random effects ``b``."""
+    spec = result["_spec"]
+    fixed = result["fixed"] if fixed is None else fixed
+    p = {}
+    for name, code in zip(spec["names"], spec["codes"], strict=True):
+        eta = np.full(n, fixed[name])
+        for cov in spec["covariates"].get(name, ()):
+            eta = eta + fixed[f"{name}.{cov}"] * _column(data, cov).astype(float)
+        if b is not None and name in b:
+            eta = eta + b[name]
+        p[name] = _INVERSE[code](eta)
+    x = {c: _column(data, c).astype(float) for c in spec["predictors"]}
+    if spec["group_predictors"]:
+        out = spec["model"](p, x, {c: _column(data, c).astype(float) for c in spec["group_predictors"]})
+    else:
+        out = spec["model"](p, x)
+    return np.broadcast_to(np.asarray(out, dtype=float), (n,)).copy()
 
 
 def _per_group(data, groups: np.ndarray, column: str) -> np.ndarray:

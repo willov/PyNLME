@@ -12,8 +12,11 @@ R nlme-style interface: formulas as strings, R's names and printouts.
 
 Runs on ``pynlme.fit`` with ``compat="r"`` (R's standard errors and BIC). The
 result is a dict; the functions ``fixef``, ``ranef``, ``VarCorr``, ``vcov``,
-``logLik``, ``AIC``, ``BIC``, ``fitted``, ``resid`` and ``summary`` read it as
-their R namesakes do.
+``logLik``, ``AIC``, ``BIC``, ``fitted``, ``resid``, ``predict`` and ``summary``
+read it as their R namesakes do.
+
+saemix: ``saemixData``, ``saemixModel``, ``saemix`` and ``coef``, ``psi``,
+``phi``, ``eta``, ``predict``, ``summary`` (see ``pynlme.r_saemix``).
 """
 
 import ast
@@ -25,10 +28,23 @@ import numpy as np
 from scipy import stats as sps
 
 from .api import _column, fit
+from .api import predict as _predict
+from .r_saemix import (
+    coef,
+    eta,
+    phi,
+    predict_saemix,
+    psi,
+    saemix,
+    saemixData,
+    saemixModel,
+    summary_saemix,
+)
 
 __all__ = [
-    "AIC", "BIC", "SSasymp", "SSbiexp", "SSfol", "SSlogis", "SSmicmen", "VarCorr", "fitted",
-    "fixef", "logLik", "nlme", "pdDiag", "pdSymm", "ranef", "resid", "residuals", "summary", "vcov",
+    "AIC", "BIC", "SSasymp", "SSbiexp", "SSfol", "SSlogis", "SSmicmen", "VarCorr", "coef", "eta",
+    "fitted", "fixef", "logLik", "nlme", "pdDiag", "pdSymm", "phi", "predict", "psi", "ranef", "resid",
+    "residuals", "saemix", "saemixData", "saemixModel", "summary", "vcov",
 ]
 
 _METHODS = {"ML": "LME", "REML": "RELME"}
@@ -301,7 +317,7 @@ def nlme(
         fitted=y - st["ires"],
         residuals=st["ires"],
         call={
-            "model": model, "data": data_name, "fixed": fixed, "random": random, "groups": group,
+            "engine": "nlme", "model": model, "data": data_name, "fixed": fixed, "random": random, "groups": group,
             "method": method, "structure": structure, "re_names": [rename[n] for n in re_names],
             "n_obs": n_obs, "n_groups": n_groups,
         },
@@ -389,8 +405,22 @@ def _g(v: float, digits: int = 7) -> str:
     return f"{v:.{digits}g}"
 
 
+def predict(fit: dict, newdata=None, level: int = 1, type: str = "ipred") -> np.ndarray:  # noqa: A002
+    """Predictions, as R's ``predict``.
+
+    nlme fits: ``level=1`` individual (NaN for groups not in the fit, as R's
+    NA), ``level=0`` population. saemix fits: ``type`` "ipred", "icpred",
+    "ppred" or "ypred", as saemix's predict.
+    """
+    if fit["call"]["engine"] == "saemix":
+        return predict_saemix(fit, newdata, type)
+    return _predict(fit, newdata, level)
+
+
 def summary(fit: dict) -> str:
-    """R's ``summary(nlme_fit)`` printout."""
+    """R's ``summary()`` printout of an nlme or saemix fit."""
+    if fit["call"]["engine"] == "saemix":
+        return summary_saemix(fit)
     call = fit["call"]
     lines = [
         "Nonlinear mixed-effects model fit by "
