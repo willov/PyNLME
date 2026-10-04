@@ -82,6 +82,10 @@ class NLMEOptions:
     verbose: int = 0
     random_state: int | None = None
 
+    # Input layout: "stacked" (y a vector, group per observation) or
+    # "grouped" (y one row per group). None: inferred from the shape of y.
+    data_format: str | None = None
+
     # Conventions and defaults: "matlab" (MATLAB nlmefit/nlmefitsa) or "r"
     # (R nlme for nlmefit, saemix for nlmefitsa). Explicit options override.
     compat: str = "matlab"

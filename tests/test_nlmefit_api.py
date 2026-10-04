@@ -152,3 +152,46 @@ def test_bad_compat_raises():
     c = orange()
     with pytest.raises(ValueError):
         nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, compat="python")
+
+
+class TestDataFormat:
+    """Stacked vs grouped input: from DataFormat, or from the shape of y only."""
+
+    @staticmethod
+    def model(phi, x):
+        return phi[0] * np.exp(-phi[1] * x[:, 0])
+
+    def data(self):
+        rng = np.random.default_rng(0)
+        t = np.array([0.5, 1.0, 2.0, 4.0])
+        y = np.array([(10 + i) * np.exp(-(0.5 + 0.05 * i) * t) for i in range(4)]) + rng.normal(0, 0.1, (4, 4))
+        return np.tile(t, (4, 1)), y
+
+    def test_small_stacked_data_without_group_is_an_error(self):
+        # Previously guessed to be grouped data because it had <= 10 rows.
+        X, y = self.data()
+        with pytest.raises(ValueError, match="group is required"):
+            nlmefit(X[:2].ravel(), y[:2].ravel(), None, None, self.model, [10.0, 0.5])
+
+    def test_column_vector_y_is_stacked(self):
+        X, y = self.data()
+        group = np.repeat(np.arange(4), 4)
+        a = nlmefit(X.ravel(), y.ravel(), group, None, self.model, [10.0, 0.5])
+        b = nlmefit(X.reshape(-1, 1), y.reshape(-1, 1), group, None, self.model, [10.0, 0.5])
+        np.testing.assert_allclose(b[0], a[0], rtol=1e-10)
+
+    def test_grouped_matrix_matches_stacked(self):
+        X, y = self.data()
+        group = np.repeat(np.arange(4), 4)
+        stacked = nlmefit(X.ravel(), y.ravel(), group, None, self.model, [10.0, 0.5])
+        grouped = nlmefit(X, y, None, None, self.model, [10.0, 0.5])
+        labelled = nlmefit(X, y, ["a", "b", "c", "d"], None, self.model, [10.0, 0.5], DataFormat="grouped")
+        np.testing.assert_allclose(grouped[0], stacked[0], rtol=1e-10)
+        np.testing.assert_allclose(labelled[0], stacked[0], rtol=1e-10)
+
+    def test_data_format_overrides_shape(self):
+        X, y = self.data()
+        with pytest.raises(ValueError, match="group is required"):
+            nlmefit(X, y, None, None, self.model, [10.0, 0.5], DataFormat="stacked")
+        with pytest.raises(ValueError, match="DataFormat"):
+            nlmefit(X, y, None, None, self.model, [10.0, 0.5], DataFormat="wide")

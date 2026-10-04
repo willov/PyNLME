@@ -102,7 +102,11 @@ def detect_data_format(
     group: np.ndarray | list | None = None,
 ) -> str:
     """
-    Detect whether data is in stacked or grouped format.
+    Guess whether data is in stacked or grouped format.
+
+    Not used by nlmefit/nlmefitsa, which decide from the shape of y only (see
+    resolve_data_format) or from the DataFormat option; this heuristic also
+    looks at X and can misclassify small datasets.
 
     Parameters
     ----------
@@ -153,12 +157,30 @@ def detect_data_format(
     return 'stacked'
 
 
+def resolve_data_format(y, data_format: str | None = None) -> str:
+    """'stacked' or 'grouped', from an explicit setting or from the shape of y.
+
+    Without a setting, y with a singleton dimension (a vector, including a
+    MATLAB-style column or row vector) is stacked, and a matrix with more than
+    one row and column is grouped (one row per group). No other shape
+    heuristics are used.
+    """
+    if data_format is not None:
+        data_format = str(data_format).lower()
+        if data_format not in ("stacked", "grouped"):
+            raise ValueError(f"DataFormat must be 'stacked' or 'grouped', not '{data_format}'")
+        return data_format
+    y = np.asarray(y)
+    return "grouped" if y.ndim == 2 and min(y.shape) > 1 else "stacked"
+
+
 def validate_inputs(
     X: np.ndarray,
     y: np.ndarray,
     group: np.ndarray | list | None,
     V: np.ndarray | None,
     beta0: np.ndarray,
+    data_format: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
     """
     Validate and standardize inputs for NLME fitting.
@@ -174,14 +196,17 @@ def validate_inputs(
         - Grouped: shape (n_groups, n_obs_per_group, n_features) or (n_groups, n_obs_per_group)
     y : array_like
         Response variable. Can be:
-        - Stacked: shape (n_obs,)
+        - Stacked: shape (n_obs,), (n_obs, 1) or (1, n_obs)
         - Grouped: shape (n_groups, n_obs_per_group)
     group : array_like or None
-        Grouping variable. Required for stacked format, ignored for grouped format.
+        Grouping variable. Required for stacked data; for grouped data,
+        optional labels for the rows of y.
     V : array_like or None
         Group-level predictors
     beta0 : array_like
         Initial parameter values
+    data_format : {'stacked', 'grouped'} or None
+        Overrides the format inferred from y (see resolve_data_format).
 
     Returns
     -------
@@ -196,8 +221,7 @@ def validate_inputs(
     if V is not None:
         V = np.asarray(V, dtype=float)
 
-    # Detect data format and convert if necessary
-    data_format = detect_data_format(X, y, group)
+    data_format = resolve_data_format(y, data_format)
 
     if data_format == 'grouped':
         # Convert grouped data to stacked format
@@ -212,7 +236,10 @@ def validate_inputs(
     else:
         # Already in stacked format
         if group is None:
-            raise ValueError("group parameter is required for stacked data format")
+            raise ValueError(
+                "group is required for stacked data (y a vector). For grouped data, pass y "
+                "with one row per group, or set DataFormat='grouped'."
+            )
         group = np.asarray(group)
         y = y.ravel()
 

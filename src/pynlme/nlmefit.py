@@ -33,6 +33,7 @@ _MATLAB_NAMES = {
     "REParamsSelect": "re_params_select",
     "RefineBeta0": "refine_beta0",
     "Vectorization": "vectorization",
+    "DataFormat": "data_format",
     "NIterations": "n_iterations",
     "NMCMCIterations": "n_mcmc_iterations",
     "NBurnIn": "n_burn_in",
@@ -236,7 +237,7 @@ def nlmefit(
     if compat == "r":
         parsed.setdefault("refine_beta0", False)  # nlme has no pre-fit
     options = NLMEOptions(**parsed)
-    X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0)
+    X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
 
     approx = options.approximation_type.upper()
     error_model = options.error_model.lower()
@@ -402,7 +403,7 @@ def nlmefitsa(
     _require(options.vectorization.lower() in _VECTORIZATIONS, f"Unknown Vectorization '{options.vectorization}'")
     _require(options.fe_obs_design is None and options.re_obs_design is None, "FEObsDesign/REObsDesign are not implemented yet")
 
-    X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0)
+    X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
     y, modelfun, logl_offset = _apply_error_transform(error_model, y, modelfun, V)
     model = _build_model(X, y, group, V, modelfun, beta0, options, matlab_style)
     full_cov = _full_covariance(options.cov_pattern, model.n_random)

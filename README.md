@@ -64,7 +64,7 @@ beta, psi, stats, b = nlmefit(time, concentration, subject, None, model,
                               [1, 1, 1, 1], ParamTransform=[0, 1, 0, 1])
 ```
 
-Name-value arguments use MATLAB's names (`ParamTransform=...`, `REParamsSelect=[2, 3]`), and parameter indices given under MATLAB names are 1-based, as in MATLAB. The equivalent snake_case names (`param_transform`, `re_params_select`) use 0-based indices. As in MATLAB, `modelfun` is called as `modelfun(phi, x)` when `V` is empty and `modelfun(phi, x, v)` otherwise, `psi` is r-by-r and `b` is r-by-m.
+Name-value arguments use MATLAB's names (`ParamTransform=...`, `REParamsSelect=[2, 3]`), and parameter indices given under MATLAB names are 1-based, as in MATLAB. The equivalent snake_case names (`param_transform`, `re_params_select`) use 0-based indices. Data can be stacked (MATLAB's layout: `y` a vector and `group` per observation) or grouped (`y` with one row per group, `group` optional); the layout follows from the shape of `y` or is set with `DataFormat="stacked"`/`"grouped"`. As in MATLAB, `modelfun` is called as `modelfun(phi, x)` when `V` is empty and `modelfun(phi, x, v)` otherwise, `psi` is r-by-r and `b` is r-by-m.
 
 ### 🎯 Multi-Dimensional Input Format (New!)
 
