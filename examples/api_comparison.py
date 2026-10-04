@@ -63,7 +63,7 @@ def main():
         X, y, group, None, exponential_model, beta0, method='SAEM'
     )
     print(f"  β = {beta1c}")
-    print(f"  Log-likelihood = {stats1c.logl:.3f}")
+    print("  (nlmefitsa does not report a log-likelihood yet)")
     print()
     
     # =========================================================================

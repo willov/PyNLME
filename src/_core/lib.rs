@@ -1,7 +1,7 @@
 //! PyNLME Core - Rust implementation of nonlinear mixed-effects models
 //!
-//! This module provides high-performance implementations of NLME algorithms
-//! including MLE and SAEM, with Python bindings via PyO3.
+//! Currently only the experimental SAEM fitter lives here; nlmefit is
+//! implemented in Python (src/pynlme/lindstrom_bates.py).
 
 #![allow(
     unused_imports,
@@ -14,13 +14,10 @@
 use pyo3::prelude::*;
 
 mod errors;
-mod mle;
-mod mle_batched;
 mod nlme;
 mod saem;
 mod utils;
 
-use mle::*;
 use nlme::*;
 use saem::*;
 
@@ -29,9 +26,7 @@ use saem::*;
 fn _core(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<NLMEResult>()?;
     m.add_class::<SAEMOptions>()?;
-    m.add_class::<MLEOptions>()?;
 
-    m.add_function(wrap_pyfunction!(fit_nlme_mle, m)?)?;
     m.add_function(wrap_pyfunction!(fit_nlme_saem, m)?)?;
 
     Ok(())

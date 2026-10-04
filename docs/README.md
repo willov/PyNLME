@@ -1,5 +1,7 @@
 # PyNLME - Nonlinear Mixed-Effects Models for Python
 
+> **Out of date.** This page describes the original prototype, whose fitting algorithms did not work. See the main [README](../README.md) status section and [validation/](../validation/README.md) for the current state.
+
 A high-performance Python implementation of nonlinear mixed-effects (NLME) models with a MATLAB-compatible API and Rust backend.
 
 ## 🧪 Status: **FUNCTIONAL - PROOF OF CONCEPT** ⚠️

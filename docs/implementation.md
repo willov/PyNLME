@@ -1,5 +1,7 @@
 # PyNLME Implementation Details
 
+> **Out of date.** This page describes the original prototype, whose fitting algorithms did not work. See the main [README](../README.md) status section and [validation/](../validation/README.md) for the current state.
+
 ## Architecture Overview
 
 PyNLME is built with a hybrid Python/Rust architecture for optimal performance and usability:

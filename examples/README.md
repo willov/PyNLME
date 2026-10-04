@@ -12,8 +12,6 @@ All examples require the basic PyNLME installation. Some examples have additiona
 
 **Optional Requirements for Enhanced Examples:**
 - `matplotlib` - For plotting and visualization (all examples)
-- `pandas` - For performance_benchmark.py data analysis
-- `psutil` - For memory usage monitoring in performance_benchmark.py
 
 Install optional dependencies:
 ```bash
@@ -168,7 +166,4 @@ In addition to the basic and advanced usage examples, this repository includes:
   - Covariate effects (age, weight, gender)
   - Comprehensive model diagnostics and validation
 
-- **[`performance_benchmark.py`](performance_benchmark.py)** - Performance comparison
-  - Rust vs Python backend benchmarking
-  - Scalability analysis across dataset sizes
-  - Memory usage profiling
+For timings against R nlme, see [`validation/benchmark.py`](../validation/benchmark.py).

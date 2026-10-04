@@ -3,6 +3,7 @@ Tests for parameter transformation functions in PyNLME.
 """
 
 import numpy as np
+from scipy.special import ndtr
 
 from pynlme.utils import transform_parameters
 
@@ -60,13 +61,13 @@ class TestTransformParameters:
         codes = np.array([2, 2, 2, 2, 2])
         result = transform_parameters(phi, codes)
 
-        # Expected: 0.5 * (1 + tanh(0.7978 * phi))
-        expected = 0.5 * (1 + np.tanh(0.7978 * phi))
+        # Expected: standard normal CDF (MATLAB's probit transform)
+        expected = ndtr(phi)
         np.testing.assert_array_almost_equal(result, expected)
 
     def test_probit_bounds(self):
         """Test that probit transformation stays within (0,1)."""
-        phi = np.array([-10.0, -5.0, 0.0, 5.0, 10.0])
+        phi = np.array([-8.0, -5.0, 0.0, 5.0, 8.0])
         codes = np.array([2, 2, 2, 2, 2])
         result = transform_parameters(phi, codes)
 
@@ -123,7 +124,7 @@ class TestTransformParameters:
             [
                 1.0,  # identity
                 np.exp(0.0),  # exp(0) = 1
-                0.5 * (1 + np.tanh(0.7978 * (-1.0))),  # probit
+                ndtr(-1.0),  # probit
                 1 / (1 + np.exp(-2.0)),  # logit
             ]
         )
@@ -218,7 +219,7 @@ class TestTransformParameters:
             elif code == 1:  # exponential
                 assert result[0] == np.exp(phi_val)
             elif code == 2:  # probit
-                expected = 0.5 * (1 + np.tanh(0.7978 * phi_val))
+                expected = ndtr(phi_val)
                 np.testing.assert_almost_equal(result[0], expected)
             elif code == 3:  # logit
                 expected = 1 / (1 + np.exp(-phi_val))

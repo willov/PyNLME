@@ -3,6 +3,7 @@ Utility functions for PyNLME package.
 """
 
 import numpy as np
+from scipy.special import ndtr
 
 
 def stack_grouped_data(
@@ -242,7 +243,9 @@ def validate_inputs(
     # Validate V if provided
     if V is not None:
         if V.ndim == 1:
-            V = V.reshape(1, -1)
+            # A vector is one value per group (MATLAB column vector), unless
+            # there is a single group, in which case it is that group's row.
+            V = V.reshape(-1, 1) if V.shape[0] == n_groups else V.reshape(1, -1)
         if V.shape[0] != n_groups:
             raise ValueError(f"V must have {n_groups} rows (one per group)")
 
@@ -299,7 +302,6 @@ def transform_parameters(
 
     Notes
     -----
-    This function is currently a placeholder for future implementation.
     Parameter transformations are useful for:
     - Ensuring positive parameters (e.g., clearance, volume)
     - Constraining parameters to intervals (e.g., bioavailability 0-1)
@@ -324,13 +326,10 @@ def transform_parameters(
     if np.any(exp_mask):
         phi_transformed[..., exp_mask] = np.exp(phi[..., exp_mask])
 
-    # Probit transformation (normal CDF approximation)
+    # Probit transformation (normal CDF), as MATLAB's ParamTransform code 2
     probit_mask = transform_codes == 2
     if np.any(probit_mask):
-        # Use tanh approximation to normal CDF: Φ(x) ≈ 0.5(1 + tanh(0.7978x))
-        phi_transformed[..., probit_mask] = 0.5 * (
-            1 + np.tanh(phi[..., probit_mask] * 0.7978)
-        )
+        phi_transformed[..., probit_mask] = ndtr(phi[..., probit_mask])
 
     # Logit transformation (inverse logit)
     logit_mask = transform_codes == 3

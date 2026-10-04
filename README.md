@@ -1,48 +1,52 @@
 # PyNLME - Nonlinear Mixed-Effects Models for Python
 
-[![Tests](https://img.shields.io/badge/tests-48%2F48%20passing-brightgr## 🎯 Features
-
-- **🚀 Multi-Dimensional Input**: Supports both stacked and grouped data formats
-- **🐍 Pythonic API**: Modern `fit_nlme()` interface with method parameter
-- **🔄 MATLAB Compatible**: Drop-in replacement for `nlmefit`/`nlmefitsa`
-- **🔥 Fast**: Rust backend with automatic fallback to Python
-- **🧪 Robust**: 48/48 tests passing, comprehensive error handling
-- **📊 Complete**: Full diagnostics, residuals, and model statistics
-[![Rust Backend](https://img.shields.io/badge/rust%20backend-enabled-orange)]()
-[![MATLAB Compatible](https://img.shields.io/badge/MATLAB-compatible-blue)]()
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
-
-A high-performance Python implementation of nonlinear mixed-effects (NLME) models with MATLAB-compatible API and Rust backend for optimization.
+A Python implementation of MATLAB's `nlmefit` and `nlmefitsa`, with the same call syntax, so that MATLAB users can move their nonlinear mixed-effects models to Python.
 
 ## AI Disclaimer
 
 I (willov) asked Claude Sonnet 4 in GitHub Copilot agent mode to "create a Python NLME implementation with a rust backend with a similar call syntax to MATLAB's nlmefitsa". Please use the package with caution, it is very likely that the AI have hallucinated quirks not tested. If you find it useful, please assist in creating tests to test the reliability of the package.
 
-At the current state, this should be seen as a proof-of-concept rather than production ready.
-
 ## ⚠️ Current Status
 
-**Proof of Concept**: The package is functional with 48/48 tests passing, but requires thorough validation before production use. Both Rust and Python backends work, with automatic fallback capabilities. All core algorithms (MLE and SAEM) are implemented and appear to work correctly in test scenarios.
+Everything below is checked by the tests in [tests/validation/](tests/validation/); see [validation/](validation/README.md) for details and findings.
+
+- **`nlmefit`** matches MATLAB R2023b `nlmefit` to about 1e-6 on every output (estimates, covariance, log-likelihood, AIC/BIC, standard errors, `rmse`, `errorparam`, all five residual types, random effects) for `"LME"` and `"RELME"`, with constant, proportional, combined and exponential error models. `"FOCE"` reaches MATLAB's optimum or a better one; `"FO"` reaches far better optima than MATLAB's, whose FO collapses all variances to zero on these datasets. On 640 randomly simulated datasets `nlmefit` reaches R `nlme`'s solution or a better one in all but one case, and it returns estimates where R fails to converge.
+- **`nlmefitsa`** (SAEM) agrees with MATLAB `nlmefitsa` and R `saemix` within Monte Carlo error, for all four error models, reaches the exact maximum-likelihood estimates on a linear model, and removes the linearisation bias of `nlmefit` in simulation studies (log absorption rate: +1% vs -15%).
+- **MATLAB or R conventions**: `compat="matlab"` (default) or `compat="r"` selects defaults and reporting conventions (standard-error scaling, BIC, REML variance, `RefineBeta0`, SAEM chains). Estimates are the same either way; explicit options override.
+- **Implemented options**: `ApproximationType` (`LME`, `RELME`, `FO`, `FOCE`), `ErrorModel`, `ErrorParameters`, `ParamTransform`, `CovPattern` (diagonal or full), `FEParamsSelect`/`FEConstDesign`/`FEGroupDesign` (and `RE*` equivalents for `nlmefit`; `REParamsSelect` for `nlmefitsa`), `RefineBeta0`, `Vectorization` (`SinglePhi`, `SingleGroup`, `Full`), `Options` (`MaxIter`, `TolFun`, `TolX`, `Display`), and for `nlmefitsa` `NIterations`, `NMCMCIterations`, `NBurnIn`, `NChains`, `LogLikMethod` (`is`, `lin`), `ComputeStdErrors`. Anything else raises `NotImplementedError` rather than being ignored.
+- **Not implemented yet**: non-constant error models with `FO`/`FOCE`, `LogLikMethod="gq"`, `Replicates`, `FEObsDesign`/`REObsDesign`, `OutputFcn`.
+
+### Speed
+
+Pure Python/NumPy so far (the Rust extension is not used). With `Vectorization="Full"` (the model function accepts one parameter row per observation, as in MATLAB), from `uv run python validation/benchmark.py`:
+
+| | pynlme | R | MATLAB R2023b |
+|---|---|---|---|
+| `nlmefit` LME (4 datasets) | 0.006-0.056 s | `nlme` 0.007-0.044 s | 0.02-0.23 s |
+| `nlmefit` FOCE | 0.4-3.7 s | – | 14-49 s |
+| `nlmefitsa`, MATLAB's default chains | 0.23-0.57 s | – | 1.3-3.7 s |
+| `nlmefitsa`, 1 chain | 0.15-0.34 s | `saemix` 0.45-1.32 s | – |
+
+SAEM is faster than both R and MATLAB on identical problems; LME is at parity with R `nlme` (slightly slower on one dataset). With the default `Vectorization="SinglePhi"` everything is correct but slower, because the model is called once per group.
 
 ## 🚀 Quick Start
 
+The MATLAB documentation example, in pynlme:
+
 ```python
 import numpy as np
-from pynlme import fit_nlme
+from pynlme import nlmefit
 
-# Define your model
-def exponential_decay(phi, t, v=None):
-    return phi[0] * np.exp(-phi[1] * t.ravel())
+# MATLAB: model = @(phi,t)(phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t));
+def model(phi, t):
+    return phi[0] * np.exp(-phi[1] * t) + phi[2] * np.exp(-phi[3] * t)
 
-# Fit the model (uses optimized Rust backend with Python fallback)
-beta, psi, stats, b = fit_nlme(t, y, group, None, exponential_decay, [10.0, 0.5])
-print(f"Fixed effects: {beta}, Log-likelihood: {stats.logl}")
-
-# Alternative: specify algorithm explicitly
-beta, psi, stats, b = fit_nlme(
-    t, y, group, None, exponential_decay, [10.0, 0.5], method='SAEM'
-)
+# time, concentration, subject: the indomethacin data (validation/datasets/indometh.csv)
+beta, psi, stats, b = nlmefit(time, concentration, subject, None, model,
+                              [1, 1, 1, 1], ParamTransform=[0, 1, 0, 1])
 ```
+
+Name-value arguments use MATLAB's names (`ParamTransform=...`, `REParamsSelect=[2, 3]`), and parameter indices given under MATLAB names are 1-based, as in MATLAB. The equivalent snake_case names (`param_transform`, `re_params_select`) use 0-based indices. As in MATLAB, `modelfun` is called as `modelfun(phi, x)` when `V` is empty and `modelfun(phi, x, v)` otherwise, `psi` is r-by-r and `b` is r-by-m.
 
 ### 🎯 Multi-Dimensional Input Format (New!)
 
@@ -130,14 +134,6 @@ uv run maturin develop  # Build Rust extension
 
 > **Note**: The `cp311-abi3` wheels use Python's stable ABI and work with Python 3.11+ including future versions. You don't need separate wheels for each Python version. Option 2 is for developers who want to build from source or contribute to the project.
 
-## 🎯 Features
-
-- **� Pythonic API**: Modern `fit_nlme()` interface with method parameter
-- **🔄 MATLAB Compatible**: Drop-in replacement for `nlmefit`/`nlmefitsa`
-- **🔥 Fast**: Rust backend with automatic fallback to Python
-- **🧪 Robust**: 48/48 tests passing, comprehensive error handling
-- **📊 Complete**: Full diagnostics, residuals, and model statistics
-
 ## 📚 Documentation
 
 - **[Complete Documentation](docs/README.md)** - Full feature overview and examples
@@ -150,7 +146,7 @@ uv run maturin develop  # Build Rust extension
 
 ```bash
 # Run the full test suite (for developers)
-uv run pytest tests/ -v  # All 48 tests should pass
+uv run pytest tests/ -v
 
 # Verify installation works (for end users)
 python -c "
@@ -169,24 +165,6 @@ When using UV for package management, run Python scripts with `uv run python scr
 ## 📄 License
 
 MIT License - see LICENSE file for details.
-
-## ✅ Current Features (Working)
-
-- **Multi-Dimensional Input Format**: Support for both traditional stacked format and intuitive grouped format where each row represents a subject
-- **Modern Python API**: `fit_nlme()`, `fit_mle()`, and `fit_saem()` functions with clean interfaces
-- **MATLAB-Compatible API**: Identical interface to MATLAB's `nlmefit` and `nlmefitsa`
-- **High-Performance Rust Backend**: Core algorithms implemented in Rust with automatic Python fallback
-- **Multiple Algorithms**: Both MLE and SAEM (Stochastic Approximation EM) algorithms with full Rust backend support  
-- **Robust Implementation**: Proper convergence checking and error handling
-- **Comprehensive Statistics**: AIC, BIC, log-likelihood, residuals, and more
-- **Type Safety**: Full type annotations and data validation
-- **Real-World Tested**: Validated with pharmacokinetic modeling scenarios
-
-## 🚧 In Development
-
-- **Advanced Error Models**: Proportional, combined, and exponential error models
-- **Parameter Transformations**: Log, probit, and logit transformations
-- **Enhanced Diagnostics**: Additional model validation tools
 
 ## 📖 References
 

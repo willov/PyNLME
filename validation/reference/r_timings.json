@@ -1,0 +1,14 @@
+{
+  "nlme": {
+    "indometh": 0.044,
+    "theoph": 0.039,
+    "orange": 0.007,
+    "linear": 0.007
+  },
+  "saemix": {
+    "theoph": 1.318,
+    "orange": 1.209,
+    "linear": 0.451
+  },
+  "r_version": "R version 4.6.1 (2026-06-24)"
+}

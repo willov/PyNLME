@@ -54,7 +54,7 @@ class TestNLMEOptions:
         """Test default option values."""
         options = NLMEOptions()
         assert options.approximation_type == "LME"
-        assert options.optim_fun == "lbfgs"
+        assert options.optim_fun == "fminsearch"
         assert options.error_model == "constant"
         assert options.cov_parametrization == "logm"
         assert options.max_iter == 200
@@ -95,9 +95,7 @@ class TestSAEMOptions:
         assert options.n_iterations == (150, 150, 100)
         assert options.n_mcmc_iterations == (2, 2, 2)
         assert options.n_burn_in == 5
-        assert options.step_size_sequence == "auto"
-        assert options.tol_ll == 1e-6
-        assert options.tol_sa == 1e-4
+        assert options.loglik_method == "none"
 
     def test_custom_saem_options(self):
         """Test creating SAEM options with custom values."""
@@ -105,12 +103,12 @@ class TestSAEMOptions:
             n_iterations=(100, 100, 50),
             n_mcmc_iterations=(3, 3, 3),
             n_burn_in=10,
-            tol_sa=1e-5,
+            loglik_method="is",
         )
         assert options.n_iterations == (100, 100, 50)
         assert options.n_mcmc_iterations == (3, 3, 3)
         assert options.n_burn_in == 10
-        assert options.tol_sa == 1e-5
+        assert options.loglik_method == "is"
 
 
 class TestErrorModel:

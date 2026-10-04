@@ -1,0 +1,41 @@
+{
+  "source": "MATLAB documentation pages for nlmefit and nlmefitsa (https://www.mathworks.com/help/stats/nlmefit.html, https://www.mathworks.com/help/stats/nlmefitsa.html), retrieved 2026-10-04",
+  "note": "Values are as printed in the documentation (4 decimals). indometh_lme agrees with R nlme (pnlsTol = 1e-6) to all printed decimals. The other entries have not been checked against a MATLAB run yet.",
+  "cases": {
+    "indometh_lme": {
+      "function": "nlmefit",
+      "call": "nlmefit(time, concentration, subject, [], @(phi,t) phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t), [1 1 1 1], ParamTransform=[0 1 0 1])",
+      "dataset": "indometh.csv",
+      "decimals": 4,
+      "beta": [0.4606, -1.3459, 2.8277, 0.7729],
+      "psi_diag": [0.0124, 0.0000, 0.3264, 0.0250]
+    },
+    "indometh_saem": {
+      "function": "nlmefitsa",
+      "call": "nlmefitsa(time, concentration, subject, [], @(phi,t) phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t), [1 1 1 1], ParamTransform=[0 1 0 1])",
+      "dataset": "indometh.csv",
+      "decimals": 4,
+      "stochastic": true,
+      "beta": [0.8630, -0.7897, 2.7762, 1.0785],
+      "psi_diag": [0.0585, 0.0248, 0.5068, 0.0139],
+      "rmse": 0.0772,
+      "errorparam": 0.0811,
+      "dfe": 57
+    },
+    "orange_group_predictor": {
+      "function": "nlmefit",
+      "call": "nlmefit(t, c, id, k, @(phi,xfun,vfun) phi(:,1)./(1+exp(-vfun(:).*(xfun-phi(:,2)))), [100 100])",
+      "dataset": "orangetreedata.mat (ships with MATLAB; export with validation/matlab/run_references.m)",
+      "decimals": 4,
+      "beta": [129.6589, 121.4555]
+    },
+    "nonlinear_group_predictor": {
+      "function": "nlmefitsa",
+      "call": "nlmefitsa(X, y, group, V, @(phi,xfun,vfun) phi(1).*xfun(:,1).*exp(phi(2).*xfun(:,2)./vfun)+phi(3).*xfun(:,3), [1 1 1])",
+      "dataset": "nonlineardata.mat (ships with MATLAB; export with validation/matlab/run_references.m)",
+      "decimals": 4,
+      "stochastic": true,
+      "beta": [1.0008, 4.9980, 6.9999]
+    }
+  }
+}

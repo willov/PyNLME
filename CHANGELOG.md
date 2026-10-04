@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **nlmefit rewritten** as a Lindstrom-Bates implementation (LME step via QR decompositions with a log-Cholesky covariance parameterisation and an analytic gradient; restarts for collapsed variance components; damping for cycling iterations) for `ApproximationType` "LME" and "RELME", the algorithm used by MATLAB nlmefit and R nlme. The previous Rust and Python MLE code did not estimate random effects (psi was fixed at 0.1*I and b at zero) and has been removed.
+- MATLAB name-value arguments are accepted directly (`ParamTransform=...`, `REParamsSelect=[2, 3]`, `FEGroupDesign=...`, `CovPattern=...`, `Options={...}`), with MATLAB's 1-based indices. `modelfun` is called with two arguments when `V` is empty, as in MATLAB. `b` is returned r-by-m.
+- Options that are not implemented raise `NotImplementedError` instead of being silently ignored. Failed fits raise instead of returning `beta0`, and there is no silent switch between backends.
+- Probit `ParamTransform` uses the exact normal CDF instead of a tanh approximation.
+- **nlmefitsa rewritten** as a SAEM implementation in Python (three Metropolis-Hastings kernels with adaptive scales, simulated annealing, closed-form M-step, saemix-style updates for parameters without random effects, multiple chains, importance-sampling and linearisation log-likelihoods, linearisation standard errors). It replaces the previous Rust and Python SAEM code, which is no longer used.
+- `stats.rmse` follows MATLAB: sqrt(sum(ires^2)/dfe). The error standard deviation is in `stats.errorparam`. For RELME, psi, the error variance and covb are reported as MATLAB does (RSS/N scaling) and BIC uses log(m - f).
+
+### Added
+- `nlmefit` ApproximationType "FO" and "FOCE" (direct maximisation of the linearised marginal likelihood; FOCE with conditional modes).
+- Error models "proportional", "combined" and "exponential" for `nlmefit` (LME/RELME) and `nlmefitsa`, and `ErrorParameters`, following MATLAB's implementation.
+- `stats.pwres` and `stats.cwres`, and MATLAB's definitions for all weighted residuals.
+- `Vectorization="Full"`: the model is called once for many groups (one parameter row per observation). SAEM and LME internals work on flat/padded arrays.
+- `compat="matlab"|"r"`: MATLAB (default) or R (nlme/saemix) defaults and reporting conventions.
+- `NChains` for `nlmefitsa`, defaulting to MATLAB's max(1, round(100/m)).
+- R timing benchmark (`validation/r/benchmark.R`) and MATLAB error-model, FO and FOCE references.
+- Randomized comparison against R nlme on freshly simulated datasets each run (`tests/validation/test_random_vs_r.py`) and simulation studies of bias and coverage (`tests/validation/test_simulation_recovery.py`, `--runslow`); a CI job runs both with R installed.
+- MATLAB R2023b reference fits for nlmefit (LME, RELME, FO, FOCE) and nlmefitsa, and R saemix references; tests compare against both.
+- `validation/`: reference datasets, R nlme reference fits, MATLAB documentation values, a MATLAB script to generate MATLAB references, and a benchmark against R timings.
+- `tests/validation/`: nlmefit compared against R nlme on six cases and against the MATLAB documentation indomethacin example.
+
+### Removed
+- Tests of the removed MLE backends (`test_backend_comparison`, `test_batched_ffi_optimization`, `test_performance_optimization`) and `test_matlab_baseline` (its group-predictor data was incomplete); `examples/performance_benchmark.py`.
+
 ### Fixed
 - **Test Suite**: Fixed backend consistency test to properly compare Rust vs Python backends
   - Corrected pharmacokinetic model function signature to be static method
