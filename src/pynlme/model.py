@@ -258,6 +258,31 @@ class GroupedModel:
         J = (f_up - f_down).reshape(m, p, self.n_max) / (2 * h[:, :, None])
         return np.swapaxes(J, 1, 2)
 
+    def jacobian_padded_matlab(self, etas, f0=None) -> np.ndarray:
+        """d f / d eta as MATLAB's statjacobian, shape (m, n_max, p).
+
+        Forward differences with step DerivStep * eta (relative and signed);
+        for a zero entry DerivStep * ||eta row|| (DerivStep if the row is
+        zero). Analytic derivatives are used if the model has them.
+        """
+        m, p = etas.shape
+        if self.has_jacobian:
+            return self.jacobian_padded(etas)
+        if f0 is None:
+            f0 = self.predict_padded(etas)
+        h = _DERIV_STEP * etas
+        norm = np.linalg.norm(etas, axis=1, keepdims=True)
+        h = np.where(h == 0, _DERIV_STEP * np.where(norm == 0, 1.0, norm), h)
+        up = (etas[:, None, :] + h[:, :, None] * np.eye(p)[None]).reshape(-1, p)
+        values, valid = self.predict_flat(np.repeat(np.arange(m), p), up)
+        if not valid.all():
+            raise FloatingPointError("modelfun returned non-finite values")
+        seg_mask = np.repeat(self.mask, p, axis=0)
+        f_up = np.zeros(seg_mask.shape)
+        f_up[seg_mask] = values
+        J = (f_up.reshape(m, p, self.n_max) - f0[:, None, :]) / h[:, :, None]
+        return np.swapaxes(J, 1, 2) * self.mask[..., None]
+
     def jacobian_many(self, groups, etas) -> list[np.ndarray]:
         """Jacobians d f / d eta for several (group, eta) pairs."""
         groups = np.asarray(groups, dtype=int)

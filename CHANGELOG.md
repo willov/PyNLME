@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `compat="matlab"` (the default) with `"LME"`/`"RELME"` now follows MATLAB nlmefit's
+  iteration step by step (`matlab_lb.py`: LMfit pre-fit, Gauss-Newton PNLS, fminsearch
+  LME step on `logm`/`chol`, tolFac schedule, error-model weights, forward-difference
+  derivatives) with MATLAB's default options (`TolX = TolFun = 1e-4`, previously 1e-6).
+  Results agree with MATLAB R2023b's to ~1e-10 on most data, also at its default
+  options. `CovParameterization` (`"logm"`, `"chol"`) now takes effect; `OptimFun`
+  `"fminunc"` raises.
+- New warning when a random-effects variance collapses to zero during the iterations
+  (results there depend on rounding, in MATLAB too).
 - `compat="r"` with `"LME"`/`"RELME"` (constant or exponential error model) now follows
   R nlme's iteration step by step: PNLS with the covariance updated by EM and nlm
   (`optif9`) and at most `pnlsMaxIter` steps, and nlmeControl's defaults (`max_iter=50`,

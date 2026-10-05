@@ -21,6 +21,10 @@ from .validation.cases import (
 FACTORIES = {"indometh": indometh, "theoph": theoph, "orange": orange, "linear": linear_sim}
 
 
+
+# Converged tightly, so differences in the derivatives do not show.
+TIGHT = {"Options": {"TolX": 1e-8, "TolFun": 1e-8, "MaxIter": 1000}}
+
 def grouped_model(case):
     parsed, matlab_style = _parse_options(case.kwargs)
     options = NLMEOptions(**parsed)
@@ -46,17 +50,19 @@ def test_fits_agree_with_finite_difference_fits(approx, full):
     numeric = vectorized(theoph())
     analytic = with_derivatives(theoph(), full=full)
     a = nlmefit(numeric.X, numeric.y, numeric.group, numeric.V, numeric.modelfun, numeric.beta0,
-                **numeric.kwargs, ApproximationType=approx)
+                **numeric.kwargs, ApproximationType=approx, **TIGHT)
     b = nlmefit(analytic.X, analytic.y, analytic.group, analytic.V, analytic.modelfun, analytic.beta0,
-                **analytic.kwargs, ApproximationType=approx)
+                **analytic.kwargs, ApproximationType=approx, **TIGHT)
     np.testing.assert_allclose(b[0], a[0], rtol=1e-5)
     np.testing.assert_allclose(np.diag(b[1]), np.diag(a[1]), rtol=1e-4)
-    assert b[2].logl == pytest.approx(a[2].logl, abs=1e-4)
+    # compat="matlab" uses MATLAB's forward differences (step eps^(1/3)),
+    # which move the linearised likelihood by ~1e-4 against exact derivatives.
+    assert b[2].logl == pytest.approx(a[2].logl, abs=5e-4)
 
 
 def test_still_matches_matlab_with_analytic_derivatives():
     c = with_derivatives(theoph())
-    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs)
+    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, **TIGHT)
     ref = load_reference("matlab_theoph_lme_tight.json")
     np.testing.assert_allclose(beta, ref["beta"], rtol=1e-5)
     np.testing.assert_allclose(stats.sebeta, ref["stats"]["sebeta"], rtol=1e-4)

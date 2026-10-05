@@ -77,7 +77,7 @@ def test_default_relme_is_lmes_true_reml():
 
     c, ref = linear_sim(), load_reference("r_nlme_linear_relme.json")
     beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs,
-                                  ApproximationType="RELME")
+                                  ApproximationType="RELME", Options={"TolX": 1e-8, "TolFun": 1e-8})
     n, f = len(c.y), len(beta)
     np.testing.assert_allclose(beta, ref["beta"], rtol=RTOL)
     np.testing.assert_allclose(psi * n / (n - f), np.atleast_2d(ref["psi"]), rtol=RTOL)

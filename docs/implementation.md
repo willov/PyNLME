@@ -40,6 +40,19 @@ nlme), restarts for variance components collapsed to zero, damping when the iter
 cycles, the best state if it does not converge, and stopping when changes only jitter at
 the model's numerical noise level (ODE models).
 
+With `compat="matlab"` (the default), `"LME"`/`"RELME"` use `matlab_lb.py`, which
+follows MATLAB R2023b's nlmefit: `RefineBeta0` by its Levenberg-Marquardt `LMfit`,
+`Delta_0 = 0.375 sqrt(sum Z^2 / M)`, PNLS by Gauss-Newton with step halving for fixed
+`Delta` (random effects whose precision exceeds 1e8 times the smallest held fixed), the
+LME step by `fminsearch` (a reimplementation of MATLAB's Nelder-Mead) on `logm(Delta'Delta)`
+or `chol`, at a tolerance that stays at 100 x TolX/TolFun (nlmefit tightens a misnamed
+variable), the `tolFac` 2 -> 0 schedule for PNLS, error-model weights after each LME step,
+and forward-difference derivatives with step `eps^(1/3) * eta` (statjacobian). With
+MATLAB's default options its iterates agree with MATLAB's `OutputFcn` trace to ~1e-10.
+The previous engine (`fit_lindstrom_bates`: Levenberg-Marquardt PNLS run to convergence,
+L-BFGS-B LME step with analytic gradient, restarts of collapsed variances) is still used
+for `compat="r"` with proportional or combined error models.
+
 With `compat="r"` (constant or exponential error model) `fit_lindstrom_bates_nlme`
 follows nlme 3.1's iteration instead (`src/nlme.c`, `nlme_iterate`/`nlme_increment`):
 each PNLS iteration re-linearises, updates the relative covariance factor by 20 ML EM

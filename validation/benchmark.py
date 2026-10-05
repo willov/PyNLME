@@ -39,10 +39,14 @@ def best_of(n, fn) -> float:
     return min(times)
 
 
-def matlab_time(name: str, method: str) -> float:
+def matlab_time(name: str, method: str, options: str = "tight") -> float:
     if method == "saem":
         return float(np.mean([load_reference(f"matlab_{name}_saem_seed{s}.json")["elapsed_s"] for s in range(1, 6)]))
-    return load_reference(f"matlab_{name}_{method}_tight.json")["elapsed_s"]
+    return load_reference(f"matlab_{name}_{method}_{options}.json")["elapsed_s"]
+
+
+# nlmeControl of validation/r/benchmark.R
+R_CONTROL = {"compat": "r", "max_iter": 200, "pnls_tol": 1e-6, "tol_x": 1e-7}
 
 
 def main() -> None:
@@ -56,8 +60,11 @@ def main() -> None:
         def fit(case, f=nlmefit, **kw):
             return lambda: f(case.X, case.y, case.group, case.V, case.modelfun, case.beta0, **case.kwargs, **kw)
 
-        rows.append((name, "nlmefit LME", best_of(5, fit(c)), best_of(5, fit(cv)),
-                     f"R nlme {r['nlme'][name]:.3f}", f"MATLAB {matlab_time(name, 'lme'):.2f}"))
+        # Like for like: each mode follows its reference's iteration and options.
+        rows.append((name, "LME, compat matlab", best_of(5, fit(c)), best_of(5, fit(cv)),
+                     "", f"MATLAB {matlab_time(name, 'lme', 'default'):.2f}"))
+        rows.append((name, "LME, compat r", best_of(5, fit(c, **R_CONTROL)), best_of(5, fit(cv, **R_CONTROL)),
+                     f"R nlme {r['nlme'][name]:.3f}", ""))
         rows.append((name, "nlmefit FOCE", best_of(1, fit(c, ApproximationType="FOCE")),
                      best_of(1, fit(cv, ApproximationType="FOCE")), "", f"MATLAB {matlab_time(name, 'foce'):.2f}"))
         if name != "indometh":  # not a usable SAEM case (see README)

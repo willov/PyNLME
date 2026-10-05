@@ -219,8 +219,15 @@ class LinearizedLME:
         # zero rows do not change the QR factors.
         extra = max(f + 1 - J.shape[1], 0)
         pad = ((0, 0), (0, extra), (0, 0))
-        self.Z = np.pad(Z, pad)
-        self.Xw = np.pad(np.concatenate([X, w[:, :, None]], axis=2), pad)
+        ZXw = np.pad(np.concatenate([Z, X, w[:, :, None]], axis=2), pad)
+        # Every quantity below depends on [Z_i X_i w_i] only through inner
+        # products, which an orthogonal transformation keeps: replace each
+        # group's rows by its (r + f + 1)-square QR factor once, so that the
+        # many solves (optimizer, EM) work on small blocks.
+        if ZXw.shape[1] > ZXw.shape[2]:
+            ZXw = np.linalg.qr(ZXw, mode="r")
+        self.Z = ZXw[..., :r]
+        self.Xw = ZXw[..., r:]
         self.penalty = np.concatenate(
             [np.broadcast_to(np.eye(r), (m, r, r)), np.zeros((m, r, f + 1))], axis=2
         )
@@ -516,16 +523,42 @@ def fit_lindstrom_bates(
 # settings in nlme.
 
 
+def _inv_small(A: np.ndarray) -> np.ndarray:
+    """Inverse of (batched) 1x1 or 2x2 matrices in closed form (LAPACK's call
+    overhead dominates at this size); np.linalg.inv otherwise."""
+    r = A.shape[-1]
+    if r == 1:
+        return 1.0 / A
+    if r == 2:
+        a, b, c, d = A[..., 0, 0], A[..., 0, 1], A[..., 1, 0], A[..., 1, 1]
+        det = a * d - b * c
+        out = np.empty_like(A)
+        out[..., 0, 0], out[..., 0, 1], out[..., 1, 0], out[..., 1, 1] = d / det, -b / det, -c / det, a / det
+        return out
+    return np.linalg.inv(A)
+
+
 def _em_factor(lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20) -> np.ndarray:
-    """nlme's EM update of the relative factor (internal_EM, ML)."""
-    eye = np.eye(L.shape[0])
+    """nlme's EM update of the relative factor (internal_EM, ML).
+
+    Each iteration: with precision P = (L L')^-1 and M_i = Z_i'Z_i + P, the
+    BLUPs b_i, sigma^2 = penalised RSS / N and Var(b_i | y)/sigma^2 = M_i^-1
+    give Psi/sigma^2 = mean_i(M_i^-1 + b_i b_i' / sigma^2). Written with the
+    groups' cross-products (fixed during EM) for speed.
+    """
+    f = lme.f
+    ZZ = lme.ZtZ
+    ZXw = np.einsum("mnj,mnk->mjk", lme.Z, lme.Xw)
+    XX = np.einsum("mnj,mnk->jk", lme.Xw, lme.Xw)
+    m = ZZ.shape[0]
     for _ in range(n_iter):
-        _, _, sigma2, _, u = lme.solve(L)
-        R_zz = lme._last[4]
-        R_inv = np.linalg.solve(R_zz, np.broadcast_to(eye, R_zz.shape))
-        cond_cov = L @ (R_inv @ np.swapaxes(R_inv, 1, 2)) @ L.T  # Var(b_i | y) / sigma^2
-        b = u @ L.T
-        psi = np.mean(cond_cov + np.einsum("mi,mj->mij", b, b) / sigma2, axis=0)
+        M_inv = _inv_small(ZZ + _inv_small(L @ L.T))
+        T = M_inv @ ZXw  # (m, r, f + 1)
+        S = XX - np.einsum("mrj,mrk->jk", ZXw, T)
+        beta = np.linalg.solve(S[:f, :f], S[:f, f])
+        sigma2 = (S[f, f] - S[f, :f] @ beta) / lme.n
+        b = T[:, :, f] - T[:, :, :f] @ beta
+        psi = (M_inv.sum(axis=0) + b.T @ b / sigma2) / m
         L = np.linalg.cholesky(psi) if full else np.diag(np.sqrt(np.diag(psi)))
     return L
 

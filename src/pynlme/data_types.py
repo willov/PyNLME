@@ -43,7 +43,7 @@ class NLMEOptions:
 
     # Algorithm selection
     approximation_type: str = "LME"  # "LME", "RELME" ("FO", "FOCE" not yet)
-    optim_fun: str = "fminsearch"  # Accepted for compatibility; no effect
+    optim_fun: str = "fminsearch"  # LME step optimizer (compat="matlab"); only "fminsearch"
 
     # Parameter transformations
     param_transform: np.ndarray | None = None  # 0=identity, 1=log, 2=probit, 3=logit
@@ -54,7 +54,7 @@ class NLMEOptions:
 
     # Covariance structure
     cov_pattern: np.ndarray | None = None  # None/identity = diagonal, ones = full
-    cov_parametrization: str = "logm"  # Accepted for compatibility; no effect
+    cov_parametrization: str = "logm"  # "logm" or "chol" (compat="matlab" LME/RELME)
 
     # Design matrices
     fe_params_select: np.ndarray | None = None  # Fixed effects selection
@@ -71,7 +71,8 @@ class NLMEOptions:
     compute_std_errors: bool = True
     refine_beta0: bool = True
 
-    # Convergence (tighter than MATLAB's statset defaults of 1e-4)
+    # Convergence. LME/RELME use the reference's defaults instead (MATLAB's
+    # statset 1e-4 for compat="matlab", nlmeControl's for compat="r").
     max_iter: int = 200
     tol_fun: float = 1e-6
     tol_x: float = 1e-6

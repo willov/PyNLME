@@ -53,8 +53,9 @@ both.
 | `REParamsSelect`, `REConstDesign`, `REGroupDesign` | `re_params_select`, ... | all parameters | |
 | `RefineBeta0` | `refine_beta0` | `"on"` | Pooled fit of `beta0` first |
 | `Vectorization` | `vectorization` | `"SinglePhi"` | `"SinglePhi"`, `"SingleGroup"`, `"Full"` |
-| `Options` | | | dict with `MaxIter` (200), `TolFun` and `TolX` (1e-6; MATLAB's default is 1e-4), `Display` (`"off"`, `"final"`, `"iter"`) |
-| `CovParameterization`, `OptimFun` | | | Accepted for compatibility; no effect on the result |
+| `Options` | | | dict with `MaxIter` (200), `TolFun` and `TolX` (LME/RELME: 1e-4 as MATLAB; FO/FOCE: 1e-6), `Display` (`"off"`, `"final"`, `"iter"`) |
+| `CovParameterization` | | | `"logm"` (default) or `"chol"`, as MATLAB (LME/RELME) |
+| `OptimFun` | | | `"fminsearch"` (MATLAB's default); `"fminunc"` raises |
 | `DataFormat` | `data_format` | from `y` | `"stacked"` or `"grouped"` |
 | | `compat` | `"matlab"` | `"matlab"` or `"r"` reporting conventions (below) |
 
@@ -80,7 +81,10 @@ on that scale, as in MATLAB.
 
 ### `compat`: MATLAB or R conventions
 
-For `"LME"`/`"RELME"` with a constant or exponential error model, `compat="r"` also
+For `"LME"`/`"RELME"`, `compat="matlab"` follows MATLAB nlmefit's iteration step by step
+(all error models), so with the same options the result is MATLAB's own (to ~1e-10 on
+most data; see [Results differ from MATLAB](troubleshooting.md#results-differ-from-matlab)).
+With a constant or exponential error model, `compat="r"` likewise
 follows nlme's iteration step by step (its PNLS step updates the covariance by EM and
 stops after at most `pnlsMaxIter` steps), so the estimates are R's own, including where
 several fixed points exist and including nlme's REML (which, for nonlinear models, is
@@ -89,7 +93,7 @@ and reported statistics differ.
 
 | | `compat="matlab"` | `compat="r"` (nlme) |
 |---|---|---|
-| LME/RELME iteration | Lindstrom-Bates, PNLS to convergence | nlme's (`nlmeControl` defaults: `max_iter=50`, `tol_x=1e-5` as `tolerance`, `pnls_tol=1e-3`, `pnls_max_iter=7`, `min_scale=1e-3`) |
+| LME/RELME iteration | nlmefit's (fminsearch LME step, `TolX = TolFun = 1e-4`) | nlme's (`nlmeControl` defaults: `max_iter=50`, `tol_x=1e-5` as `tolerance`, `pnls_tol=1e-3`, `pnls_max_iter=7`, `min_scale=1e-3`) |
 | RELME | restricted likelihood (equals `lme` REML on linear models) | nlme's `method="REML"` |
 | `RefineBeta0` default | on | off |
 | ML standard errors | unadjusted | x sqrt(N / (N - f)) |

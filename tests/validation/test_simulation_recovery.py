@@ -42,7 +42,8 @@ def run_study(family: str, replicates: int, seed: int = 1):
     for _ in range(replicates):
         d = simulate(family, rng, m=N_GROUPS, truth=truth)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", RuntimeWarning)  # non-convergence fails
+            # Non-convergence fails; MATLAB's informational PNLS warnings do not.
+            warnings.filterwarnings("error", message="nlmefit did not converge", category=RuntimeWarning)
             b, p, stats, _ = nlmefit(*d.fit_args(), **d.kwargs)
         beta.append(b)
         psi.append(p)

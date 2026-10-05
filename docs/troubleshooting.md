@@ -29,9 +29,18 @@ NumPy broadcast against `phi[k]`).
 
 - **Parameter indices**: under MATLAB names (`REParamsSelect=[2, 3]`) they are 1-based,
   under Python names (`re_params_select=[1, 2]`) 0-based.
-- **Tolerances**: pynlme's defaults (`TolX = TolFun = 1e-6`) are tighter than MATLAB's
-  (1e-4), so MATLAB results run with default options can differ in the 4th digit. With
-  `Options=statset('TolX',1e-8,'TolFun',1e-8)` in MATLAB the two agree to ~1e-6.
+- **Same options, same result**: `nlmefit` (LME/RELME) follows MATLAB's iteration and
+  default options (`TolX = TolFun = 1e-4`), so results agree with MATLAB's to ~1e-10 on
+  most data. Pass the same `Options` as in MATLAB.
+- **Within MATLAB's tolerance**: MATLAB's LME step runs `fminsearch` to 1e-2, and where it
+  stops can flip with perturbations at the 1e-9 level (even MATLAB's own result moves if
+  its start is rounded). Such fits agree to about MATLAB's `TolX` (1e-4). Tighter
+  `TolX`/`TolFun` make both converge to the same optimum.
+- **Warning "A random-effects variance was estimated as zero during the iterations"**:
+  the likelihood is flat along that variance, and where the iteration stops there is
+  decided by rounding, in MATLAB too (its result changes with the number of BLAS
+  threads). pynlme's fit then has the same or a slightly different likelihood. Remove
+  the random effect (`REParamsSelect`) or check the fit with `nlmefitsa`.
 - **SAEM** is stochastic; compare several seeds, not single runs.
 - **FO**: MATLAB's FO often collapses all variances to zero; pynlme finds better optima.
 - **FO/FOCE standard errors**: MATLAB reuses those of its initial LME stage; pynlme

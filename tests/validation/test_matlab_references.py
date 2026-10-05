@@ -15,6 +15,9 @@ from pynlme import nlmefit
 
 from .cases import indometh, linear_sim, load_reference, orange, theoph, theoph_wt
 
+# statset('TolX', 1e-8, 'TolFun', 1e-8, 'MaxIter', 1000) of run_references.m
+TIGHT = {"Options": {"TolX": 1e-8, "TolFun": 1e-8, "MaxIter": 1000}}
+
 CASES = {
     # The MATLAB documentation start values for indomethacin.
     "indometh": lambda: indometh(beta0=(1, 1, 1, 1)),
@@ -33,7 +36,7 @@ def fit(request):
     case = CASES[name]()
     beta, psi, stats, b = nlmefit(
         case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
-        **case.kwargs, ApproximationType=approx.upper(),
+        **case.kwargs, ApproximationType=approx.upper(), **TIGHT,
     )
     if name == "indometh" and abs(beta[0] - ref["beta"][0]) > 0.5:
         # Symmetric start: the two exponential terms may be labelled the other way.
@@ -41,6 +44,26 @@ def fit(request):
         beta, psi, b = beta[order], psi[np.ix_(order, order)], b[order]
         stats.sebeta = stats.sebeta[order]
     return ref, beta, psi, stats, b
+
+
+@pytest.mark.parametrize("name, approx", PARAMS, ids=[f"{n}-{a}" for n, a in PARAMS])
+def test_identical_to_matlab_at_its_default_options(name, approx):
+    """compat="matlab" follows nlmefit's iteration step by step (matlab_lb.py),
+    so with MATLAB's default statset the result is MATLAB's own, not just the
+    same optimum: estimates agree to ~1e-10 where MATLAB stops at TolX = 1e-4."""
+    ref = load_reference(f"matlab_{name}_{approx}_default.json")
+    case = CASES[name]()
+    beta, psi, stats, b = nlmefit(case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
+                                  **case.kwargs, ApproximationType=approx.upper())
+    ref_beta, ref_psi = np.array(ref["beta"]), np.atleast_2d(ref["psi"])
+    if name == "indometh" and abs(beta[0] - ref_beta[0]) > 0.5:
+        # Symmetric start: rounding decides which exponential term comes first.
+        order = [2, 3, 0, 1]
+        beta, psi = beta[order], psi[np.ix_(order, order)]
+    tol = 1e-6 if name == "indometh" else 1e-8
+    np.testing.assert_allclose(beta, ref_beta, rtol=tol, atol=tol)
+    np.testing.assert_allclose(psi, ref_psi, rtol=tol, atol=tol * np.max(np.diag(ref_psi)))
+    assert stats.logl == pytest.approx(ref["stats"]["logl"], abs=1e-6)
 
 
 def test_estimates(fit):
@@ -161,7 +184,7 @@ def test_error_models(name, approx, error_model):
     case = _positive(CASES[name]())
     beta, psi, stats, b = nlmefit(
         case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
-        **case.kwargs, ApproximationType=approx.upper(), ErrorModel=error_model,
+        **case.kwargs, ApproximationType=approx.upper(), ErrorModel=error_model, **TIGHT,
     )
     s = ref["stats"]
     ref_psi = np.atleast_2d(ref["psi"])

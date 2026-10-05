@@ -27,7 +27,9 @@ beta, psi, stats, b = nlmefit(time, concentration, subject, [], model, [1, 1, 1,
 ```
 
 Indices in MATLAB-named options are 1-based (`REParamsSelect=[2, 3]`); `b` is r-by-m;
-`stats` has MATLAB's fields and definitions. Results match MATLAB R2023b to ~1e-6.
+`stats` has MATLAB's fields and definitions. `nlmefit` follows MATLAB's iteration step
+by step with MATLAB's default options, so on most data the result is MATLAB R2023b's own
+to ~1e-10 (checked on thousands of simulated datasets).
 Start with the [tutorial](docs/tutorial.md).
 
 ### Python users
@@ -140,17 +142,21 @@ yet: `FEObsDesign`/`REObsDesign`, block `CovPattern`, `LogLikMethod="gq"`,
 
 ## Speed
 
-Pure Python/NumPy. With `Vectorization="Full"` (`uv run python validation/benchmark.py`):
+Pure Python/NumPy. With `Vectorization="Full"`, each mode against the program it
+replicates, with the same options (`uv run python validation/benchmark.py`):
 
 | | pynlme | R | MATLAB R2023b |
 |---|---|---|---|
-| `nlmefit` LME | 0.006-0.056 s | `nlme` 0.007-0.044 s | 0.02-0.23 s |
-| `nlmefit` FOCE | 0.4-3.7 s | – | 14-49 s |
-| `nlmefitsa`, MATLAB's chains | 0.23-0.57 s | – | 1.3-3.7 s |
-| `nlmefitsa`, 1 chain | 0.15-0.34 s | `saemix` 0.45-1.32 s | – |
+| `nlmefit` LME, default (MATLAB's iteration and options) | 0.009-0.15 s | – | 0.04-0.35 s |
+| `nlmefit` LME, `compat="r"` (nlme's iteration) | 0.011-0.12 s | `nlme` 0.007-0.044 s | – |
+| `nlmefit` FOCE | 0.47-5.0 s | – | 14-49 s |
+| `nlmefitsa`, MATLAB's chains | 0.23-0.40 s | – | 1.3-3.7 s |
+| `nlmefitsa`, 1 chain | 0.16-0.25 s | `saemix` 0.45-1.32 s | – |
 
-With the default `Vectorization="SinglePhi"` the model is called once per subject:
-same results, several times slower.
+Replicating nlme's iteration (EM and nlm inside every PNLS step) costs more in Python
+than in R's C code: up to ~2.5x R's time on the larger cases, at parity on the smaller.
+With the default `Vectorization="SinglePhi"` the model is called once per subject: same
+results, several times slower.
 
 ## ODE models
 

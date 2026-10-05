@@ -9,6 +9,7 @@ import numpy as np
 from .data_types import ModelFunction, NLMEOptions, NLMEStats, SAEMOptions
 from .first_order import fit_first_order
 from .lindstrom_bates import fit_lindstrom_bates, fit_lindstrom_bates_nlme
+from .matlab_lb import fit_lindstrom_bates_matlab
 from .model import GroupedModel, build_design
 from .saem import fit_saem as _run_saem
 from .utils import validate_inputs
@@ -242,6 +243,14 @@ def nlmefit(
     # constant on the log scale).
     nlme_iteration = (compat == "r" and approx in ("LME", "RELME")
                       and str(parsed.get("error_model", "constant")).lower() in ("constant", "exponential"))
+    # MATLAB's nlmefit iteration (matlab_lb.fit_lindstrom_bates_matlab) and
+    # statset('nlmefit') defaults.
+    matlab_iteration = compat == "matlab" and approx in ("LME", "RELME")
+    if matlab_iteration:
+        parsed.setdefault("tol_x", 1e-4)
+        parsed.setdefault("tol_fun", 1e-4)
+        if str(parsed.get("optim_fun", "fminsearch")).lower() != "fminsearch":
+            raise NotImplementedError("OptimFun 'fminunc' is not implemented; nlmefit's default is 'fminsearch'")
     if compat == "r":
         parsed.setdefault("refine_beta0", False)  # nlme has no pre-fit
     if nlme_iteration:
@@ -276,6 +285,13 @@ def nlmefit(
         result = fit_first_order(
             model, beta0, conditional=approx == "FOCE", error_model=error_model,
             error_param0=options.error_parameters, **fit_args,
+        )
+    elif matlab_iteration:
+        result = fit_lindstrom_bates_matlab(
+            model, beta0, full_cov=full_cov, reml=approx == "RELME", refine=options.refine_beta0,
+            max_iter=options.max_iter, tol_x=options.tol_x, tol_fun=options.tol_fun, error_model=error_model,
+            error_param0=options.error_parameters, parametrization=str(options.cov_parametrization).lower(),
+            x_first=float(X.flat[0]) if X.size else 1.0, verbose=options.verbose,
         )
     elif nlme_iteration:
         result = fit_lindstrom_bates_nlme(

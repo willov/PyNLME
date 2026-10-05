@@ -26,3 +26,13 @@ def r_available() -> bool:
         'quit(status = !all(sapply(c("nlme", "jsonlite"), requireNamespace, quietly = TRUE)))'
     )
     return subprocess.run(["Rscript", "-e", check], capture_output=True).returncode == 0
+
+
+def matlab_command() -> list[str] | None:
+    """The MATLAB command from PYNLME_MATLAB (e.g. "/usr/local/MATLAB/R2023b/bin/matlab"),
+    split on whitespace; environment assignments such as LD_PRELOAD=... are allowed
+    in front. None if unset."""
+    import os
+
+    command = os.environ.get("PYNLME_MATLAB")
+    return command.split() if command else None

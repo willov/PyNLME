@@ -158,6 +158,22 @@ MATLAB scripts.
   it improves the likelihood): without it L-BFGS-B stalled at a zero variance on one
   linear dataset (seed 1502491072, 18.6 below `lme`), where nlminb does not. The default (MATLAB) mode keeps its own
   iteration and can still reach a different fixed point than R on such data.
+- **MATLAB's iteration replicated** (2026-10-05). `compat="matlab"` follows nlmefit's
+  alternating algorithm step by step (`matlab_lb.py`). On the reference cases it
+  reproduces MATLAB's results at MATLAB's default options to ~1e-10, and its iterates
+  agree with MATLAB's `OutputFcn` trace. The randomized comparison
+  (`test_random_vs_matlab.py`, needs `PYNLME_MATLAB`; seeds 1001-1020 and 2001-2020,
+  `PYNLME_RANDOM_N=10`, LME and RELME, 3200 fits): of the 2715 fits whose iteration never
+  had a variance at zero, 2699 agree with MATLAB to <1e-8 in the fixed effects, 13 to
+  1e-6 and 3 to MATLAB's TolX (1e-4). The latter are MATLAB's own sensitivity: its LME
+  step runs fminsearch to 1e-2, and where it stops can flip with 1e-9 perturbations
+  (rounding MATLAB's starting theta of seed 1007 `logistic_6` to 8 digits moves MATLAB's
+  own estimates by 2e-5, onto pynlme's). In the other ~480 fits a variance reached zero
+  (16% of simulated fits end there; pynlme warns, as the estimates are not well
+  determined). There the likelihood is flat and rounding decides whether either program
+  leaves the plateau: MATLAB's own result changes with the number of BLAS threads (seed
+  1001 `logistic_7` RELME: -308.544 with one thread, as pynlme; -310.691 with four), and
+  pynlme ended up to 2.1 higher or 1.2 lower than MATLAB in 13 of them.
 - **Robustness fixes found by the randomized comparison**: the LME step is
   computed with QR decompositions (cross-products cancel catastrophically for
   large random-effects scales), uses a log-Cholesky parameterisation, restarts
