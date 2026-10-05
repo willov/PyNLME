@@ -276,6 +276,29 @@ A SciPy ODE model: `rhs(t, y, phi, v)` vectorised over K systems (y is K x state
 `y0(phi, v)`, `output(y, phi, v)`. With `Vectorization="Full"` all subjects are solved
 in one `solve_ivp` call.
 
+### Several observed features
+
+When a subject has measurements of several model features (e.g. a concentration and an
+effect), stack them into one response vector, as with MATLAB's `nlmefit`, and give each
+row's feature as an index in a column of `X` (column 1 by default, `feature_column`):
+
+```python
+model = sund_model("mm_pkpd", feature=["conc", "effect"],
+                   parameters=["ka", "V", "vmax", "km", "emax", "ec50"], v_states=["gut"])
+# or: ode_model(rhs, y0, output) with output returning columns [conc, effect]
+
+X = np.column_stack([time, feature_index])   # 0 = conc, 1 = effect
+beta, psi, stats, b = nlmefit(X, y, subject, dose, model, beta0,
+                              ParamTransform=[1] * 6, ErrorModel="proportional",
+                              Vectorization="Full")
+```
+
+Each subject is simulated once and read out at every row's feature. All rows share one
+error model, as in MATLAB: with features on different scales, a proportional error model
+(or rescaled data) keeps one feature from dominating. Separate error parameters per
+feature are planned for `compat="r"` (nlme's `varIdent`) and a custom mode.
+Runnable example: `examples/multiple_features.py`.
+
 ## Data helpers
 
 - `stack_grouped_data(X_grouped, y_grouped, group_ids=None)`: grouped to stacked arrays.

@@ -14,6 +14,17 @@ phi supplies the named SUND parameters (in order); the columns of V (group
 predictors such as the dose) set the named initial states, then the named
 parameters. All other parameters and initial states keep the model's values.
 
+Several observed features (e.g. a concentration and an effect): stack all
+observations of a subject into one response vector and add a predictor column
+with each row's feature, as an index into ``feature``:
+
+    model = sund_model("pkpd", feature=["conc", "effect"], parameters=[...])
+    X = np.column_stack([time, feature_index])   # 0 = conc, 1 = effect
+    nlmefit(X, y, subject, dose, model, beta0, Vectorization="Full")
+
+Each subject is simulated once and read out at all its features. The features
+share one error model (as in MATLAB's nlmefit).
+
 With Vectorization="Full" the parameter sets of a model call (subjects, MCMC
 chains, finite-difference perturbations) are simulated in batches: one SUND
 simulation holds ``batch_size`` copies of the model in separate containers.
@@ -29,7 +40,7 @@ import numpy as np
 
 def sund_model(
     model,
-    feature: str,
+    feature: str | Sequence[str],
     parameters: Sequence[str],
     v_states: Sequence[str] = (),
     v_parameters: Sequence[str] = (),
@@ -38,6 +49,7 @@ def sund_model(
     abs_tol: float = 1e-12,
     batch_size: int = 16,
     time_unit: str | None = None,
+    feature_column: int = 1,
 ):
     """Build a model function from an installed SUND model.
 
@@ -47,8 +59,10 @@ def sund_model(
         Name of an installed SUND model (enables batched simulation with
         containers), or a ready ``sund.Simulation`` (simulated one parameter
         set at a time).
-    feature : str
-        Name of the SUND feature that is observed.
+    feature : str or sequence of str
+        Name of the SUND feature that is observed, or several names: then
+        column ``feature_column`` of x gives each row's feature as a 0-based
+        index into this list.
     parameters : sequence of str
         SUND parameter names set from phi, in phi's order.
     v_states, v_parameters : sequence of str
@@ -62,6 +76,8 @@ def sund_model(
         Parameter sets per batched simulation (model name only).
     time_unit : str, optional
         Simulation time unit; defaults to the model's.
+    feature_column : int
+        Column of x holding the feature index (several features only).
 
     Returns
     -------
@@ -87,7 +103,12 @@ def sund_model(
     state_names = list(reference.state_names)
     feature_names = list(reference.feature_names)
     n_f = len(feature_names)
-    feature_index = feature_names.index(feature)
+    multiple = not isinstance(feature, str)
+    observed = list(feature) if multiple else [feature]
+    missing = [f for f in observed if f not in feature_names]
+    if missing:
+        raise ValueError(f"unknown SUND features {missing}; the model has {feature_names}")
+    feature_index = np.array([feature_names.index(f) for f in observed], dtype=int)
     p_idx = np.array([param_names.index(p) for p in parameters], dtype=int)
     vs_idx = np.array([state_names.index(s) for s in v_states], dtype=int)
     vp_idx = np.array([param_names.index(p) for p in v_parameters], dtype=int)
@@ -106,17 +127,20 @@ def sund_model(
         return batches[k]
 
     def values_for(P, X0, times):
-        """Feature values (len(times), k) for k parameter sets."""
+        """Observed feature values (len(times), k, n_observed) for k parameter sets."""
         k = len(P)
         grid = times if times[0] == t0 else np.concatenate([[t0], times])
         sim = simulation(k)
         sim.simulate(time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel())
-        f = np.asarray(sim.feature_values)[:, feature_index::n_f][:, :k]
-        return f if times[0] == t0 else f[1:]
+        # Columns: model copy j, feature i at j * n_f + i.
+        values = np.asarray(sim.feature_values)[:, : k * n_f].reshape(len(grid), k, n_f)[:, :, feature_index]
+        return values if times[0] == t0 else values[1:]
 
     def model_fn(phi, x, v=None):
-        t = np.asarray(x, dtype=float).reshape(len(x), -1)[:, 0]
+        x = np.asarray(x, dtype=float).reshape(len(x), -1)
+        t = x[:, 0]
         n = len(t)
+        which = _feature_rows(x, feature_column, len(observed)) if multiple else np.zeros(n, dtype=int)
         phi = np.asarray(phi, dtype=float)
         if phi.ndim == 1:
             phi = np.broadcast_to(phi, (n, phi.size))
@@ -142,7 +166,18 @@ def sund_model(
             rows = (system >= start) & (system < stop)
             times = np.unique(t[rows])
             f = values_for(P[start:stop], X0[start:stop], times)
-            out[rows] = f[np.searchsorted(times, t[rows]), system[rows] - start]
+            out[rows] = f[np.searchsorted(times, t[rows]), system[rows] - start, which[rows]]
         return out
 
     return model_fn
+
+
+def _feature_rows(x: np.ndarray, column: int, n_features: int) -> np.ndarray:
+    """Each row's feature index from column ``column`` of x, validated."""
+    if x.shape[1] <= column:
+        raise ValueError(f"several features need their index in column {column} of X")
+    index = x[:, column]
+    which = index.astype(int)
+    if np.any(which != index) or np.any(which < 0) or np.any(which >= n_features):
+        raise ValueError(f"feature indices in column {column} of X must be integers 0..{n_features - 1}")
+    return which

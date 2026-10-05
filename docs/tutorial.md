@@ -118,6 +118,13 @@ one row and column is grouped) or is set with `DataFormat="stacked"`/`"grouped"`
 See `examples/sund_ode_model.py` for a model compiled with SUND, and the API reference
 for `ode_model` (SciPy).
 
+
+Several measured features (e.g. concentration and effect) are fitted together by
+stacking them into one response vector with a feature-index column in `X`, as in
+MATLAB; `sund_model(feature=["conc", "effect"], ...)` and `ode_model` read out each row's
+feature from one simulation per subject. See the API reference, "Several observed
+features".
+
 ## 7. R conventions
 
 `compat="r"` follows R's nlme: its iteration and default tolerances for `"LME"` and

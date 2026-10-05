@@ -165,6 +165,9 @@ results, several times slower.
   `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`
   (`pip install "pynlme[sund]"`); see [examples/sund_ode_model.py](examples/sund_ode_model.py).
 - **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a vectorised right-hand side.
+- **Several measured features** (e.g. concentration and effect): stack them in one
+  response vector with a feature column in `X`, and pass `feature=["conc", "effect"]`
+  (SUND) or a multi-column `output` (SciPy); each subject is simulated once.
 
 On the Michaelis-Menten validation model: `nlmefit` takes 1.0 s with SUND (batched with
 containers), 3.6 s with batched SciPy, 3-5 s in MATLAB with `ode45`. Analytic

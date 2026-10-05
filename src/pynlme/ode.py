@@ -33,6 +33,7 @@ def ode_model(
     method: str = "DOP853",
     rtol: float = 1e-10,
     atol: float = 1e-12,
+    feature_column: int = 1,
 ) -> Callable:
     """Build a model function from a vectorised ODE.
 
@@ -45,9 +46,14 @@ def ode_model(
         ``y0(phi, v)`` returning the initial states at ``t0``, (K, n_states).
     output : callable
         ``output(y, phi, v)`` returning the observed quantity, shape (K,),
-        from states y of shape (K, n_states).
+        from states y of shape (K, n_states). For several observed features
+        return one column per feature, shape (K, n_features); column
+        ``feature_column`` of x then gives each row's feature (0-based), so
+        that all observations of a subject are stacked in one response vector.
     t0 : float
         Time of the initial state (e.g. the dose); observations are at t >= t0.
+    feature_column : int
+        Column of x holding the feature index (several features only).
     method, rtol, atol
         Passed to scipy.integrate.solve_ivp. The tolerances apply to the
         stacked system; tight values keep finite-difference Jacobians accurate.
@@ -62,7 +68,8 @@ def ode_model(
     """
 
     def model(phi, x, v=None):
-        t = np.asarray(x, dtype=float).reshape(len(x), -1)[:, 0]
+        x = np.asarray(x, dtype=float).reshape(len(x), -1)
+        t = x[:, 0]
         n = len(t)
         phi = np.asarray(phi, dtype=float)
         if phi.ndim == 1:
@@ -98,6 +105,11 @@ def ode_model(
                 return np.full(n, np.nan)
             states = sol.y.T.reshape(len(times), K, n_states)
         at_obs = states[np.searchsorted(times, t), system]  # (n, n_states)
-        return np.asarray(output(at_obs, phi, v), dtype=float).reshape(n)
+        values = np.asarray(output(at_obs, phi, v), dtype=float)
+        if values.ndim == 2 and values.shape[1] > 1:
+            from .sund_adapter import _feature_rows
+
+            return values[np.arange(n), _feature_rows(x, feature_column, values.shape[1])]
+        return values.reshape(n)
 
     return model

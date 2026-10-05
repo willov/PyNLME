@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control names and defaults, `summary`, `coef`, `psi`/`phi`/`eta` (modes or
   conditional means), `predict` (ipred, icpred, ppred, ypred); agrees with R saemix.
 - `pynlme.predict` for `fit` results (new data, population or individual level).
+- Several observed features per subject: `sund_model(feature=[...])` and `ode_model` with
+  a multi-column `output` read out each row's feature (index in a column of `X`) from
+  one simulation per subject, for stacked data as in MATLAB.
 
 ### Changed
 
