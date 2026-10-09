@@ -158,7 +158,7 @@ def main():
         print(f"Results are identical: {np.allclose(beta, beta_trad, rtol=1e-10)}")
         
     except Exception as e:
-        print(f"Model fitting failed (likely backend issue): {e}")
+        print(f"Model fitting failed: {e}")
         print("But the data conversion functionality works!")
     
     # Example 3: Multiple predictor variables

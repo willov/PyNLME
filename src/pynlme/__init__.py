@@ -1,23 +1,23 @@
 """
 PyNLME - Nonlinear Mixed-Effects Models for Python
 
-A high-performance Python library for nonlinear mixed-effects (NLME) modeling
-with a Rust backend. PyNLME provides both a modern Pythonic API and
-MATLAB-compatible interfaces for seamless migration.
+Nonlinear mixed-effects (NLME) models in Python (NumPy, SciPy): MATLAB's
+nlmefit and nlmefitsa (Lindstrom-Bates, FO, FOCE, SAEM), validated against
+MATLAB R2023b, R nlme and R saemix.
 
 Quick Start
 -----------
 >>> import numpy as np
 >>> from pynlme import fit_nlme
 >>>
->>> # Define your model
->>> def model(phi, x, v=None):
-...     return phi[0] * np.exp(-phi[1] * x)
+>>> def model(phi, x):
+...     return phi[0] * np.exp(-phi[1] * x[:, 0])
 >>>
->>> # Fit the model
 >>> beta, psi, stats, b = fit_nlme(X, y, group, None, model, beta0)
 
-For MATLAB users, nlmefit() and nlmefitsa() are also available.
+Also: nlmefit/nlmefitsa (MATLAB names and options), compat="r" (R's nlme
+iteration and conventions), pynlme.r (R's nlme() and saemix interfaces), and
+ODE models via sund_model (SUND) or ode_model (SciPy).
 """
 
 from .api import fit, predict

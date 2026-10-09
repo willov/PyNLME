@@ -60,10 +60,11 @@ def main():
     # SAEM method
     print("\nUsing fit_nlme() with SAEM method:")
     beta1c, psi1c, stats1c, b1c = pynlme.fit_nlme(
-        X, y, group, None, exponential_model, beta0, method='SAEM'
+        X, y, group, None, exponential_model, beta0, method='SAEM',
+        loglik_method='is',  # off by default, as in MATLAB
     )
     print(f"  β = {beta1c}")
-    print("  (nlmefitsa does not report a log-likelihood yet)")
+    print(f"  Log-likelihood (importance sampling) = {stats1c.logl:.3f}")
     print()
     
     # =========================================================================

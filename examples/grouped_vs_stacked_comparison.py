@@ -124,7 +124,7 @@ def main():
         print(f"Results identical: {np.allclose(beta1, beta2)}")
         
     except Exception as e:
-        print(f"Model fitting failed (backend issue): {e}")
+        print(f"Model fitting failed: {e}")
         print("But data conversion works perfectly!")
     
     print("\n\n📊 Summary:")

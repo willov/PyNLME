@@ -53,11 +53,6 @@ venv.bak/
 # pyenv
 .python-version
 
-# Rust files
-/target/
-Cargo.lock
-**/*.rs.bk
-
 # OS generated files
 .DS_Store
 .DS_Store?
