@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Several observed features per subject: `sund_model(feature=[...])` and `ode_model` with
   a multi-column `output` read out each row's feature (index in a column of `X`) from
   one simulation per subject, for stacked data as in MATLAB.
+- Model inputs from SUND activities: `sund_model(activities={experiment: Activity}, ...)`
+  with the experiment ID in a column of `V`, or a function building a subject's
+  activities from its `V` row (e.g. doses per kg).
 
 ### Changed
 
