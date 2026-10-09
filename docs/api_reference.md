@@ -125,6 +125,8 @@ holds the conditional means of the random effects.
 
 ## `fit(model, data, response, group, start, predictors=(), group_predictors=(), transform=None, random=None, method="LME", **options)`
 
+*Provisional: this interface is still being designed and may change.*
+
 Named parameters, data as a dict of arrays or a dataframe (Polars, or anything indexed
 by column name), results as a plain dict. Runs `nlmefit`/`nlmefitsa` with
 `Vectorization="Full"`.

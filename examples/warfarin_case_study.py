@@ -167,10 +167,13 @@ def warfarin_model(beta, x, v=None):
     age = x[:, 3]
     female = x[:, 4]
 
+    # One parameter vector, or one row per observation (vectorization="full"):
+    # index parameters along the last axis.
+    beta = np.asarray(beta).T
     # Transform parameters to ensure positivity (vectorized)
     cl_70kg = np.exp(beta[0])
     v_per_kg = np.exp(beta[1])
-    ka = np.exp(beta[2])
+    ka = np.broadcast_to(np.exp(beta[2]), time.shape)
     age_effect = beta[3]
     female_effect = beta[4]
 
@@ -195,19 +198,20 @@ def warfarin_model(beta, x, v=None):
         dose_valid = dose[valid_mask]
         v_valid = v[valid_mask]
         ke_valid = ke[valid_mask]
-        
+        ka_valid = ka[valid_mask]
+
         # Check for numerical issues (vectorized)
-        diff_mask = np.abs(ka - ke_valid) > 1e-6
+        diff_mask = np.abs(ka_valid - ke_valid) > 1e-6
         
         # Normal case: ka != ke (vectorized)
         if np.any(diff_mask):
             idx = valid_mask.copy()
             idx[valid_mask] = diff_mask
             conc[idx] = (
-                (f * dose_valid[diff_mask] * ka)
-                / (v_valid[diff_mask] * (ka - ke_valid[diff_mask]))
+                (f * dose_valid[diff_mask] * ka_valid[diff_mask])
+                / (v_valid[diff_mask] * (ka_valid[diff_mask] - ke_valid[diff_mask]))
                 * (np.exp(-ke_valid[diff_mask] * t_valid[diff_mask]) -
-                   np.exp(-ka * t_valid[diff_mask]))
+                   np.exp(-ka_valid[diff_mask] * t_valid[diff_mask]))
             )
         
         # Special case: ka ≈ ke (vectorized)
@@ -230,7 +234,7 @@ def main():
 
     # Generate synthetic data (realistic size)
     print("📊 Generating warfarin concentration data...")
-    df = generate_warfarin_data(n_subjects=50, seed=42)  # Increased to 50 for more realistic dataset
+    df = generate_warfarin_data(n_subjects=50, seed=42)
 
     print(f"Generated {len(df)} observations from {df['subject'].nunique()} subjects")
     print(f"Age range: {df['age'].min():.0f}-{df['age'].max():.0f} years")
@@ -264,28 +268,20 @@ def main():
 
     # Fit the model with SAEM for realistic mixed-effects modeling
     print("\n⚙️  Fitting NLME model using SAEM algorithm...")
-    print("   This may take 1-2 minutes for realistic convergence...")
+    print("   This takes a few seconds...")
 
     try:
-        # Force Python SAEM implementation to see progress indicators
-        from pynlme import nlmefit
-        import sys
-        nlmefit_module = sys.modules[nlmefit.__module__]
-        rust_available_backup = nlmefit_module.RUST_AVAILABLE
-        nlmefit_module.RUST_AVAILABLE = False  # Force Python implementation
-        
         beta, psi, stats, b = pynlme.fit_nlme(
             x, y, groups, None, warfarin_model, beta0,
             method='SAEM',   # Use SAEM for better random effects estimation
-            verbose=2,       # More verbose output for progress tracking
+            vectorization="full",  # all subjects in one model call
+            verbose=1,       # progress output
             max_iter=100,    # Reasonable iterations for SAEM
             tol_fun=1e-5,    # Good convergence tolerance
             n_iterations=(40, 40, 20),  # Optimized for 50 subjects: faster convergence
-            n_mcmc_iterations=(2, 2, 2)  # Keep MCMC steps reasonable
+            n_mcmc_iterations=(2, 2, 2),  # Keep MCMC steps reasonable
+            loglik_method="lin",  # report the (linearised) log-likelihood
         )
-        
-        # Restore original setting
-        nlmefit_module.RUST_AVAILABLE = rust_available_backup
 
         converged = stats.logl is not None
         print(f"✅ Convergence: {'Yes' if converged else 'No'}")

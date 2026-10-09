@@ -56,7 +56,12 @@ def _run_matlab(manifest: Path, results: Path, approx: str) -> None:
         key, value = command.pop(0).split("=", 1)
         env[key] = value
     call = f"addpath('{SCRIPT_DIR}'); fit_manifest('{manifest}', '{results}', '{approx}')"
-    subprocess.run([*command, "-batch", call], check=True, capture_output=True, env=env)
+    # Output to a file, not a pipe: MATLAB starts background helpers (MathWorks
+    # ServiceHost, CrashReporter) that inherit stdout/stderr and keep a pipe open
+    # after MATLAB exits, so reading it to the end would never return.
+    with open(results.with_suffix(".log"), "w") as log:
+        subprocess.run([*command, "-batch", call], check=True, stdout=log, stderr=subprocess.STDOUT,
+                       stdin=subprocess.DEVNULL, env=env, timeout=1800)
 
 
 @pytest.fixture(scope="module", params=["LME", "RELME"])

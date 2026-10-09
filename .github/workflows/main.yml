@@ -77,7 +77,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
       fail-fast: false
     
     steps:
@@ -105,10 +105,12 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         run: uv run mypy src/pynlme/ --ignore-missing-imports || true
 
-  # Validation against R: randomized comparison with nlme and simulation studies
+  # Validation against R: randomized comparison with nlme and simulation studies.
+  # Slow, so only when started by hand (Actions -> CI/CD Pipeline -> Run workflow).
   validation:
     name: Validate against R nlme
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 

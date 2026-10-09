@@ -34,24 +34,28 @@ Start with the [tutorial](docs/tutorial.md).
 
 ### Python users
 
-Named parameters, data as a dict of arrays or a Polars DataFrame, results as a dict:
+The same estimators with snake_case options and 0-based indices:
 
 ```python
-from pynlme import fit
+import numpy as np
+from pynlme import fit_nlme
 
-def model(p, x, v):
-    ke, ka, cl, t = p["ke"], p["ka"], p["cl"], x["time"]
-    return v["dose"] * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
+def model(phi, t):
+    return phi[0] * np.exp(-phi[1] * t[:, 0])
 
-result = fit(model, data, response="conc", group="subject", predictors=["time"],
-             group_predictors=["dose"], start={"ke": 0.08, "ka": 1.6, "cl": 0.04},
-             transform={"ke": "log", "ka": "log", "cl": "log"}, random=["ka", "cl"])
-result["typical"]["cl"], result["psi"]["variances"], result["stats"]["aic"]
+beta, psi, stats, b = fit_nlme(t, y, group, None, model, [10.0, 0.5])
+beta, psi, stats, b = fit_nlme(t, y, group, None, model, [10.0, 0.5], method="SAEM",
+                               random_state=1)
 ```
 
-The model receives one value per observation, so it is evaluated for all subjects at
-once. For arrays and positional parameters, `fit_nlme` takes snake_case options with
-0-based indices. See the [API reference](docs/api_reference.md).
+`t` holds the predictors (one row per observation), `group` the subject of each row;
+data can also be given grouped, one row per subject. Options such as
+`param_transform=[0, 1]`, `re_params_select=[0]` or `error_model="proportional"` follow
+MATLAB's, and `vectorization="full"` evaluates all subjects in one model call. By
+default the estimators follow MATLAB's; `compat="r"` follows R's.
+
+`pynlme.fit` is a named-parameter interface (dict or Polars data, dict results); its
+design is not settled yet and may change. See the [API reference](docs/api_reference.md).
 
 ### R users (nlme, saemix) who would rather not use R
 
@@ -175,14 +179,30 @@ derivatives (`pynlme.with_jacobian`) replace finite differences when available.
 
 ## Installation
 
+Python 3.11-3.14. pynlme is pure Python (NumPy, SciPy); no compiler is needed.
+
 ```bash
 pip install git+https://github.com/willov/PyNLME          # or a wheel from Releases
 pip install "pynlme[sund] @ git+https://github.com/willov/PyNLME"   # with SUND models
 ```
 
-For development: `git clone`, then `uv sync --dev` and `uv run pytest`
-(`--runslow` adds the simulation studies; the randomized comparison needs R with
-`nlme` and `jsonlite`).
+SUND compiles your model files on `sund.install_model("model.txt")`, with the system
+C compiler if there is one and otherwise the Zig compiler it installs with it.
+
+For development:
+
+```bash
+git clone https://github.com/willov/PyNLME && cd PyNLME
+uv sync --dev --extra sund     # leave out --extra sund to skip SUND
+uv run pytest                  # --runslow adds the simulation studies
+```
+
+`uv sync` installs exactly what is requested: running it without `--extra sund`
+uninstalls SUND (its folder of compiled models stays behind as an empty `sund`
+package; rerun with `--extra sund` to restore it). The validation tests compare with R
+when `Rscript` with `nlme` and `jsonlite` is available, and with MATLAB when
+`PYNLME_MATLAB` names the MATLAB command (see
+[validation/README.md](validation/README.md)).
 
 ## Documentation
 

@@ -53,7 +53,9 @@ def test_fits_agree_with_finite_difference_fits(approx, full):
                 **numeric.kwargs, ApproximationType=approx, **TIGHT)
     b = nlmefit(analytic.X, analytic.y, analytic.group, analytic.V, analytic.modelfun, analytic.beta0,
                 **analytic.kwargs, ApproximationType=approx, **TIGHT)
-    np.testing.assert_allclose(b[0], a[0], rtol=1e-5)
+    # FOCE maximises with L-BFGS-B, whose stopping point moves by ~1e-5 with the
+    # derivatives used (and between SciPy versions); LME/RELME agree to ~1e-7.
+    np.testing.assert_allclose(b[0], a[0], rtol=1e-4 if approx == "FOCE" else 1e-5)
     np.testing.assert_allclose(np.diag(b[1]), np.diag(a[1]), rtol=1e-4)
     # compat="matlab" uses MATLAB's forward differences (step eps^(1/3)),
     # which move the linearised likelihood by ~1e-4 against exact derivatives.

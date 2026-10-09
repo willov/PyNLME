@@ -7,8 +7,9 @@ Releases are created automatically when the version in `pyproject.toml` changes 
    `CHANGELOG.md` under a heading `## [x.y.z] - YYYY-MM-DD`.
 2. Commit and push (or merge) to `main`.
 3. GitHub Actions (`.github/workflows/main.yml`):
-   - runs the tests on Linux, Windows and macOS with Python 3.11-3.13, and the
-     validation tests against R (`validation` job);
+   - runs the tests on Linux, Windows and macOS with Python 3.11-3.14 (the fast tests;
+     the slow validation against R, the `validation` job, runs only when the workflow
+     is started by hand: Actions -> CI/CD Pipeline -> Run workflow);
    - if the version changed and the tag does not exist yet, tags `vx.y.z`, builds the
      wheel and sdist (`uv build`; pynlme is pure Python, so one `py3-none-any` wheel
      works everywhere) and creates a GitHub release (marked pre-release) with them and

@@ -7,9 +7,9 @@ Where to start:
 
 - **MATLAB users**: [tutorial.md](tutorial.md) follows MATLAB's own documentation
   examples; options and outputs carry MATLAB's names and definitions.
-- **Python users**: [`fit`](api_reference.md#fitmodel-data-response-group-start-predictors-group_predictors-transformnone-randomnone-methodlme-options)
-  with named parameters, dict/Polars data and dict results; or
-  [api_reference.md](api_reference.md) for snake_case options, 0-based indices, `fit_nlme`, `Vectorization="Full"`, ODE models).
+- **Python users**: `fit_nlme` with snake_case options and 0-based indices
+  ([api_reference.md](api_reference.md): `fit_nlme`, `Vectorization="Full"`, ODE
+  models). `fit` (named parameters, dict/Polars data and results) is provisional.
 - **R (nlme/saemix) users**: `pynlme.r.nlme` with R's formulas, and
   `saemixData`/`saemixModel`/`saemix`, with `summary()`, `fixef()`, `predict()`,
   ... ([API reference](api_reference.md#r-style-pynlmer)); `compat="r"` and the translation table in the
@@ -36,8 +36,15 @@ Where to start:
 - `nlmefitsa`: SAEM with MATLAB's defaults (iterations, MCMC kernels, chains), all error
   models, importance-sampling and linearised log-likelihoods, standard errors.
 - `Vectorization="Full"` for batched model evaluation; analytic derivatives via
-  `with_jacobian`; ODE models via SUND (`sund_model`) or SciPy (`ode_model`).
-- `compat="matlab"` (default) or `compat="r"` reporting conventions.
+  `with_jacobian`; ODE models via SUND (`sund_model`) or SciPy (`ode_model`), including
+  several observed features per subject (stacked data with a feature column).
+- `compat="matlab"` (default): `nlmefit` LME/RELME follow MATLAB's iteration and default
+  options, giving MATLAB's results (~1e-10 on most data). `compat="r"`: they follow
+  nlme's iteration and `nlmeControl` defaults, giving R's (including nlme's REML), and
+  the reporting conventions are R's.
+- `pynlme.r`: R's `nlme()` with string formulas and `saemixData`/`saemixModel`/`saemix`,
+  with `summary`, `fixef`, `ranef`, `VarCorr`, `predict`, ...
+- `fit` and `predict`: named parameters, dict/Polars data and results (provisional).
 
 Not implemented: `FEObsDesign`/`REObsDesign`, block-structured `CovPattern`,
 `LogLikMethod="gq"`, `Replicates`, `OutputFcn`. These raise errors rather than being

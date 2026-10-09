@@ -12,9 +12,23 @@ How pynlme is checked. There are three kinds of test in
    them with both R `nlme` and pynlme. Skipped when R with `nlme` and `jsonlite`
    is not installed. `PYNLME_RANDOM_SEED` reproduces a run; `PYNLME_RANDOM_N`
    sets the number of datasets per model family (default 5).
-3. **Simulation studies** (`test_simulation_recovery.py`, run with `--runslow`):
+3. **Randomized comparison with MATLAB** (`test_random_vs_matlab.py`): as 2, against
+   MATLAB's `nlmefit` (LME and RELME). Skipped unless `PYNLME_MATLAB` gives the command
+   that starts MATLAB, e.g.
+   `PYNLME_MATLAB="LD_PRELOAD=/usr/lib/libfontconfig.so.1 /usr/local/MATLAB/R2023b/bin/matlab"`.
+4. **Simulation studies** (`test_simulation_recovery.py`, run with `--runslow`):
    hundreds of datasets simulated from known parameters, checking bias and
    confidence-interval coverage. No reference software involved.
+
+CI runs the fast tests (`uv run pytest`) on every push to `main` and on pull requests.
+The slow checks are run by hand, when the algorithms change:
+
+```bash
+uv run pytest --runslow                              # + simulation studies, R if installed
+PYNLME_RANDOM_N=10 uv run pytest tests/validation    # more random datasets
+```
+
+or in CI via Actions -> CI/CD Pipeline -> Run workflow (the `validation` job, R only).
 
 The simulated model families (oral PK with dose as `V`, logistic growth, linear
 with full covariance, Emax) are defined in

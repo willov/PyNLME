@@ -60,6 +60,17 @@ MATLAB compatibility demonstrations:
 - Result validation and comparison
 - Migration guides for MATLAB users
 
+### [`sund_ode_model.py`](sund_ode_model.py)
+An ODE model (Michaelis-Menten PK) compiled with the SUND toolbox, fitted with
+`nlmefit` and `nlmefitsa` (needs `pip install "pynlme[sund]"`).
+
+### [`multiple_features.py`](multiple_features.py)
+A concentration and an effect measured in the same subjects (PK/PD), stacked in one
+response vector with a feature column, one ODE simulation per subject (SciPy).
+
+### [`warfarin_case_study.py`](warfarin_case_study.py)
+A larger PK study (simulated warfarin data, covariates, SAEM) with diagnostic plots.
+
 ## 🚀 Running Examples
 
 ```bash
