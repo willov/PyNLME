@@ -4,10 +4,6 @@ Fit nonlinear mixed-effects models (population PK/PD, growth curves, systems-bio
 models) in Python. The algorithms are those of MATLAB's `nlmefit`/`nlmefitsa` and R's
 `nlme`/`saemix`, and the results are validated against all of them.
 
-## AI Disclaimer
-
-I (willov) asked Claude Sonnet 4 in GitHub Copilot agent mode to "create a Python NLME implementation with a rust backend with a similar call syntax to MATLAB's nlmefitsa". Please use the package with caution, it is very likely that the AI have hallucinated quirks not tested. If you find it useful, please assist in creating tests to test the reliability of the package.
-
 ## Pick your starting point
 
 ### Coming from MATLAB
