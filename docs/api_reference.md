@@ -291,7 +291,7 @@ and `v_parameters`), or a function of a subject's `V` row returning its activiti
 (e.g. a dose per kg as a bolus). Doses per kg are simplest in the model: an input per kg
 times a body-weight parameter set from `V`, as in `validation/models/pk_inputs_sund.txt`.
 With activities each subject is simulated on its own; SUND activities cannot yet be
-shared across batched model copies (see [sund-wishlist.md](sund-wishlist.md)).
+shared across batched model copies.
 
 ### `ode_model(rhs, y0, output, t0=0, method="DOP853", rtol=1e-10, atol=1e-12)`
 

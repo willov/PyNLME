@@ -24,7 +24,6 @@ Where to start:
 | [troubleshooting.md](troubleshooting.md) | Warnings, differences from MATLAB, speed |
 | [implementation.md](implementation.md) | Algorithms and code structure, for developers |
 | [../validation/README.md](../validation/README.md) | How the package is validated, and what was found |
-| [sund-wishlist.md](sund-wishlist.md) | Features requested from the SUND toolbox |
 | [release-workflow.md](release-workflow.md) | Making a release |
 
 ## What is implemented
