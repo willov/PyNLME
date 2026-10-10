@@ -153,24 +153,66 @@ yet: `FEObsDesign`/`REObsDesign`, block `CovPattern`, `LogLikMethod="gq"`,
 
 ## Speed
 
-Each mode against the program it replicates, with the same options and
-`Vectorization="Full"`; times in milliseconds. Regenerate with
-`uv run python validation/benchmark.py --markdown` (pynlme on this machine; R and MATLAB
-times from `validation/reference/`).
+pynlme against the original programs (MATLAB R2023b `nlmefit`/`nlmefitsa`, R `nlme`
+and `saemix`), all run on the same machine, on the same data with the same start
+values and options; times in milliseconds, the best of several runs (MATLAB after a
+warm-up run). Each pynlme mode runs the iteration of the program next to it. The
+models are called once for all subjects (`Vectorization="Full"` in pynlme and MATLAB;
+R and saemix do this anyway).
 
-| Case | MATLAB mode | MATLAB mode, Rust kernels | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |
-|---|---|---|---|---|---|---|---|---|---|---|
-| indometh | 140 | 18.6 | 346 | 82.2 | 18.7 | 44.0 | 4189 | 49195 | – | – |
-| theoph | 28.1 | 16.4 | 52.6 | 108 | 24.2 | 39.0 | 3505 | 41763 | 245 | 1318 |
-| orange | 9.6 | 5.0 | 50.7 | 13.0 | 3.1 | 7.0 | 547 | 14513 | 174 | 1209 |
-| linear | 24.5 | 14.3 | 43.5 | 13.9 | 5.9 | 7.0 | 711 | 47310 | 155 | 451 |
+| LME | pynlme MATLAB mode (NumPy) | pynlme MATLAB mode (Rust) | MATLAB `nlmefit` | pynlme R mode (NumPy) | pynlme R mode (Rust) | R `nlme` |
+|---|---|---|---|---|---|---|
+| indometh | 140 | 18.6 | 71.8 | 102 | 24.4 | 46.0 |
+| theoph | 28.0 | 16.3 | 16.4 | 108 | 24.3 | 39.0 |
+| orange | 9.6 | 4.9 | 3.8 | 13.1 | 3.0 | 7.0 |
+| linear | 24.2 | 14.1 | 20.9 | 11.2 | 4.6 | 7.0 |
+
+| FOCE | pynlme | MATLAB `nlmefit` |
+|---|---|---|
+| indometh | 4443 | 1471 |
+| theoph | 3343 | 1736 |
+| orange | 453 | 95.9 |
+| linear | 685 | 139 |
+
+| SAEM | pynlme `nlmefitsa` | MATLAB `nlmefitsa` | pynlme `pynlme.r.saemix` | R `saemix` |
+|---|---|---|---|---|
+| theoph | 248 | 876 | 333 | 1371 |
+| orange | 176 | 1540 | 251 | 1218 |
+| linear | 155 | 1657 | 212 | 456 |
+
+In short: on these small problems all programs take milliseconds to a second, and
+the differences rarely matter in practice.
+
+- **LME**: with the Rust kernels, pynlme is about as fast as MATLAB (faster on
+  indometh and linear, equal on theoph, slower on orange) and 1.5-2.5 times faster
+  than R `nlme`. Without the kernels (NumPy only), pynlme is 1.2-3 times slower than
+  both.
+- **FOCE**: pynlme is 2-5 times slower than MATLAB. Its FOCE is its own iteration
+  (it reaches MATLAB's optimum or a better one, not MATLAB's path) and is not yet
+  compiled.
+- **SAEM**: pynlme is 2-11 times faster than MATLAB and saemix, with the same
+  iterations and chains as each.
+
+Machine: AMD Ryzen 7 7800X3D (8 cores, 16 threads), 32 GB RAM, Linux (Arch, kernel
+7.2). pynlme 0.5.0 on Python 3.13, NumPy 2.5, SciPy 1.18; MATLAB R2023b Update 1
+(Statistics and Machine Learning Toolbox 23.2, 8 computational threads); R 4.6.1, nlme
+3.1-169, saemix 3.5.
+
+We are not experts in tuning MATLAB or R for speed: the original programs run as a
+typical user would run them (their default settings, an interpreted model function,
+the system BLAS), and they could likely be made faster. The times also vary by
+10-20% between runs, and R's timer resolves 1 ms. The cases are small; larger
+problems (more subjects, ODE models) may rank differently.
+
+Regenerate: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in
+MATLAB, then `uv run python validation/benchmark.py --markdown`.
 
 The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile the
-inner loops of both modes (the MATLAB mode's LME step with a full `logm` covariance
+inner loops of the LME modes (the MATLAB mode's LME step with a full `logm` covariance
 still runs in Python); the future custom mode will use them too. They do the same
 arithmetic as the NumPy code, which runs instead when they are missing or
 `PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is called once per
-subject: same results, several times slower. ODE models: see below.
+subject: same results, several times slower.
 
 ## ODE models
 
@@ -186,8 +228,9 @@ subject: same results, several times slower. ODE models: see below.
   response vector with a feature column in `X`, and pass `feature=["conc", "effect"]`
   (SUND) or a multi-column `output` (SciPy); each subject is simulated once.
 
-On the Michaelis-Menten validation model: `nlmefit` takes 1.0 s with SUND (batched with
-containers), 3.6 s with batched SciPy, 3-5 s in MATLAB with `ode45`. Analytic
+On the Michaelis-Menten validation model `nlmefit` took 1.0 s with SUND (batched with
+containers), 3.6 s with batched SciPy, and 3-5 s in MATLAB with `ode45` (single runs,
+not part of the benchmark above). Analytic
 derivatives (`pynlme.with_jacobian`) replace finite differences when available.
 
 ## Installation

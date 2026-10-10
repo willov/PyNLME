@@ -45,6 +45,11 @@ NumPy broadcast against `phi[k]`).
 - **FO**: MATLAB's FO often collapses all variances to zero; pynlme finds better optima.
 - **FO/FOCE standard errors**: MATLAB reuses those of its initial LME stage; pynlme
   computes them at the FO/FOCE estimates.
+- **`Vectorization="Full"` models**: pynlme always calls a `Full` model with one row of
+  `phi` (and of `V`) per observation. MATLAB does so only with observation-level
+  designs; with group-level designs it passes one row of `phi` per group, `V`
+  unexpanded, and all rows of `X`, so MATLAB models written for that case (indexing
+  `phi` by a group column) need that indexing removed.
 - **Label switching**: symmetric starting values (e.g. two identical exponential terms)
   can give the same fit with parameters in a different order.
 

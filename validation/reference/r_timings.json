@@ -1,14 +1,17 @@
 {
   "nlme": {
-    "indometh": 0.044,
+    "indometh": 0.046,
     "theoph": 0.039,
     "orange": 0.007,
     "linear": 0.007
   },
   "saemix": {
-    "theoph": 1.318,
-    "orange": 1.209,
-    "linear": 0.451
+    "theoph": 1.371,
+    "orange": 1.218,
+    "linear": 0.456
   },
-  "r_version": "R version 4.6.1 (2026-06-24)"
+  "r_version": "R version 4.6.1 (2026-06-24)",
+  "nlme_version": "3.1.169",
+  "saemix_version": "3.5",
+  "blas": "/usr/lib/liblapack.so.3.12.0"
 }

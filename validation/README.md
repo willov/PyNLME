@@ -46,8 +46,9 @@ with full covariance, Emax) are defined in
 | `reference/matlab_*.json` | MATLAB R2023b fits, from `matlab/run_references.m`: `nlmefit` with LME, RELME, FO and FOCE (default and tight tolerances) and `nlmefitsa` (5 seeds) |
 | `datasets/mm_pk.csv`, `make_mm_dataset.py`, `models/mm_pk_sund.txt` | Michaelis-Menten PK data simulated from known parameters, and the model in SUND format |
 | `r/fit_manifest.R` | Fits simulated datasets for the randomized comparison |
-| `r/benchmark.R` | R `nlme`/`saemix` timings (best of repeated runs) for `benchmark.py` |
-| `benchmark.py` | Times nlmefit/nlmefitsa against R and MATLAB on the validation cases |
+| `r/benchmark.R` | R `nlme`/`saemix` timings (best of repeated runs) for `benchmark.py`, written to `reference/r_timings.json` |
+| `matlab/benchmark.m` | MATLAB `nlmefit`/`nlmefitsa` timings (best of repeated runs after a warm-up, `SinglePhi` and `Full`), written to `reference/matlab_timings.json` |
+| `benchmark.py` | Times pynlme on the benchmark cases against those timings; `--markdown` prints the README's tables and the machine's specifications |
 
 The case definitions (model, start values, options) are in
 [tests/validation/cases.py](../tests/validation/cases.py), mirrored in the R and

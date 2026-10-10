@@ -1,4 +1,5 @@
-# Timings of R nlme and saemix on the validation cases (best of several runs).
+# Timings of R nlme and saemix on the benchmark cases (best of several runs), with
+# the cases and start values of validation/benchmark.py (tests/validation/cases.py).
 #
 # Run from the repository root:  Rscript validation/r/benchmark.R
 # Writes validation/reference/r_timings.json, used by validation/benchmark.py.
@@ -23,7 +24,7 @@ timings <- list(nlme = list(), saemix = list())
 indo <- groupedData(conc ~ time | subject, data = read("indometh.csv"))
 timings$nlme$indometh <- best_of(20, nlme(conc ~ p1 * exp(-exp(p2) * time) + p3 * exp(-exp(p4) * time),
   data = indo, fixed = p1 + p2 + p3 + p4 ~ 1, random = pdDiag(p1 + p2 + p3 + p4 ~ 1),
-  start = c(p1 = 0.5, p2 = -1.3, p3 = 2.8, p4 = 0.8), control = ctrl))
+  start = c(p1 = 0.5, p2 = -1, p3 = 2.5, p4 = 0.5), control = ctrl))
 
 theo <- groupedData(conc ~ time | subject, data = read("theoph.csv"))
 timings$nlme$theoph <- best_of(20, nlme(conc ~ dose * exp(lKe + lKa - lCl) *
@@ -69,5 +70,8 @@ timings$saemix$linear <- saemix_time(
   matrix(c(1, 1), ncol = 2, dimnames = list(NULL, c("a", "b"))), c(0, 0), matrix(1, 2, 2))
 
 timings$r_version <- R.version.string
+timings$nlme_version <- as.character(packageVersion("nlme"))
+timings$saemix_version <- as.character(packageVersion("saemix"))
+timings$blas <- La_library()
 write(toJSON(timings, auto_unbox = TRUE, pretty = TRUE, digits = 6), "validation/reference/r_timings.json")
 print(timings)

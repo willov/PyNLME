@@ -1,0 +1,43 @@
+{
+  "timings": {
+    "indometh": {
+      "lme_single": 0.075495,
+      "foce_single": 3.060989,
+      "lme_full": 0.071776,
+      "foce_full": 1.470706
+    },
+    "theoph": {
+      "lme_single": 0.020626,
+      "foce_single": 3.616701,
+      "saem_single": 0.643156,
+      "lme_full": 0.0164,
+      "foce_full": 1.73616,
+      "saem_full": 0.87621
+    },
+    "orange": {
+      "lme_single": 0.004627,
+      "foce_single": 0.169112,
+      "saem_single": 1.243969,
+      "lme_full": 0.00384,
+      "foce_full": 0.095946,
+      "saem_full": 1.539703
+    },
+    "linear": {
+      "lme_single": 0.022792,
+      "foce_single": 0.248141,
+      "saem_single": 1.472182,
+      "lme_full": 0.020919,
+      "foce_full": 0.139126,
+      "saem_full": 1.657454
+    }
+  },
+  "runs": {
+    "lme": 10,
+    "foce": 3,
+    "saem": 3
+  },
+  "matlab_version": "23.2.0.2380103 (R2023b) Update 1",
+  "toolbox_version": "23.2",
+  "threads": 8,
+  "computer": "GLNXA64"
+}
