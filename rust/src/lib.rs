@@ -5,7 +5,9 @@
 //! dominates. These kernels do the same arithmetic in one call.
 
 use numpy::ndarray::{Array1, Array2, Array3, ArrayView2, ArrayView3, Axis};
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray2, PyReadonlyArray3};
+use numpy::{
+    IntoPyArray, PyArray1, PyArray2, PyArray3, PyReadonlyArray1, PyReadonlyArray2, PyReadonlyArray3,
+};
 use pyo3::prelude::*;
 
 /// In-place Householder QR of a row-major `rows x cols` matrix; afterwards the
@@ -1165,6 +1167,331 @@ fn lme_solve<'py>(
     )
 }
 
+/// Solve the n x n system a x = b in place (b becomes x) by LU decomposition with
+/// partial pivoting, as LAPACK's gesv (numpy.linalg.solve).
+fn lu_solve(a: &mut [f64], n: usize, b: &mut [f64]) {
+    for k in 0..n {
+        let pivot = (k..n)
+            .max_by(|&i, &j| a[i * n + k].abs().total_cmp(&a[j * n + k].abs()))
+            .unwrap();
+        if pivot != k {
+            for c in 0..n {
+                a.swap(k * n + c, pivot * n + c);
+            }
+            b.swap(k, pivot);
+        }
+        for i in k + 1..n {
+            let factor = a[i * n + k] / a[k * n + k];
+            for c in k + 1..n {
+                a[i * n + c] -= factor * a[k * n + c];
+            }
+            b[i] -= factor * b[k];
+        }
+    }
+    for k in (0..n).rev() {
+        let mut v = b[k];
+        for c in k + 1..n {
+            v -= a[k * n + c] * b[c];
+        }
+        b[k] = v / a[k * n + k];
+    }
+}
+
+/// The model's group-level data for the conditional modes: designs A_i (p x f) and
+/// B_i (p x r), weighted responses, and where each group's rows start.
+struct ModesProblem<'a> {
+    a: ArrayView3<'a, f64>,
+    b: ArrayView3<'a, f64>,
+    y: &'a [f64],
+    w: &'a [f64],
+    starts: Vec<usize>,
+    lengths: Vec<usize>,
+    beta: &'a [f64],
+    l: ArrayView2<'a, f64>,
+}
+
+impl ModesProblem<'_> {
+    /// eta_i = A_i beta + B_i L u.
+    fn eta(&self, i: usize, u: &[f64]) -> Vec<f64> {
+        let (p, f) = (self.a.shape()[1], self.a.shape()[2]);
+        let r = self.b.shape()[2];
+        let lu: Vec<f64> = (0..r)
+            .map(|j| (0..r).map(|k| self.l[[j, k]] * u[k]).sum())
+            .collect();
+        (0..p)
+            .map(|q| {
+                let fixed: f64 = (0..f).map(|k| self.a[[i, q, k]] * self.beta[k]).sum();
+                let random: f64 = (0..r).map(|k| self.b[[i, q, k]] * lu[k]).sum();
+                fixed + random
+            })
+            .collect()
+    }
+
+    /// Weighted residuals w (y - f) of group i from its predictions.
+    fn residuals(&self, i: usize, f: &[f64]) -> Vec<f64> {
+        let o = self.starts[i];
+        (0..self.lengths[i])
+            .map(|k| self.w[o + k] * (self.y[o + k] - f[k]))
+            .collect()
+    }
+}
+
+fn sum_sq(v: &[f64]) -> f64 {
+    v.iter().map(|x| x * x).sum()
+}
+
+/// Evaluate the model for several groups through a Python callback
+/// `predict(groups, etas) -> (values, valid)`; values are stacked by group.
+fn call_predict(
+    py: Python<'_>,
+    predict: &Py<PyAny>,
+    groups: &[usize],
+    etas: Vec<Vec<f64>>,
+) -> PyResult<(Vec<f64>, Vec<bool>)> {
+    let p = etas.first().map_or(0, |e| e.len());
+    let etas = Array2::from_shape_vec((groups.len(), p), etas.concat()).unwrap();
+    let out = predict.call1(py, (groups.to_vec(), etas.into_pyarray(py)))?;
+    let (values, valid): (PyReadonlyArray1<f64>, PyReadonlyArray1<bool>) = out.extract(py)?;
+    Ok((values.as_array().to_vec(), valid.as_array().to_vec()))
+}
+
+/// Conditional modes of the random effects for FOCE, as
+/// first_order.conditional_modes: u_i minimising ||w_i (y_i - f_i(beta, L u_i))||^2 +
+/// ||u_i||^2 by Levenberg-Marquardt, all groups in lock-step. The model is
+/// evaluated by the Python callbacks `predict(groups, etas) -> (values, valid)` and
+/// `jacobian(groups, etas) -> rows` (d f / d eta, stacked by group), once per round
+/// for all groups that need it.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn conditional_modes<'py>(
+    py: Python<'py>,
+    predict: Py<PyAny>,
+    jacobian: Py<PyAny>,
+    a: PyReadonlyArray3<'py, f64>,
+    b: PyReadonlyArray3<'py, f64>,
+    y: PyReadonlyArray1<'py, f64>,
+    w: PyReadonlyArray1<'py, f64>,
+    lengths: Vec<usize>,
+    beta: PyReadonlyArray1<'py, f64>,
+    l: PyReadonlyArray2<'py, f64>,
+    u0: PyReadonlyArray2<'py, f64>,
+    max_iter: usize,
+    tol: f64,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let (y, w, beta) = (y.as_slice()?, w.as_slice()?, beta.as_slice()?);
+    let mut starts = vec![0; lengths.len()];
+    for i in 1..lengths.len() {
+        starts[i] = starts[i - 1] + lengths[i - 1];
+    }
+    let problem = ModesProblem {
+        a: a.as_array(),
+        b: b.as_array(),
+        y,
+        w,
+        starts,
+        lengths,
+        beta,
+        l: l.as_array(),
+    };
+    let u0 = u0.as_array();
+    let (m, r) = (u0.shape()[0], u0.shape()[1]);
+    let p = problem.b.shape()[1];
+    let mut u: Vec<Vec<f64>> = (0..m).map(|i| u0.row(i).to_vec()).collect();
+    let mut etas: Vec<Vec<f64>> = (0..m).map(|i| problem.eta(i, &u[i])).collect();
+    let all: Vec<usize> = (0..m).collect();
+    let (values, valid) = call_predict(py, &predict, &all, etas.clone())?;
+    if let Some(i) = valid.iter().position(|ok| !ok) {
+        return Err(pyo3::exceptions::PyFloatingPointError::new_err(format!(
+            "modelfun returned non-finite values for group {i}"
+        )));
+    }
+    let mut res: Vec<Vec<f64>> = (0..m)
+        .map(|i| {
+            let o = problem.starts[i];
+            problem.residuals(i, &values[o..o + problem.lengths[i]])
+        })
+        .collect();
+    let mut objective: Vec<f64> = (0..m).map(|i| sum_sq(&res[i]) + sum_sq(&u[i])).collect();
+    let mut lam = vec![1e-3; m];
+    let mut iterations = vec![0usize; m];
+    let mut need_jacobian = vec![true; m];
+    let mut active = vec![true; m];
+    let mut system = vec![vec![0.0; r * r]; m]; // M_i = H'H + I
+    let mut gradient = vec![vec![0.0; r]; m]; // g_i = H' res - u
+    let l_mat = problem.l;
+    while active.iter().any(|&x| x) {
+        // Groups starting an iteration: Jacobian, gradient and Gauss-Newton matrix.
+        let starting: Vec<usize> = (0..m).filter(|&i| active[i] && need_jacobian[i]).collect();
+        if !starting.is_empty() {
+            let etas_start = Array2::from_shape_vec(
+                (starting.len(), p),
+                starting.iter().flat_map(|&i| etas[i].clone()).collect(),
+            )
+            .unwrap();
+            let rows: PyReadonlyArray2<f64> = jacobian
+                .call1(py, (starting.clone(), etas_start.into_pyarray(py)))?
+                .extract(py)?;
+            let rows = rows.as_array();
+            let mut row = 0;
+            for &i in &starting {
+                let (o, n) = (problem.starts[i], problem.lengths[i]);
+                // H = (w J) B_i L, as (n x p)(p x r)(r x r).
+                let mut h = vec![0.0; n * r];
+                for k in 0..n {
+                    let jb: Vec<f64> = (0..r)
+                        .map(|c| {
+                            (0..p)
+                                .map(|q| {
+                                    problem.w[o + k] * rows[[row + k, q]] * problem.b[[i, q, c]]
+                                })
+                                .sum()
+                        })
+                        .collect();
+                    for c in 0..r {
+                        h[k * r + c] = (0..r).map(|j| jb[j] * l_mat[[j, c]]).sum();
+                    }
+                }
+                row += n;
+                for c in 0..r {
+                    gradient[i][c] =
+                        (0..n).map(|k| h[k * r + c] * res[i][k]).sum::<f64>() - u[i][c];
+                    for d in 0..r {
+                        system[i][c * r + d] =
+                            (0..n).map(|k| h[k * r + c] * h[k * r + d]).sum::<f64>()
+                                + if c == d { 1.0 } else { 0.0 };
+                    }
+                }
+                iterations[i] += 1;
+                need_jacobian[i] = false;
+                if lam[i] >= 1e10 {
+                    active[i] = false; // no damping left to try
+                }
+            }
+        }
+        let trying: Vec<usize> = (0..m).filter(|&i| active[i]).collect();
+        if trying.is_empty() {
+            break;
+        }
+        let mut steps = Vec::with_capacity(trying.len());
+        let mut u_new = Vec::with_capacity(trying.len());
+        let mut etas_new = Vec::with_capacity(trying.len());
+        for &i in &trying {
+            let mut damped = system[i].clone();
+            for c in 0..r {
+                damped[c * r + c] += lam[i] * system[i][c * r + c];
+            }
+            let mut step = gradient[i].clone();
+            lu_solve(&mut damped, r, &mut step);
+            let candidate: Vec<f64> = (0..r).map(|c| u[i][c] + step[c]).collect();
+            etas_new.push(problem.eta(i, &candidate));
+            u_new.push(candidate);
+            steps.push(step);
+        }
+        let (values, valid) = call_predict(py, &predict, &trying, etas_new.clone())?;
+        let mut offset = 0;
+        for (k, &i) in trying.iter().enumerate() {
+            let n = problem.lengths[i];
+            let f = &values[offset..offset + n];
+            offset += n;
+            let (res_new, objective_new) = if valid[k] {
+                let res_new = problem.residuals(i, f);
+                let value = sum_sq(&res_new) + sum_sq(&u_new[k]);
+                (res_new, value)
+            } else {
+                (Vec::new(), f64::INFINITY)
+            };
+            if objective_new > objective[i] {
+                lam[i] *= 10.0;
+                if lam[i] >= 1e10 {
+                    active[i] = false; // no improving step: done
+                }
+                continue;
+            }
+            u[i] = u_new[k].clone();
+            etas[i] = etas_new[k].clone();
+            res[i] = res_new;
+            objective[i] = objective_new;
+            lam[i] = (lam[i] / 10.0).max(1e-12);
+            let largest_step = steps[k].iter().fold(0.0f64, |acc, v| acc.max(v.abs()));
+            let largest_u = u[i].iter().fold(0.0f64, |acc, v| acc.max(v.abs()));
+            if largest_step <= tol * (1.0 + largest_u) || iterations[i] >= max_iter {
+                active[i] = false;
+            } else {
+                need_jacobian[i] = true;
+            }
+        }
+    }
+    let flat: Vec<f64> = u.concat();
+    Ok(Array2::from_shape_vec((m, r), flat)
+        .unwrap()
+        .into_pyarray(py))
+}
+
+/// log|I + H'H| and the quadratic form of the model linearised at b_i = L u_i, as
+/// first_order.linearized_marginal: with H_i = (w_i J_i) B_i L and
+/// v_i = w_i (y_i - f_i) + H_i u_i, sums 2 log det C_i (C_i C_i' = I + H_i'H_i) and
+/// v_i'v_i - |C_i^-1 H_i'v_i|^2 over the groups.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn linearized_marginal<'py>(
+    jacobian_rows: PyReadonlyArray2<'py, f64>,
+    f: PyReadonlyArray1<'py, f64>,
+    y: PyReadonlyArray1<'py, f64>,
+    w: PyReadonlyArray1<'py, f64>,
+    lengths: Vec<usize>,
+    b: PyReadonlyArray3<'py, f64>,
+    l: PyReadonlyArray2<'py, f64>,
+    u: PyReadonlyArray2<'py, f64>,
+) -> PyResult<(f64, f64)> {
+    let (jac, b, l, u) = (
+        jacobian_rows.as_array(),
+        b.as_array(),
+        l.as_array(),
+        u.as_array(),
+    );
+    let (f, y, w) = (f.as_slice()?, y.as_slice()?, w.as_slice()?);
+    let (p, r) = (b.shape()[1], b.shape()[2]);
+    let (mut logdet, mut quad) = (0.0, 0.0);
+    let mut o = 0;
+    for (i, &n) in lengths.iter().enumerate() {
+        let mut h = vec![0.0; n * r];
+        for k in 0..n {
+            let jb: Vec<f64> = (0..r)
+                .map(|c| {
+                    (0..p)
+                        .map(|q| w[o + k] * jac[[o + k, q]] * b[[i, q, c]])
+                        .sum()
+                })
+                .collect();
+            for c in 0..r {
+                h[k * r + c] = (0..r).map(|j| jb[j] * l[[j, c]]).sum();
+            }
+        }
+        let v: Vec<f64> = (0..n)
+            .map(|k| {
+                w[o + k] * (y[o + k] - f[o + k])
+                    + (0..r).map(|c| h[k * r + c] * u[[i, c]]).sum::<f64>()
+            })
+            .collect();
+        let mut system = vec![0.0; r * r];
+        for c in 0..r {
+            for d in 0..r {
+                system[c * r + d] = (0..n).map(|k| h[k * r + c] * h[k * r + d]).sum::<f64>()
+                    + if c == d { 1.0 } else { 0.0 };
+            }
+        }
+        let chol = cholesky_lower(&system, r);
+        logdet += 2.0 * (0..r).map(|c| chol[c * r + c].ln()).sum::<f64>();
+        let mut hv: Vec<f64> = (0..r)
+            .map(|c| (0..n).map(|k| h[k * r + c] * v[k]).sum())
+            .collect();
+        solve_lower(&chol, r, &mut hv);
+        quad += sum_sq(&v) - sum_sq(&hv);
+        o += n;
+    }
+    Ok((logdet, quad))
+}
+
 #[pymodule]
 fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lme_solve, m)?)?;
@@ -1176,5 +1503,7 @@ fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matlab_negloglik, m)?)?;
     m.add_function(wrap_pyfunction!(matlab_lme_step, m)?)?;
     m.add_function(wrap_pyfunction!(fminsearch_py, m)?)?;
+    m.add_function(wrap_pyfunction!(conditional_modes, m)?)?;
+    m.add_function(wrap_pyfunction!(linearized_marginal, m)?)?;
     Ok(())
 }

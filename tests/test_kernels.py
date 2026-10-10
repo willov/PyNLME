@@ -1,5 +1,5 @@
 """
-The optional Rust kernels (kernels/, package pynlme-kernels) against the NumPy
+The Rust kernels (rust/, module pynlme._kernels) against the NumPy
 code they replace, on random problems of random sizes: they must do the same
 arithmetic for any data, not just the validation cases.
 """
@@ -217,3 +217,69 @@ def test_matlab_objective_kernels(seed):
     )
     assert v_k == pytest.approx(v_p, rel=1e-10, abs=1e-8)
     assert c_k == pytest.approx(c_p, rel=1e-10)
+
+
+def random_foce_problem(rng):
+    """A model of the GroupedModel kind on simulated data of random size, with
+    beta, L and starting modes; Vectorization "full" or per group."""
+    from pynlme.data_types import NLMEOptions
+    from pynlme.nlmefit import _build_model, _parse_options
+    from pynlme.utils import validate_inputs
+
+    m = int(rng.integers(2, 25))
+    lengths = rng.integers(2, 12, size=m)
+    group = np.repeat(np.arange(m), lengths)
+    t = rng.uniform(0, 5, size=group.size)
+    r = int(rng.integers(1, 4))
+    beta = np.array([2.0, -0.5, 0.3]) + rng.normal(size=3) * 0.2
+    b = rng.normal(size=(m, 3)) * 0.2
+    b[:, r:] = 0
+    phi = beta + b[group]
+    y = phi[:, 0] * np.exp(-np.exp(phi[:, 1]) * t) + phi[:, 2]
+    y = y + rng.normal(size=y.size) * 0.05
+
+    def model(phi, t):
+        phi = np.atleast_2d(phi)
+        return phi[..., 0] * np.exp(-phi[..., 1] * t[:, 0]) + phi[..., 2]
+
+    kwargs = {
+        "ParamTransform": [0, 1, 0],
+        "REParamsSelect": list(range(1, r + 1)),
+        "Vectorization": "Full" if rng.integers(0, 2) else "SinglePhi",
+    }
+    parsed, matlab_style = _parse_options(kwargs)
+    X, y, g, V, beta0 = validate_inputs(t, y, group, None, beta)
+    built = _build_model(X, y, g, V, model, beta0, NLMEOptions(**parsed), matlab_style)
+    L = np.diag(np.exp(rng.normal(size=r) * 0.5))
+    if r > 1:
+        L[np.tril_indices(r, -1)] = rng.normal(size=r * (r - 1) // 2) * 0.3
+    weights = (
+        None if rng.integers(0, 2) else [rng.uniform(0.5, 2, size=n) for n in lengths]
+    )
+    U0 = rng.normal(size=(m, r)) * 0.1
+    return built, beta, L, U0, weights
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_foce_kernels_match_numpy(seed):
+    """conditional_modes and linearized_marginal: the Rust kernels against the
+    NumPy code (same steps; the modes to the solver's tolerance)."""
+    from pynlme import first_order as fo
+
+    rng = np.random.default_rng(seed)
+    model, beta, L, U0, weights = random_foce_problem(rng)
+    kernels = lb._kernels
+    try:
+        lb._kernels = None
+        U_np = fo.conditional_modes(model, beta, L, U0, weights=weights)
+        ll_np = fo.linearized_marginal(model, beta, L, U_np, weights=weights)[0]
+    finally:
+        lb._kernels = kernels
+    U_rs = fo.conditional_modes(model, beta, L, U0, weights=weights)
+    ll_rs = fo.linearized_marginal(
+        model, beta, L, U_np, weights=weights, with_parts=False
+    )[0]
+    # Near the mode the objective is flat to rounding, so where Levenberg-Marquardt
+    # stops can differ by ~sqrt(eps) between the two (summation order).
+    np.testing.assert_allclose(U_rs, U_np, rtol=1e-6, atol=1e-8)
+    np.testing.assert_allclose(ll_rs, ll_np, rtol=1e-12)

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import optimize
 
+from . import lindstrom_bates
 from .lindstrom_bates import CovarianceFactor, refine_beta0
 from .model import GroupedModel
 
@@ -47,66 +48,155 @@ def conditional_modes(
     tol: float = 1e-12,
     weights=None,
 ):
-    """u_i minimising ||w_i (y_i - f_i(beta, L u_i))||^2 + ||u_i||^2 for each group."""
-    r = model.n_random
+    """u_i minimising ||w_i (y_i - f_i(beta, L u_i))||^2 + ||u_i||^2 for each group.
+
+    Levenberg-Marquardt per group. The groups are independent, so they advance
+    in lock-step: each round evaluates the model once for all groups that need a
+    Jacobian and once for all trial steps (one call each with
+    Vectorization="Full"). Every group takes the same steps as when solved alone.
+    """
+    m, r = model.n_groups, model.n_random
+    if lindstrom_bates._kernels is not None:
+        return _conditional_modes_kernel(model, beta, L, U0, max_iter, tol, weights)
     U = U0.copy()
-    for i in range(model.n_groups):
-        w = 1.0 if weights is None else weights[i]
-        u = U[i]
-        eta = model.eta(i, beta, L @ u)
-        res = w * (model.y[i] - model.predict(i, eta))
-        S = res @ res + u @ u
-        lam = 1e-3
-        for _ in range(max_iter):
-            H = _rows(w, model.jacobian(i, eta)) @ model.B[i] @ L
-            g = H.T @ res - u
-            M = H.T @ H + np.eye(r)
-            improved = False
-            while lam < 1e10:
-                step = np.linalg.solve(M + lam * np.diag(np.diag(M)), g)
-                u_new = u + step
-                eta_new = model.eta(i, beta, L @ u_new)
-                try:
-                    res_new = w * (model.y[i] - model.predict(i, eta_new))
-                except FloatingPointError:
-                    lam *= 10
-                    continue
-                S_new = res_new @ res_new + u_new @ u_new
-                if S_new <= S:
-                    improved = True
-                    break
-                lam *= 10
-            if not improved:
-                break
-            u, eta, res, S = u_new, eta_new, res_new, S_new
-            lam = max(lam / 10, 1e-12)
+    w = [1.0 if weights is None else weights[i] for i in range(m)]
+    etas = model.etas_all(beta, (U @ L.T).T)
+    fs = model.predict_many(np.arange(m), etas)
+    res = [w[i] * (model.y[i] - fs[i]) for i in range(m)]
+    S = np.array([res[i] @ res[i] + U[i] @ U[i] for i in range(m)])
+    lam = np.full(m, 1e-3)
+    outer = np.zeros(m, dtype=int)  # Levenberg-Marquardt iterations started
+    need_jacobian = np.ones(m, dtype=bool)
+    active = np.ones(m, dtype=bool)
+    M = [None] * m
+    g = [None] * m
+    while active.any():
+        # Groups starting an iteration: Jacobian, gradient and Gauss-Newton matrix.
+        starting = np.flatnonzero(active & need_jacobian)
+        if starting.size:
+            Js = model.jacobian_many(starting, etas[starting])
+            for k, i in enumerate(starting):
+                H = _rows(w[i], Js[k]) @ model.B[i] @ L
+                g[i] = H.T @ res[i] - U[i]
+                M[i] = H.T @ H + np.eye(r)
+                outer[i] += 1
+                need_jacobian[i] = False
+                if lam[i] >= 1e10:  # no damping left to try
+                    active[i] = False
+        trying = np.flatnonzero(active)
+        if not trying.size:
+            break
+        steps = {
+            i: np.linalg.solve(M[i] + lam[i] * np.diag(np.diag(M[i])), g[i])
+            for i in trying
+        }
+        U_new = np.array([U[i] + steps[i] for i in trying])
+        etas_new = np.array(
+            [model.eta(i, beta, L @ u) for i, u in zip(trying, U_new, strict=True)]
+        )
+        fs_new = model.predict_many(trying, etas_new, allow_invalid=True)
+        for k, i in enumerate(trying):
+            if fs_new[k] is None:
+                S_new = np.inf
+            else:
+                res_new = w[i] * (model.y[i] - fs_new[k])
+                S_new = res_new @ res_new + U_new[k] @ U_new[k]
+            if S_new > S[i]:
+                lam[i] *= 10
+                if lam[i] >= 1e10:  # no improving step: done
+                    active[i] = False
+                continue
+            U[i], etas[i], res[i], S[i] = U_new[k], etas_new[k], res_new, S_new
+            lam[i] = max(lam[i] / 10, 1e-12)
             # The marginal likelihood is differentiated numerically, so the
             # modes must be solved to near machine precision.
-            if np.max(np.abs(step)) <= tol * (1 + np.max(np.abs(u))):
-                break
-        U[i] = u
+            step = steps[i]
+            if (
+                np.max(np.abs(step)) <= tol * (1 + np.max(np.abs(U[i])))
+                or outer[i] >= max_iter
+            ):
+                active[i] = False
+            else:
+                need_jacobian[i] = True
     return U
+
+
+def _conditional_modes_kernel(model, beta, L, U0, max_iter, tol, weights):
+    """conditional_modes by the Rust kernel, with the model as Python callbacks."""
+    lengths = [len(y) for y in model.y]
+    w = (
+        np.ones(sum(lengths))
+        if weights is None
+        else np.concatenate(
+            [np.broadcast_to(wt, (n,)) for wt, n in zip(weights, lengths, strict=True)]
+        )
+    )
+    return lindstrom_bates._kernels.conditional_modes(
+        lambda groups, etas: model.predict_flat(groups, etas),
+        lambda groups, etas: model.jacobian_rows(groups, etas),
+        np.ascontiguousarray(model.A, dtype=float),
+        np.ascontiguousarray(model.B, dtype=float),
+        np.concatenate(model.y).astype(float),
+        np.ascontiguousarray(w, dtype=float),
+        lengths,
+        np.ascontiguousarray(beta, dtype=float),
+        np.ascontiguousarray(L, dtype=float),
+        np.ascontiguousarray(U0, dtype=float),
+        max_iter,
+        tol,
+    )
 
 
 def _rows(w, J):
     return J if np.isscalar(w) else w[:, None] * J
 
 
-def linearized_marginal(model: GroupedModel, beta, L, U, sigma2=None, weights=None):
+def linearized_marginal(
+    model: GroupedModel, beta, L, U, sigma2=None, weights=None, with_parts=True
+):
     """Log-likelihood of the model linearised at b_i = L u_i.
 
     With observation weights w (error SD proportional to 1/w), residuals and
     Jacobians are weighted and sum(log w) is added, as MATLAB's nlmefit does.
     With sigma2=None the error variance is profiled out. Returns the
-    log-likelihood, sigma^2, and per-group (X_i, H_i) for standard errors.
+    log-likelihood, sigma^2, and per-group (X_i, H_i) for standard errors
+    (empty unless with_parts).
     """
     n = model.n_obs
     logdet, quad = 0.0, 0.0
     parts = []
     groups = np.arange(model.n_groups)
     etas = np.array([model.eta(i, beta, L @ U[i]) for i in groups])
-    Js = model.jacobian_many(groups, etas)
-    fs = model.predict_many(groups, etas)
+    kernels = lindstrom_bates._kernels
+    if kernels is not None and not with_parts:
+        values, valid = model.predict_flat(groups, etas)
+        if not valid.all():
+            raise FloatingPointError("modelfun returned non-finite values")
+        lengths = [len(y) for y in model.y]
+        w = (
+            np.ones(n)
+            if weights is None
+            else np.concatenate(
+                [
+                    np.broadcast_to(wt, (k,))
+                    for wt, k in zip(weights, lengths, strict=True)
+                ]
+            )
+        )
+        logdet, quad = kernels.linearized_marginal(
+            np.ascontiguousarray(model.jacobian_rows(groups, etas)),
+            values,
+            np.concatenate(model.y).astype(float),
+            np.ascontiguousarray(w, dtype=float),
+            lengths,
+            np.ascontiguousarray(model.B, dtype=float),
+            np.ascontiguousarray(L, dtype=float),
+            np.ascontiguousarray(U, dtype=float),
+        )
+        groups = []  # the per-group loop below is done
+    else:
+        Js = model.jacobian_many(groups, etas)
+        fs = model.predict_many(groups, etas)
     for i in groups:
         wt = 1.0 if weights is None else weights[i]
         J = _rows(wt, Js[i])
@@ -177,7 +267,7 @@ def fit_first_order(
         try:
             U = modes(beta_x, L)
             logl, _, _ = linearized_marginal(
-                model, beta_x, L, U, weights=state["weights"]
+                model, beta_x, L, U, weights=state["weights"], with_parts=False
             )
         except (np.linalg.LinAlgError, FloatingPointError):
             return np.inf

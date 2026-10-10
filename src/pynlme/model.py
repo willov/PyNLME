@@ -297,25 +297,38 @@ class GroupedModel:
     def jacobian_many(self, groups, etas) -> list[np.ndarray]:
         """Jacobians d f / d eta for several (group, eta) pairs."""
         groups = np.asarray(groups, dtype=int)
+        J = self.jacobian_rows(groups, etas)
+        return np.split(J, np.cumsum(self._lengths[groups])[:-1])
+
+    def jacobian_rows(self, groups, etas) -> np.ndarray:
+        """d f / d eta for several (group, eta) pairs, rows stacked by group (N, p):
+        analytic if the model provides one, else central differences (one model
+        call with Vectorization="Full")."""
+        groups = np.asarray(groups, dtype=int)
         etas = np.asarray(etas, dtype=float)
-        k, p = etas.shape
         if self.has_jacobian:
-            J = self.jacobian_flat(groups, etas)
-            return np.split(J, np.cumsum(self._lengths[groups])[:-1])
+            return self.jacobian_flat(groups, etas)
+        k, p = etas.shape
         h = _DERIV_STEP * np.maximum(np.abs(etas), 1.0)  # (k, p)
         steps = h[:, :, None] * np.eye(p)[None]  # (k, p, p)
         up = (etas[:, None, :] + steps).reshape(-1, p)
         down = (etas[:, None, :] - steps).reshape(-1, p)
         rep = np.repeat(groups, p)
-        f = self.predict_many(np.concatenate([rep, rep]), np.vstack([up, down]))
-        f_up, f_down = f[: k * p], f[k * p :]
-        out = []
-        for j in range(k):
-            cols = [
-                (f_up[j * p + c] - f_down[j * p + c]) / (2 * h[j, c]) for c in range(p)
-            ]
-            out.append(np.column_stack(cols))
-        return out
+        values, valid = self.predict_flat(
+            np.concatenate([rep, rep]), np.vstack([up, down])
+        )
+        if not valid.all():
+            raise FloatingPointError("modelfun returned non-finite values")
+        half = values.size // 2
+        lengths = self._lengths[groups]
+        # Rows of pair (group j, parameter c) are consecutive; divide each by 2 h.
+        diff = (values[:half] - values[half:]) / np.repeat(
+            2 * h.reshape(-1), np.repeat(lengths, p)
+        )
+        blocks = np.split(diff, np.cumsum(lengths * p)[:-1])
+        return np.concatenate(
+            [b.reshape(p, n).T for b, n in zip(blocks, lengths, strict=True)]
+        )
 
     @property
     def n_groups(self) -> int:
