@@ -218,30 +218,33 @@ better, Monte Carlo error ~0.01). With an additive error model FOCEi is FOCE.
 
 | Case | Method | Program | Time (ms) | Exact log-likelihood |
 |---|---|---|---|---|
-| indometh | FOCE | pynlme | 4437 | 56.116 |
-| indometh | FOCE | MATLAB `nlmefit` | 1471 | 56.115 |
-| indometh | FOCE | nlmixr2 FOCEi | 1319 | 56.055 |
-| theoph | FOCE | pynlme | 3816 | -177.750 |
-| theoph | FOCE | MATLAB `nlmefit` | 1736 | -178.446 |
-| theoph | FOCE | nlmixr2 FOCEi | 321 | -177.756 |
-| theoph | SAEM | pynlme `nlmefitsa` | 249 | -177.761 |
-| theoph | SAEM | nlmixr2 SAEM | 1392 | -178.138 |
-| orange | FOCE | pynlme | 402 | -131.575 |
-| orange | FOCE | MATLAB `nlmefit` | 96 | -131.575 |
-| orange | FOCE | nlmixr2 FOCEi | 279 | -131.576 |
-| orange | SAEM | pynlme `nlmefitsa` | 177 | -131.593 |
-| orange | SAEM | nlmixr2 SAEM | 618 | -158.405 |
-| linear | FOCE | pynlme | 317 | -67.484 |
-| linear | FOCE | MATLAB `nlmefit` | 139 | -67.484 |
+| indometh | FOCE | pynlme | 695 | 56.114 |
+| indometh | FOCE | MATLAB `nlmefit` | 1447 | 56.115 |
+| indometh | FOCE | nlmixr2 FOCEi | 1308 | 56.055 |
+| theoph | FOCE | pynlme | 612 | -177.750 |
+| theoph | FOCE | MATLAB `nlmefit` | 1722 | -178.446 |
+| theoph | FOCE | nlmixr2 FOCEi | 323 | -177.756 |
+| theoph | SAEM | pynlme `nlmefitsa` | 163 | -177.761 |
+| theoph | SAEM | nlmixr2 SAEM | 1372 | -178.138 |
+| orange | FOCE | pynlme | 95 | -131.575 |
+| orange | FOCE | MATLAB `nlmefit` | 98 | -131.575 |
+| orange | FOCE | nlmixr2 FOCEi | 281 | -131.576 |
+| orange | SAEM | pynlme `nlmefitsa` | 109 | -131.593 |
+| orange | SAEM | nlmixr2 SAEM | 614 | -158.405 |
+| linear | FOCE | pynlme | 66 | -67.484 |
+| linear | FOCE | MATLAB `nlmefit` | 137 | -67.484 |
 | linear | FOCE | nlmixr2 FOCEi | 198 | -67.481 |
-| linear | SAEM | pynlme `nlmefitsa` | 158 | -67.559 |
+| linear | SAEM | pynlme `nlmefitsa` | 84 | -67.559 |
 | linear | SAEM | nlmixr2 SAEM | – | failed: chol(): decomposition failed |
 
+pynlme with its Rust kernels (the default).
+
 - **FOCE**: the three programs reach the same optimum (within 0.06 in log-likelihood;
-  MATLAB 0.7 lower on theoph). pynlme's FOCE is the slowest, 1.4-12 times slower than
-  nlmixr2's FOCEi (which compiles the model).
-- **SAEM**: on theoph (all parameters log-transformed) pynlme's SAEM is faster than
-  nlmixr2's and ends higher. In our setup nlmixr2's SAEM left the parameters without
+  MATLAB 0.7 lower on theoph). pynlme is the fastest on indometh, orange and linear
+  (1.9-3 times faster than nlmixr2's FOCEi), nlmixr2 on theoph (1.9 times faster than
+  pynlme).
+- **SAEM**: on theoph (all parameters log-transformed) pynlme's SAEM is 8 times
+  faster than nlmixr2's and ends higher. In our setup nlmixr2's SAEM left the parameters without
   a transform (indometh `tp1`/`tp3`, orange `tasym`, linear `ta`/`tb`) at their start
   values with their variances at zero, and failed on the linear case. We are not
   nlmixr2 experts: this may be a matter of how we specified the models (start values

@@ -1,7 +1,7 @@
 {
   "indometh": {
     "focei": {
-      "elapsed_s": 1.319,
+      "elapsed_s": 1.308,
       "theta": {
         "tp1": 0.77963754531,
         "tp2": -0.87631422135,
@@ -21,7 +21,7 @@
       "message": "Normal exit from bobyqa"
     },
     "saem": {
-      "elapsed_s": 0.637,
+      "elapsed_s": 0.63,
       "theta": {
         "tp1": 0.5,
         "tp2": -1.1487104661,
@@ -43,7 +43,7 @@
   },
   "theoph": {
     "focei": {
-      "elapsed_s": 0.321,
+      "elapsed_s": 0.323,
       "theta": {
         "tke": -2.4666153051,
         "tka": 0.48896322344,
@@ -60,7 +60,7 @@
       "message": "Normal exit from bobyqa"
     },
     "saem": {
-      "elapsed_s": 1.392,
+      "elapsed_s": 1.372,
       "theta": {
         "tke": -2.5049324215,
         "tka": 0.51116000757,
@@ -79,7 +79,7 @@
   },
   "orange": {
     "focei": {
-      "elapsed_s": 0.279,
+      "elapsed_s": 0.281,
       "theta": {
         "tasym": 192.3236614455,
         "txmid": 728.3568785719,
@@ -95,7 +95,7 @@
       "message": "Normal exit from bobyqa"
     },
     "saem": {
-      "elapsed_s": 0.618,
+      "elapsed_s": 0.614,
       "theta": {
         "tasym": 192,
         "txmid": 726.0029933828,

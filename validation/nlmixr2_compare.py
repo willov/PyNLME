@@ -40,6 +40,9 @@ def main() -> None:
     warnings.simplefilter("ignore")
     nlmixr2 = load_reference("nlmixr2_results.json")
     rows = []
+    # Time all fits first: the likelihood scoring is heavy NumPy work that slows
+    # timings taken right after it.
+    all_fits = {}
     for name, factory in CASES.items():
         case = vectorized(factory())
 
@@ -74,7 +77,9 @@ def main() -> None:
             (beta, psi, stats, _), t = timed(call(nlmefitsa, random_state=1, NChains=1))
             fits.append(("SAEM", "pynlme `nlmefitsa`", t, beta, psi, stats.errorparam))
             fits.append(("SAEM", "nlmixr2 SAEM", None, None, None, None))
+        all_fits[name] = (case, fits)
 
+    for name, (case, fits) in all_fits.items():
         for method, program, t, beta, psi, errorparam in fits:
             if program.startswith("nlmixr2"):
                 fit = nlmixr2[name]["focei" if method == "FOCE" else "saem"]
