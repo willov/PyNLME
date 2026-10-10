@@ -154,10 +154,11 @@ times from `validation/reference/`).
 | orange | 9.6 | 5.0 | 50.7 | 13.0 | 3.1 | 7.0 | 547 | 14513 | 174 | 1209 |
 | linear | 24.5 | 14.3 | 43.5 | 13.9 | 5.9 | 7.0 | 711 | 47310 | 155 | 451 |
 
-The Rust kernels (`kernels/`, optional package `pynlme-kernels`, used automatically when
-installed: `pip install ./kernels`) compile the inner loops of both modes (the MATLAB
-mode's LME step with a full `logm` covariance still runs in Python); the future custom
-mode will use them too. Without `Vectorization="Full"` the model is
+The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile the
+inner loops of both modes (the MATLAB mode's LME step with a full `logm` covariance
+still runs in Python); the future custom mode will use them too. They do the same
+arithmetic as the NumPy code, which runs instead when they are missing or
+`PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is
 called once per subject: same results, several times slower. ODE models compiled with
 SUND: the validation Michaelis-Menten fit takes ~0.4 s, against 3-5 s in MATLAB with
 `ode45`.
@@ -182,12 +183,18 @@ derivatives (`pynlme.with_jacobian`) replace finite differences when available.
 
 ## Installation
 
-Python 3.11-3.14. pynlme is pure Python (NumPy, SciPy); no compiler is needed.
+Python 3.11-3.14, on NumPy and SciPy, with compiled kernels in Rust. The wheels from
+[Releases](https://github.com/willov/PyNLME/releases) (Linux, Windows, macOS) need no
+compiler:
 
 ```bash
-pip install git+https://github.com/willov/PyNLME          # or a wheel from Releases
+pip install pynlme-<version>-cp311-abi3-<platform>.whl            # a wheel from Releases
+pip install git+https://github.com/willov/PyNLME                  # builds from source
 pip install "pynlme[sund] @ git+https://github.com/willov/PyNLME"   # with SUND models
 ```
+
+Installing from git (or the source archive) compiles the kernels and needs a Rust
+toolchain ([rustup.rs](https://rustup.rs)).
 
 SUND compiles your model files on `sund.install_model("model.txt")`, with the system
 C compiler if there is one and otherwise the Zig compiler it installs with it.
@@ -196,9 +203,11 @@ For development:
 
 ```bash
 git clone https://github.com/willov/PyNLME && cd PyNLME
-uv sync --dev --extra sund     # leave out --extra sund to skip SUND
+uv sync --dev --extra sund     # builds the Rust kernels; leave out --extra sund to skip SUND
 uv run pytest                  # --runslow adds the simulation studies
 ```
+
+`uv sync` rebuilds the kernels when files in `rust/` change.
 
 `uv sync` installs exactly what is requested: running it without `--extra sund`
 uninstalls SUND (its folder of compiled models stays behind as an empty `sund`

@@ -57,7 +57,7 @@ R_CONTROL = {"compat": "r", "max_iter": 200, "pnls_tol": 1e-6, "tol_x": 1e-7}
 
 
 def kernels(on: bool):
-    """Switch the optional Rust kernels (pynlme-kernels) on or off; returns
+    """Switch the Rust kernels (pynlme._kernels) on or off; returns
     whether they are installed."""
     import pynlme.lindstrom_bates as lb
 

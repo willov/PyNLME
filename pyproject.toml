@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "pynlme"
@@ -55,8 +55,19 @@ Documentation = "https://github.com/willov/PyNLME/blob/main/docs/README.md"
 Issues = "https://github.com/willov/PyNLME/issues"
 Changelog = "https://github.com/willov/PyNLME/blob/main/CHANGELOG.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/pynlme"]
+[tool.maturin]
+python-source = "src"
+manifest-path = "rust/Cargo.toml"
+module-name = "pynlme._kernels"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+# Rebuild the compiled kernels when the Rust code changes
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "rust/Cargo.toml" },
+    { file = "rust/src/**/*.rs" },
+]
 
 [tool.uv.sources]
 pynlme = { workspace = true }

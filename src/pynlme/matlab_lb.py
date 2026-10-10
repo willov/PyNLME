@@ -244,7 +244,7 @@ class _Linearised:
 
 
 def _kernels():
-    """The Rust kernels if installed and enabled (same switch as lindstrom_bates)."""
+    """The Rust kernels if built and enabled (same switch as lindstrom_bates)."""
     from . import lindstrom_bates
 
     return lindstrom_bates._kernels

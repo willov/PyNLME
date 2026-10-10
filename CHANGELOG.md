@@ -27,8 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of `V`. A builder `container -> Activity` lets `sund_model` simulate the experiment's
   subjects in batches; ready `Activity` objects are simulated one subject at a time.
 
+- Compiled kernels in Rust (`rust/`, module `pynlme._kernels`) for the inner loops of
+  both replicate modes: the LME solve and gradient, the EM and nlm (`optif9`) steps of
+  the R mode, and the QR decompositions, objective and `fminsearch` LME step of the
+  MATLAB mode. Same arithmetic as the NumPy code, 1.7-7.5 times faster on the validation
+  cases; the NumPy code runs without them or with `PYNLME_KERNELS=0`.
+
 ### Changed
 
+- The package is built with maturin (previously hatchling); wheels are built per
+  platform, and installing from source needs a Rust toolchain.
 - `compat="matlab"` (the default) with `"LME"`/`"RELME"` now follows MATLAB nlmefit's
   iteration step by step (`matlab_lb.py`: LMfit pre-fit, Gauss-Newton PNLS, fminsearch
   LME step on `logm`/`chol`, tolFac schedule, error-model weights, forward-difference

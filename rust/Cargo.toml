@@ -2,15 +2,15 @@
 name = "pynlme_kernels"
 version = "0.1.0"
 edition = "2021"
-description = "Optional compiled kernels for pynlme"
+description = "Compiled kernels for pynlme (Lindstrom-Bates inner loops)"
 license = "MIT"
 
 [lib]
-name = "pynlme_kernels"
+name = "_kernels"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.27", features = ["extension-module", "abi3-py311"] }
+pyo3 = { version = "0.27", features = ["abi3-py311"] }
 numpy = "0.27"
 
 [profile.release]

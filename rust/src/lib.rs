@@ -1166,7 +1166,7 @@ fn lme_solve<'py>(
 }
 
 #[pymodule]
-fn pynlme_kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lme_solve, m)?)?;
     m.add_function(wrap_pyfunction!(em_factor, m)?)?;
     m.add_function(wrap_pyfunction!(nlm_factor, m)?)?;

@@ -12,7 +12,7 @@ import pytest
 import pynlme.lindstrom_bates as lb
 
 pytestmark = pytest.mark.skipif(
-    lb._kernels is None, reason="pynlme-kernels not installed"
+    lb._kernels is None, reason="compiled kernels not built"
 )
 
 

@@ -69,6 +69,8 @@ node_modules/
 # Documentation builds
 docs/_build/
 site/
-# Rust build output of the optional kernels
-kernels/target/
-kernels/Cargo.lock
+# Rust build output of the compiled kernels
+rust/target/
+rust/Cargo.lock
+src/pynlme/_kernels*.so
+src/pynlme/_kernels*.pyd

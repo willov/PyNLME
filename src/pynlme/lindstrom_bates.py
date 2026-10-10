@@ -24,13 +24,13 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import optimize
 
-# Optional compiled kernels (kernels/, package pynlme-kernels); the same
-# arithmetic as the NumPy code below, without its per-call overhead.
-# PYNLME_KERNELS=0 disables them.
+# Compiled kernels (rust/, built into the package as pynlme._kernels): the same
+# arithmetic as the NumPy code below, without its per-call overhead. Without them
+# (a build without Rust, or PYNLME_KERNELS=0) the NumPy code runs.
 try:
     if os.environ.get("PYNLME_KERNELS", "1") == "0":
         raise ImportError
-    import pynlme_kernels as _kernels
+    from . import _kernels
 except ImportError:
     _kernels = None
 

@@ -2,8 +2,10 @@
 
 ## Setup
 
-Python 3.11-3.14 and [uv](https://docs.astral.sh/uv/). pynlme is pure Python (NumPy,
-SciPy); no compiler is needed except by SUND, which compiles model files.
+Python 3.11-3.14, [uv](https://docs.astral.sh/uv/) and a Rust toolchain
+([rustup.rs](https://rustup.rs)): the package is built with maturin and compiles the
+kernels in `rust/` (module `pynlme._kernels`). SUND compiles model files with a C
+compiler.
 
 ```bash
 git clone https://github.com/willov/PyNLME && cd PyNLME
@@ -12,6 +14,13 @@ uv run pytest                  # the fast tests, as CI runs them
 ```
 
 `uv sync` installs exactly what is requested; without `--extra sund` it uninstalls SUND.
+It rebuilds the kernels when files in `rust/` change.
+
+The kernels do the same arithmetic as the NumPy code in `lindstrom_bates.py` and
+`matlab_lb.py`, which runs when they are missing or `PYNLME_KERNELS=0` is set;
+`tests/test_kernels.py` compares the two. Run the tests both ways after changing either,
+and keep the Rust code clean under `cargo fmt` and `cargo clippy`
+(`cd rust && cargo clippy --release`).
 
 ## Tests
 
