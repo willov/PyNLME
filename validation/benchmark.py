@@ -49,17 +49,30 @@ def matlab_time(name: str, method: str, options: str = "tight") -> float:
 R_CONTROL = {"compat": "r", "max_iter": 200, "pnls_tol": 1e-6, "tol_x": 1e-7}
 
 
+def kernels(on: bool):
+    """Switch the optional Rust kernels (pynlme-kernels) on or off; returns
+    whether they are installed."""
+    import pynlme.lindstrom_bates as lb
+
+    if not hasattr(kernels, "installed"):
+        kernels.installed = lb._kernels
+    lb._kernels = kernels.installed if on else None
+    return kernels.installed is not None
+
+
+def fit(case, f=nlmefit, **kw):
+    return lambda: f(case.X, case.y, case.group, case.V, case.modelfun, case.beta0, **case.kwargs, **kw)
+
+
 def main() -> None:
     warnings.simplefilter("ignore")
+    if "--markdown" in sys.argv:
+        return markdown()
     r = load_reference("r_timings.json")
     rows = []
     for name, factory in CASES.items():
         c = factory()
         cv = vectorized(c)
-
-        def fit(case, f=nlmefit, **kw):
-            return lambda: f(case.X, case.y, case.group, case.V, case.modelfun, case.beta0, **case.kwargs, **kw)
-
         # Like for like: each mode follows its reference's iteration and options.
         rows.append((name, "LME, compat matlab", best_of(5, fit(c)), best_of(5, fit(cv)),
                      "", f"MATLAB {matlab_time(name, 'lme', 'default'):.2f}"))
@@ -78,6 +91,36 @@ def main() -> None:
     for name, method, t1, t2, ref_r, ref_m in rows:
         refs = ", ".join(x for x in (ref_r, ref_m) if x)
         print(f"{name:<10}{method:<20}{t1:>14.3f}{t2:>10.3f}   {refs}")
+
+
+def markdown() -> None:
+    """The README's speed table (Vectorization="Full"), in milliseconds."""
+    r = load_reference("r_timings.json")
+    has_kernels = kernels(True)
+
+    def ms(t):
+        return f"{1000 * t:.0f}" if t >= 0.1 else f"{1000 * t:.1f}"
+
+    print("| Case | MATLAB mode | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE |"
+          " SAEM, 1 chain | `saemix` |")
+    print("|---|---|---|---|---|---|---|---|---|---|")
+    for name, factory in CASES.items():
+        cv = vectorized(factory())
+        kernels(False)
+        lme_m = best_of(5, fit(cv))
+        lme_r = best_of(5, fit(cv, **R_CONTROL))
+        foce = best_of(1, fit(cv, ApproximationType="FOCE"))
+        saem = best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1)) if name != "indometh" else None
+        lme_rk = None
+        if has_kernels:
+            kernels(True)
+            lme_rk = best_of(5, fit(cv, **R_CONTROL))
+        cells = [name, ms(lme_m), ms(matlab_time(name, "lme", "default")), ms(lme_r),
+                 "–" if lme_rk is None else ms(lme_rk), ms(r["nlme"][name]), ms(foce),
+                 ms(matlab_time(name, "foce")), "–" if saem is None else ms(saem),
+                 "–" if saem is None else ms(r["saemix"][name])]
+        print("| " + " | ".join(cells) + " |")
+    kernels(True)
 
 
 if __name__ == "__main__":

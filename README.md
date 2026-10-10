@@ -142,21 +142,24 @@ yet: `FEObsDesign`/`REObsDesign`, block `CovPattern`, `LogLikMethod="gq"`,
 
 ## Speed
 
-Pure Python/NumPy. With `Vectorization="Full"`, each mode against the program it
-replicates, with the same options (`uv run python validation/benchmark.py`):
+Each mode against the program it replicates, with the same options and
+`Vectorization="Full"`; times in milliseconds. Regenerate with
+`uv run python validation/benchmark.py --markdown` (pynlme on this machine; R and MATLAB
+times from `validation/reference/`).
 
-| | pynlme | R | MATLAB R2023b |
-|---|---|---|---|
-| `nlmefit` LME, default (MATLAB's iteration and options) | 0.009-0.15 s | – | 0.04-0.35 s |
-| `nlmefit` LME, `compat="r"` (nlme's iteration) | 0.011-0.12 s | `nlme` 0.007-0.044 s | – |
-| `nlmefit` FOCE | 0.47-5.0 s | – | 14-49 s |
-| `nlmefitsa`, MATLAB's chains | 0.23-0.40 s | – | 1.3-3.7 s |
-| `nlmefitsa`, 1 chain | 0.16-0.25 s | `saemix` 0.45-1.32 s | – |
+| Case | MATLAB mode | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |
+|---|---|---|---|---|---|---|---|---|---|
+| indometh | 133 | 346 | 78.3 | 35.1 | 44.0 | 4520 | 49195 | – | – |
+| theoph | 27.1 | 52.6 | 107 | 28.2 | 39.0 | 3375 | 41763 | 246 | 1318 |
+| orange | 9.1 | 50.7 | 13.0 | 3.5 | 7.0 | 450 | 14513 | 176 | 1209 |
+| linear | 23.8 | 43.5 | 11.1 | 6.6 | 7.0 | 680 | 47310 | 155 | 451 |
 
-Replicating nlme's iteration (EM and nlm inside every PNLS step) costs more in Python
-than in R's C code: up to ~2.5x R's time on the larger cases, at parity on the smaller.
-With the default `Vectorization="SinglePhi"` the model is called once per subject: same
-results, several times slower.
+The Rust kernels (`kernels/`, optional package `pynlme-kernels`, used automatically when
+installed: `pip install ./kernels`) compile the R mode's inner loops; the MATLAB mode
+and the future custom mode will use them too. Without `Vectorization="Full"` the model is
+called once per subject: same results, several times slower. ODE models compiled with
+SUND: the validation Michaelis-Menten fit takes ~0.4 s, against 3-5 s in MATLAB with
+`ode45`.
 
 ## ODE models
 

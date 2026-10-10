@@ -543,48 +543,23 @@ def fit_lindstrom_bates(
 # settings in nlme.
 
 
-def _inv_small(A: np.ndarray) -> np.ndarray:
-    """Inverse of (batched) 1x1 or 2x2 matrices in closed form (LAPACK's call
-    overhead dominates at this size); np.linalg.inv otherwise."""
-    r = A.shape[-1]
-    if r == 1:
-        return 1.0 / A
-    if r == 2:
-        a, b, c, d = A[..., 0, 0], A[..., 0, 1], A[..., 1, 0], A[..., 1, 1]
-        det = a * d - b * c
-        out = np.empty_like(A)
-        out[..., 0, 0], out[..., 0, 1], out[..., 1, 0], out[..., 1, 1] = d / det, -b / det, -c / det, a / det
-        return out
-    return np.linalg.inv(A)
-
-
 def _em_factor(lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20) -> np.ndarray:
-    """nlme's EM update of the relative factor (internal_EM, ML).
-
-    Each iteration: with precision P = (L L')^-1 and M_i = Z_i'Z_i + P, the
-    BLUPs b_i, sigma^2 = penalised RSS / N and Var(b_i | y)/sigma^2 = M_i^-1
-    give Psi/sigma^2 = mean_i(M_i^-1 + b_i b_i' / sigma^2). Written with the
-    groups' cross-products (fixed during EM) for speed.
-    """
-    f = lme.f
-    ZZ = lme.ZtZ
-    ZXw = np.einsum("mnj,mnk->mjk", lme.Z, lme.Xw)
-    XX = np.einsum("mnj,mnk->jk", lme.Xw, lme.Xw)
+    """nlme's EM update of the relative factor (internal_EM, ML), with the
+    QR-based LME solve in each step, as nlme does: Psi/sigma^2 =
+    mean_i(Var(b_i | y)/sigma^2 + b_i b_i'/sigma^2)."""
     if _kernels is not None:
-        return _kernels.em_factor(np.ascontiguousarray(ZZ), np.ascontiguousarray(ZXw), np.ascontiguousarray(XX),
-                                  np.ascontiguousarray(L), float(lme.n), full, n_iter)
-    m = ZZ.shape[0]
+        return _kernels.em_factor(lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full, n_iter)
+    eye = np.eye(L.shape[0])
     for _ in range(n_iter):
-        M_inv = _inv_small(ZZ + _inv_small(L @ L.T))
-        T = M_inv @ ZXw  # (m, r, f + 1)
-        S = XX - np.einsum("mrj,mrk->jk", ZXw, T)
-        beta = np.linalg.solve(S[:f, :f], S[:f, f])
-        sigma2 = (S[f, f] - S[f, :f] @ beta) / lme.n
-        b = T[:, :, f] - T[:, :, :f] @ beta
-        psi = (M_inv.sum(axis=0) + b.T @ b / sigma2) / m
+        _, _, _, _, u = lme.solve(L)
+        sigma2 = lme._last[3] / lme.n  # ML, as nlme's EM (RML = 0)
+        R_zz = lme._last[4]
+        R_inv = np.linalg.solve(R_zz, np.broadcast_to(eye, R_zz.shape))
+        cond_cov = L @ (R_inv @ np.swapaxes(R_inv, 1, 2)) @ L.T  # Var(b_i | y) / sigma^2
+        b = u @ L.T
+        psi = np.mean(cond_cov + np.einsum("mi,mj->mij", b, b) / sigma2, axis=0)
         L = np.linalg.cholesky(psi) if full else np.diag(np.sqrt(np.diag(psi)))
     return L
-
 
 _DBL_MAX = np.finfo(float).max
 _EPS = np.finfo(float).eps
