@@ -80,7 +80,7 @@ models correctly.
 - ODE models: `pynlme.sund_model` (compiled SUND models; optional extra `pynlme[sund]`) and `pynlme.ode_model` (SciPy, batched over subjects with `Vectorization="Full"`); Michaelis-Menten validation case with MATLAB references; `examples/sund_ode_model.py`.
 - SAEM samples parameters without random effects during annealing (MATLAB/saemix scheme); the Lindstrom-Bates loop stops when changes only jitter at the model's numerical noise level.
 - `nlmefit` ApproximationType "FO" and "FOCE" (direct maximisation of the linearised marginal likelihood; FOCE with conditional modes).
-- Error models "proportional", "combined" and "exponential" for `nlmefit` (LME/RELME) and `nlmefitsa`, and `ErrorParameters`, following MATLAB's implementation.
+- Error models "proportional", "combined" and "exponential" for `nlmefit` (LME/RELME) and `nlmefitsa`, and `ErrorParameters`, with MATLAB's definitions.
 - `stats.pwres` and `stats.cwres`, and MATLAB's definitions for all weighted residuals.
 - `Vectorization="Full"`: the model is called once for many groups (one parameter row per observation). SAEM and LME internals work on flat/padded arrays.
 - `compat="matlab"|"r"`: MATLAB (default) or R (nlme/saemix) defaults and reporting conventions.

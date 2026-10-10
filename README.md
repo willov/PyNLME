@@ -1,8 +1,15 @@
 # pynlme: nonlinear mixed-effects models in Python
 
 Fit nonlinear mixed-effects models (population PK/PD, growth curves, systems-biology
-models) in Python. The algorithms are those of MATLAB's `nlmefit`/`nlmefitsa` and R's
-`nlme`/`saemix`, and the results are validated against all of them.
+models) in Python. pynlme reimplements the published algorithms behind MATLAB's
+`nlmefit`/`nlmefitsa` and R's `nlme`/`saemix`, reproduces their results, and is
+validated against all of them.
+
+pynlme is an independent project, not affiliated with MathWorks or the R project. Its
+code is its own and contains no MATLAB or R code: the replicate modes reproduce the
+reference programs' computations, worked out from the publications, their
+documentation, outputs and traces, and their source (see
+[Implementation: Sources](docs/implementation.md#sources)).
 
 ## Pick your starting point
 
@@ -23,9 +30,9 @@ beta, psi, stats, b = nlmefit(time, concentration, subject, [], model, [1, 1, 1,
 ```
 
 Indices in MATLAB-named options are 1-based (`REParamsSelect=[2, 3]`); `b` is r-by-m;
-`stats` has MATLAB's fields and definitions. `nlmefit` follows MATLAB's iteration step
-by step with MATLAB's default options, so on most data the result is MATLAB R2023b's own
-to ~1e-10 (checked on thousands of simulated datasets).
+`stats` has MATLAB's fields and definitions. `nlmefit` reproduces MATLAB's iteration
+step by step with MATLAB's default options, so on most data the result is MATLAB
+R2023b's to ~1e-10 (checked on thousands of simulated datasets).
 Start with the [tutorial](docs/tutorial.md).
 
 ### Python users
@@ -72,8 +79,9 @@ fixef(fit)["lCl.wtc"]; ranef(fit)[1]; VarCorr(fit)["Residual"]["StdDev"]
 ```
 
 `fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`, `BIC`, `fitted`, `resid`,
-`predict(fit, newdata, level=)` work as in R; the fit itself is a dict. R's defaults are kept (`method="ML"`, `pdSymm` for a
-plain `random` formula), and the results match R `nlme` to ~1e-4 or closer. Not yet
+`predict(fit, newdata, level=)` work as in R; the fit itself is a dict. R's defaults
+are kept (`method="ML"`, `pdSymm` for a plain `random` formula), and the results match
+R `nlme` to ~1e-4 or closer. Not yet
 supported: `weights=` (use `error_model=`), random effects with covariates, and
 transformed covariates in `fixed` (compute a column instead). See
 [the API reference](docs/api_reference.md#r-style-pynlmer).
@@ -113,7 +121,7 @@ Lower-level equivalents of R's arguments:
 | `saemix`: `transform.par`, `covariance.model` | `ParamTransform` (same codes), `CovPattern` |
 | `saemix(...)` | `nlmefitsa(..., compat="r")` (one chain, as saemix) |
 
-`compat="r"` follows nlme's iteration step by step, so pynlme returns R's own fit even
+`compat="r"` reproduces nlme's iteration step by step, so pynlme returns R's fit even
 where the model has several local solutions, and R's `method="REML"` (which for
 nonlinear models is not a restricted-likelihood fit). The default `compat="matlab"`
 RELME is a true REML fit. See [docs/troubleshooting.md](docs/troubleshooting.md).
@@ -125,10 +133,13 @@ findings are in [validation/README.md](validation/README.md).
 
 - **`nlmefit`**: matches MATLAB R2023b on every output (estimates, covariance,
   log-likelihood, AIC/BIC, standard errors, error parameters, all residual types,
-  random effects) for LME and RELME with all four error models. FOCE reaches MATLAB's
-  optimum or a better one; FO reaches far better optima than MATLAB's (whose FO
-  collapses the variances to zero). Matches R `nlme` on fixed datasets, and on 640
-  freshly simulated datasets reaches R's solution or a better one in all but one case.
+  random effects) for LME and RELME with all four error models; on 3200 simulated
+  fits, 2699 of the 2715 that never had a variance at zero agree with MATLAB to <1e-8.
+  FOCE reaches MATLAB's optimum or a better one; FO reaches far better optima than
+  MATLAB's (whose FO collapses the variances to zero).
+- **`compat="r"`**: matches R `nlme` on fixed datasets (ML and nlme's REML), and gives
+  R's fit on 2399 of 2400 freshly simulated datasets (the other has a variance that is
+  not identified).
 - **`nlmefitsa`** (SAEM): agrees with MATLAB and R `saemix` within Monte Carlo error;
   reaches the exact maximum likelihood on a linear model; removes the linearisation
   bias of `nlmefit` in simulation studies.
@@ -158,10 +169,8 @@ The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile 
 inner loops of both modes (the MATLAB mode's LME step with a full `logm` covariance
 still runs in Python); the future custom mode will use them too. They do the same
 arithmetic as the NumPy code, which runs instead when they are missing or
-`PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is
-called once per subject: same results, several times slower. ODE models compiled with
-SUND: the validation Michaelis-Menten fit takes ~0.4 s, against 3-5 s in MATLAB with
-`ode45`.
+`PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is called once per
+subject: same results, several times slower. ODE models: see below.
 
 ## ODE models
 
@@ -207,9 +216,8 @@ uv sync --dev --extra sund     # builds the Rust kernels; leave out --extra sund
 uv run pytest                  # --runslow adds the simulation studies
 ```
 
-`uv sync` rebuilds the kernels when files in `rust/` change.
-
-`uv sync` installs exactly what is requested: running it without `--extra sund`
+`uv sync` rebuilds the kernels when files in `rust/` change, and installs exactly what
+is requested: running it without `--extra sund`
 uninstalls SUND (its folder of compiled models stays behind as an empty `sund`
 package; rerun with `--extra sund` to restore it). The validation tests compare with R
 when `Rscript` with `nlme` and `jsonlite` is available, and with MATLAB when

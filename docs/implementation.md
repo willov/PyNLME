@@ -1,6 +1,9 @@
 # Implementation
 
-For developers. All fitting code is Python/NumPy/SciPy in `src/pynlme/`.
+For developers. The fitting code is Python/NumPy/SciPy in `src/pynlme/`; the inner
+loops of the Lindstrom-Bates modes also exist as compiled Rust kernels in `rust/`
+(module `pynlme._kernels`), which do the same arithmetic and are used when built
+(`PYNLME_KERNELS=0` switches them off).
 
 ## Code structure
 
@@ -8,12 +11,16 @@ For developers. All fitting code is Python/NumPy/SciPy in `src/pynlme/`.
 |---|---|
 | `nlmefit.py` | Public functions: option parsing (MATLAB and Python names), input validation, dispatch, `stats` |
 | `model.py` | `GroupedModel`: data split by group, designs `A_i`/`B_i`, parameter transforms, model calls (per group or batched), Jacobians (analytic or central differences) |
-| `lindstrom_bates.py` | `"LME"`/`"RELME"`; also the weight updates for error models |
+| `lindstrom_bates.py` | `"LME"`/`"RELME"` building blocks (LME solve, EM, nlm refinement, error-model weights, also used by FO/FOCE) and nlme's iteration for `compat="r"` |
+| `matlab_lb.py` | `"LME"`/`"RELME"` for `compat="matlab"` (nlmefit's iteration) |
 | `first_order.py` | `"FO"`/`"FOCE"` |
 | `saem.py` | `nlmefitsa` |
 | `residuals.py` | MATLAB's residual definitions |
 | `ode.py`, `sund_adapter.py` | ODE model functions (SciPy; compiled SUND models) |
 | `utils.py` | Input validation, stacked/grouped conversion |
+| `api.py` | `fit`/`predict`: named parameters, dict or Polars data (provisional) |
+| `r.py`, `r_saemix.py` | `pynlme.r`: R's `nlme()` and saemix interfaces |
+| `rust/src/lib.rs` | Compiled kernels: LME solve and gradient, EM, nlm refinement, MATLAB-mode QR, objective and Nelder-Mead |
 
 The model for group i: `phi_i = g^-1(eta_i)`, `eta_i = A_i beta + B_i b_i`,
 `b_i ~ N(0, Psi)`, `y_i = f(phi_i, X_i[, V_i]) + g_i e_i`. Internally
@@ -108,9 +115,9 @@ As MATLAB's `nlmefitsa` and saemix (Kuhn & Lavielle):
 pynlme implements published algorithms. Where a publication leaves details open (the
 order of steps, tolerances, which iterate is kept), the replicate modes match the
 reference programs; those details were established from their outputs and traces and by
-reading their source code. pynlme's code is its own implementation of the same
-computations, with its own structure and names; it is not a translation of MATLAB's or
-R's code, and contains none of it.
+reading their source code, and pynlme reproduces them. pynlme's code is its own
+implementation of the same computations, with its own structure and names; it is not a
+translation of MATLAB's or R's code, and contains none of it.
 
 | Component | Published sources |
 |---|---|
