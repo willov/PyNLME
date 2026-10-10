@@ -100,8 +100,12 @@ def test_matches_matlab(runs, name, caplog):
             beta, psi, stats, _ = nlmefit(
                 *d.fit_args(), **d.kwargs, ApproximationType=approx
             )
-        except Exception as error:  # report the seed to reproduce it
-            raise AssertionError(f"{context}: {error!r}") from error
+        except Exception as error:
+            if isinstance(error, FloatingPointError) and "error" in r:
+                # MATLAB failed too ("MYFUN has returned Inf or NaN values"): the
+                # model is not finite where the iteration leads.
+                return
+            raise AssertionError(f"{context}: {error!r}") from error  # with the seed
     collapsed = any(
         "variance was estimated as zero" in str(w.message) for w in caught
     ) or any(

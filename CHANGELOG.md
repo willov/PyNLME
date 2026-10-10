@@ -80,10 +80,14 @@ models correctly.
   subjects in batches; ready `Activity` objects are simulated one subject at a time.
 
 - Compiled kernels in Rust (`rust/`, module `pynlme._kernels`) for the inner loops of
-  both replicate modes: the LME solve and gradient, the EM and nlm (`optif9`) steps of
-  the R mode, and the QR decompositions, objective and `fminsearch` LME step of the
-  MATLAB mode. Same arithmetic as the NumPy code, 1.7-7.5 times faster on the validation
-  cases; the NumPy code runs without them or with `PYNLME_KERNELS=0`.
+  every algorithm: the LME solve and gradient, the EM and nlm (`optif9`) steps of the R
+  mode; the QR decompositions, objective, `expm` and `fminsearch` LME step of the
+  MATLAB mode; FOCE's conditional modes and linearised likelihood; SAEM's
+  Metropolis-Hastings sampler (same chain for a given `random_state`). The model
+  function stays Python and is called once per step for all subjects. Same arithmetic
+  as the NumPy code, which runs without them or with `PYNLME_KERNELS=0`.
+- FOCE solves all subjects' conditional modes in lock-step (one model call per step
+  with `Vectorization="Full"` instead of one per subject).
 
 ### Removed
 

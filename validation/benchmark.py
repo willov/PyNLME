@@ -250,26 +250,32 @@ def markdown() -> None:
             return "–"
         return f"{1000 * t:.0f}" if t >= 0.1 else f"{1000 * t:.1f}"
 
+    def both(n, fn):
+        """(NumPy, Rust) times: the best of n runs without and with the kernels."""
+        kernels(False)
+        numpy_time = best_of(n, fn)
+        kernels(True)
+        return numpy_time, (best_of(n, fn) if has_kernels else None)
+
     lme, foce, saem = [], [], []
     for name, factory in CASES.items():
         cv = vectorized(factory())
-        kernels(False)
-        numpy_m = best_of(10, fit(cv))
-        numpy_r = best_of(10, fit(cv, **R_CONTROL))
-        foce_t = best_of(3, fit(cv, ApproximationType="FOCE"))
-        kernels(True)
-        rust_m = best_of(10, fit(cv)) if has_kernels else None
-        rust_r = best_of(10, fit(cv, **R_CONTROL)) if has_kernels else None
         lme.append(
-            [name, numpy_m, rust_m, matlab_time(name, "lme")]
-            + [numpy_r, rust_r, r["nlme"][name]]
+            [name, *both(10, fit(cv)), matlab_time(name, "lme")]
+            + [*both(10, fit(cv, **R_CONTROL)), r["nlme"][name]]
         )
-        foce.append([name, foce_t, matlab_time(name, "foce")])
+        foce.append(
+            [
+                name,
+                *both(3, fit(cv, ApproximationType="FOCE")),
+                matlab_time(name, "foce"),
+            ]
+        )
         if name != "indometh":  # not a usable SAEM case (see README)
             saem.append(
                 [
                     name,
-                    best_of(3, fit(cv, nlmefitsa, random_state=1, NChains=1)),
+                    *both(3, fit(cv, nlmefitsa, random_state=1, NChains=1)),
                     matlab_time(name, "saem"),
                     best_of(3, saemix_fit(name)),
                     r["saemix"][name],
@@ -295,11 +301,12 @@ def markdown() -> None:
         ],
         lme,
     )
-    table(["FOCE", "pynlme", "MATLAB `nlmefit`"], foce)
+    table(["FOCE", "pynlme (NumPy)", "pynlme (Rust)", "MATLAB `nlmefit`"], foce)
     table(
         [
             "SAEM",
-            "pynlme `nlmefitsa`",
+            "pynlme `nlmefitsa` (NumPy)",
+            "pynlme `nlmefitsa` (Rust)",
             "MATLAB `nlmefitsa`",
             "pynlme `pynlme.r.saemix`",
             "R `saemix`",

@@ -1,7 +1,7 @@
 # Implementation
 
 For developers. The fitting code is Python/NumPy/SciPy in `src/pynlme/`; the inner
-loops of the Lindstrom-Bates modes also exist as compiled Rust kernels in `rust/`
+loops of every algorithm also exist as compiled Rust kernels in `rust/`
 (module `pynlme._kernels`), which do the same arithmetic and are used when built
 (`PYNLME_KERNELS=0` switches them off).
 
@@ -20,7 +20,7 @@ loops of the Lindstrom-Bates modes also exist as compiled Rust kernels in `rust/
 | `utils.py` | Input validation, stacked/grouped conversion |
 | `api.py` | `fit`/`predict`: named parameters, dict or Polars data (provisional) |
 | `r.py`, `r_saemix.py` | `pynlme.r`: R's `nlme()` and saemix interfaces |
-| `rust/src/lib.rs` | Compiled kernels: LME solve and gradient, EM, nlm refinement, MATLAB-mode QR, objective and Nelder-Mead |
+| `rust/src/lib.rs` | Compiled kernels: LME solve and gradient, EM, nlm refinement, MATLAB-mode QR, objective, `expm` and Nelder-Mead, FOCE conditional modes and linearised likelihood, SAEM sampler |
 
 The model for group i: `phi_i = g^-1(eta_i)`, `eta_i = A_i beta + B_i b_i`,
 `b_i ~ N(0, Psi)`, `y_i = f(phi_i, X_i[, V_i]) + g_i e_i`. Internally

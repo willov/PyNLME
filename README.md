@@ -208,10 +208,10 @@ Regenerate: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` 
 MATLAB, then `uv run python validation/benchmark.py --markdown`.
 
 The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile the
-inner loops of the LME modes (the MATLAB mode's LME step with a full `logm` covariance
-still runs in Python); the future custom mode will use them too. They do the same
-arithmetic as the NumPy code, which runs instead when they are missing or
-`PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is called once per
+inner loops of every algorithm: both LME modes, FO/FOCE and SAEM's sampler; the future
+custom mode will use them too. The model function stays Python and is called back
+once per step for all subjects. The kernels do the same arithmetic as the NumPy code,
+which runs instead when they are missing or `PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is called once per
 subject: same results, several times slower.
 
 ## ODE models
