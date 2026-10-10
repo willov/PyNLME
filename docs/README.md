@@ -37,7 +37,7 @@ Where to start:
 - `Vectorization="Full"` for batched model evaluation; analytic derivatives via
   `with_jacobian`; ODE models via SUND (`sund_model`) or SciPy (`ode_model`), including
   several observed features per subject (stacked data with a feature column) and doses
-  and other inputs from SUND activities (shared per experiment, or built per subject).
+  and other inputs from SUND activities (one set per experiment).
 - `compat="matlab"` (default): `nlmefit` LME/RELME follow MATLAB's iteration and default
   options, giving MATLAB's results (~1e-10 on most data). `compat="r"`: they follow
   nlme's iteration and `nlmeControl` defaults, giving R's (including nlme's REML), and

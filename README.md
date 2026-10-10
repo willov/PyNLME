@@ -165,9 +165,9 @@ results, several times slower.
   `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`
   (`pip install "pynlme[sund]"`); see [examples/sund_ode_model.py](examples/sund_ode_model.py).
 - **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a vectorised right-hand side.
-- **Doses and other inputs**: SUND `Activity` objects, one per experiment
+- **Doses and other inputs**: SUND activities, one set per experiment
   (`sund_model(..., activities={1: oral, 2: infusion})`, the experiment in a column of
-  `V`) or built per subject (e.g. doses per kg).
+  `V`); person-specific doses (e.g. per kg) are written in the model.
 - **Several measured features** (e.g. concentration and effect): stack them in one
   response vector with a feature column in `X`, and pass `feature=["conc", "effect"]`
   (SUND) or a multi-column `output` (SciPy); each subject is simulated once.

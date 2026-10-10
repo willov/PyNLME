@@ -50,6 +50,26 @@ def experiments():
 
 
 TIMES = np.array([0.5, 1.0, 2.0, 4.0, 8.0, 12.5, 16.0, 24.0])
+SUBJECTS = [  # phi (ka, V, CL), V row (BW, experiment)
+    (np.array([1.2, 10.0, 2.0]), np.array([70.0, 1.0])),
+    (np.array([0.8, 12.0, 1.5]), np.array([50.0, 2.0])),
+    (np.array([1.0, 9.0, 2.5]), np.array([90.0, 2.0])),
+]
+def builders():
+    """The experiments as functions of the container: sund_model batches subjects in
+    containers, each copy with the activities built for it."""
+    def oral_doses(container):
+        a = sund.Activity(time_unit="h", container=container)
+        a.add_state_manipulation(name="gut", t=[0.0, 12.0], f=[100.0, 100.0], mode="add")
+        return a
+
+    def iv(container):
+        a = sund.Activity(time_unit="h", container=container)
+        a.add_output(type="piecewise_constant", name="infusion_per_kg_in", t=[0.0, 2.0], f=[0.0, 0.5, 0.0])
+        return a
+
+    return {1: oral_doses, 2: iv}
+
 
 
 def test_activities_per_experiment():
@@ -74,17 +94,9 @@ def test_activities_per_experiment():
     np.testing.assert_allclose(model(subjects[0][0], TIMES[:, None], subjects[0][1]), out[0], rtol=1e-12)
 
 
-def test_activities_per_subject():
-    """A function of the subject's V row: an oral dose of 2 mg/kg."""
-    def dose_per_kg(v):
-        a = sund.Activity(time_unit="h")
-        a.add_state_manipulation(name="gut", t=[0.0], f=[2.0 * v[0]], mode="add")
-        return a
-
-    model = sund_model("pk_inputs", "conc", PARAMS, activities=dose_per_kg)
-    for bw in (50.0, 80.0):
-        out = model(np.array([1.0, 10.0, 2.0]), TIMES[:, None], np.array([bw]))
-        np.testing.assert_allclose(out, oral(TIMES, 1.0, 10.0, 2.0, {0.0: 2.0 * bw}), rtol=1e-6)
+def test_activities_must_be_per_experiment():
+    with pytest.raises(TypeError, match="per kg"):
+        sund_model("pk_inputs", "conc", PARAMS, activities=lambda v: experiments()[1])
 
 
 def test_activity_errors():
@@ -98,7 +110,8 @@ def test_activity_errors():
                    activities=experiments())
 
 
-def test_fit_with_two_experiments():
+@pytest.mark.parametrize("activities", [experiments, builders], ids=["plain", "builders"])
+def test_fit_with_two_experiments(activities):
     """Subjects from an oral and an infusion experiment, fitted together."""
     rng = np.random.default_rng(1)
     truth = np.array([1.0, 10.0, 2.0])
@@ -112,7 +125,7 @@ def test_fit_with_two_experiments():
         y.append(c * (1 + 0.05 * rng.normal(size=c.size)))
         group.append(np.full(len(TIMES), i))
         V.append([bw, exp_id])
-    model = sund_model("pk_inputs", "conc", PARAMS, v_parameters=["BW"], activities=experiments())
+    model = sund_model("pk_inputs", "conc", PARAMS, v_parameters=["BW"], activities=activities())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         beta, psi, stats, b = nlmefit(np.concatenate(X), np.concatenate(y), np.concatenate(group), np.array(V),
@@ -120,3 +133,20 @@ def test_fit_with_two_experiments():
                                       ErrorModel="proportional", Vectorization="Full")
     np.testing.assert_allclose(np.exp(beta), truth, rtol=0.15)
     assert stats.errorparam[0] == pytest.approx(0.05, rel=0.3)
+
+
+@pytest.mark.parametrize("batch_size", [16, 2, 1])
+def test_activity_builders_batched(batch_size):
+    subjects = SUBJECTS + [(np.array([1.5, 8.0, 1.0]), np.array([60.0, 1.0]))]
+    model = sund_model("pk_inputs", "conc", PARAMS, v_parameters=["BW"], activities=builders(),
+                       batch_size=batch_size)
+    phi = np.repeat([s[0] for s in subjects], len(TIMES), axis=0)
+    v = np.repeat([s[1] for s in subjects], len(TIMES), axis=0)
+    out = model(phi, np.tile(TIMES, len(subjects))[:, None], v).reshape(len(subjects), -1)
+    for i, ((ka, V, CL), (bw, exp_id)) in enumerate(subjects):
+        expected = (oral(TIMES, ka, V, CL, {0.0: 100.0, 12.0: 100.0}) if exp_id == 1
+                    else infusion(TIMES, V, CL, 0.5 * bw, 2.0))
+        np.testing.assert_allclose(out[i], expected, rtol=1e-6, atol=1e-12)
+    plain = sund_model("pk_inputs", "conc", PARAMS, v_parameters=["BW"], activities=experiments())
+    np.testing.assert_allclose(plain(phi, np.tile(TIMES, len(subjects))[:, None], v).reshape(len(subjects), -1),
+                               out, rtol=1e-7, atol=1e-12)

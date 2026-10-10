@@ -272,26 +272,33 @@ With `Vectorization="Full"` it simulates `batch_size` (16) parameter sets per SU
 using containers. Integrator tolerances default to rel 1e-10, abs 1e-12, because the
 model is differentiated numerically. See `examples/sund_ode_model.py`.
 
-Inputs (doses, infusions) come from SUND `Activity` objects, usually one per experiment:
+Inputs (doses, infusions) come from SUND activities, one set per experiment. You give
+the model and the data; `sund_model` creates the simulations. Give each experiment as a
+function of the container, and `sund_model` simulates the experiment's subjects in
+batches, building each copy's activities:
 
 ```python
-oral = sund.Activity(time_unit="h")
-oral.add_state_manipulation(name="gut", t=[0, 12], f=[100, 100], mode="add")
-iv = sund.Activity(time_unit="h")     # 0.5 mg/kg/h for 2 h, scaled by BW in the model
-iv.add_output(type="piecewise_constant", name="infusion_per_kg_in", t=[0, 2], f=[0, 0.5, 0])
+def oral(container):
+    a = sund.Activity(time_unit="h", container=container)
+    a.add_state_manipulation(name="gut", t=[0, 12], f=[100, 100], mode="add")
+    return a
+
+def iv(container):     # 0.5 mg/kg/h for 2 h, scaled by BW in the model
+    a = sund.Activity(time_unit="h", container=container)
+    a.add_output(type="piecewise_constant", name="infusion_per_kg_in", t=[0, 2], f=[0, 0.5, 0])
+    return a
 
 model = sund_model("pk_inputs", "conc", ["ka", "V", "CL"], v_parameters=["BW"],
                    activities={1: oral, 2: iv})
 # V: one row per subject, [body weight, experiment ID]
 ```
 
-`activities` is a dict from experiment ID to activities (or lists of them), with the ID
-in column `activity_column` of `V` (default: the column after those used by `v_states`
-and `v_parameters`), or a function of a subject's `V` row returning its activities
-(e.g. a dose per kg as a bolus). Doses per kg are simplest in the model: an input per kg
-times a body-weight parameter set from `V`, as in `validation/models/pk_inputs_sund.txt`.
-With activities each subject is simulated on its own; SUND activities cannot yet be
-shared across batched model copies.
+The experiment ID is read from column `activity_column` of `V` (default: the column
+after those used by `v_states` and `v_parameters`). Ready `Activity` objects
+(`activities={1: oral_activity}`) also work; then each subject is simulated on its own
+(1.5 s against 0.85 s batched on the validation fit). Person-specific inputs belong in
+the model: e.g. an input per kg times a body-weight parameter set from `V`, as in
+`validation/models/pk_inputs_sund.txt`.
 
 ### `ode_model(rhs, y0, output, t0=0, method="DOP853", rtol=1e-10, atol=1e-12)`
 
