@@ -1083,6 +1083,193 @@ fn fminsearch_py(
 /// nlmefit's LME step for the parametrizations computed here: "chol" (Delta
 /// set from theta at the pattern positions) or "logm" with a diagonal pattern
 /// (Delta = sqrt(exp(theta))). fminsearch on LMEnegloglikelihood.
+fn mat_mul(a: &[f64], b: &[f64], n: usize) -> Vec<f64> {
+    let mut c = vec![0.0; n * n];
+    for i in 0..n {
+        for k in 0..n {
+            let aik = a[i * n + k];
+            for j in 0..n {
+                c[i * n + j] += aik * b[k * n + j];
+            }
+        }
+    }
+    c
+}
+
+/// sum_k coefficients[k] * powers[k] (n x n matrices).
+fn mat_combination(coefficients: &[f64], powers: &[&[f64]], n: usize) -> Vec<f64> {
+    let mut out = vec![0.0; n * n];
+    for (&c, p) in coefficients.iter().zip(powers) {
+        for (o, v) in out.iter_mut().zip(p.iter()) {
+            *o += c * v;
+        }
+    }
+    out
+}
+
+fn one_norm(a: &[f64], n: usize) -> f64 {
+    (0..n)
+        .map(|j| (0..n).map(|i| a[i * n + j].abs()).sum::<f64>())
+        .fold(0.0, f64::max)
+}
+
+/// Matrix exponential by scaling and squaring with Pade approximants (Higham 2005,
+/// SIAM J. Matrix Anal. Appl. 26:1179-1193): the degree m in {3, 5, 7, 9, 13} is
+/// the lowest whose bound theta_m covers the 1-norm, else A is scaled by 2^-s to
+/// theta_13, then expm(A) = (r_13(A 2^-s))^(2^s), r_m = (V - U)^-1 (V + U).
+fn expm(a: &[f64], n: usize) -> Vec<f64> {
+    const THETA: [(usize, f64); 4] = [
+        (3, 1.495585217958292e-2),
+        (5, 2.539_398_330_063_23e-1),
+        (7, 9.504178996162932e-1),
+        (9, 2.097847961257068),
+    ];
+    const THETA_13: f64 = 5.371920351148152;
+    const B: [f64; 14] = [
+        64764752532480000.0,
+        32382376266240000.0,
+        7771770303897600.0,
+        1187353796428800.0,
+        129060195264000.0,
+        10559470521600.0,
+        670442572800.0,
+        33522128640.0,
+        1323241920.0,
+        40840800.0,
+        960960.0,
+        16380.0,
+        182.0,
+        1.0,
+    ];
+    let pade = |m: usize| -> &'static [f64] {
+        match m {
+            3 => &[120.0, 60.0, 12.0, 1.0],
+            5 => &[30240.0, 15120.0, 3360.0, 420.0, 30.0, 1.0],
+            7 => &[
+                17297280.0, 8648640.0, 1995840.0, 277200.0, 25200.0, 1512.0, 56.0, 1.0,
+            ],
+            _ => &[
+                17643225600.0,
+                8821612800.0,
+                2075673600.0,
+                302702400.0,
+                30270240.0,
+                2162160.0,
+                110880.0,
+                3960.0,
+                90.0,
+                1.0,
+            ],
+        }
+    };
+    let mut identity = vec![0.0; n * n];
+    for i in 0..n {
+        identity[i * n + i] = 1.0;
+    }
+    let norm = one_norm(a, n);
+    let solve = |u: Vec<f64>, v: Vec<f64>| -> Vec<f64> {
+        // (V - U) X = (V + U), column by column.
+        let mut x = vec![0.0; n * n];
+        for j in 0..n {
+            let mut lhs: Vec<f64> = v.iter().zip(&u).map(|(vi, ui)| vi - ui).collect();
+            let mut col: Vec<f64> = (0..n).map(|i| v[i * n + j] + u[i * n + j]).collect();
+            lu_solve(&mut lhs, n, &mut col);
+            for i in 0..n {
+                x[i * n + j] = col[i];
+            }
+        }
+        x
+    };
+    for &(m, theta) in &THETA {
+        if norm <= theta {
+            let b = pade(m);
+            let a2 = mat_mul(a, a, n);
+            let mut powers: Vec<Vec<f64>> = vec![identity.clone(), a2.clone()];
+            while powers.len() <= m / 2 {
+                let next = mat_mul(powers.last().unwrap(), &a2, n);
+                powers.push(next);
+            }
+            let refs: Vec<&[f64]> = powers.iter().map(|p| p.as_slice()).collect();
+            let odd: Vec<f64> = (0..=m / 2).map(|k| b[2 * k + 1]).collect();
+            let even: Vec<f64> = (0..=m / 2).map(|k| b[2 * k]).collect();
+            let u = mat_mul(a, &mat_combination(&odd, &refs, n), n);
+            let v = mat_combination(&even, &refs, n);
+            return solve(u, v);
+        }
+    }
+    let s = if norm > THETA_13 {
+        (norm / THETA_13).log2().ceil().max(0.0) as i32
+    } else {
+        0
+    };
+    let scale = 2f64.powi(-s);
+    let a: Vec<f64> = a.iter().map(|v| v * scale).collect();
+    let a2 = mat_mul(&a, &a, n);
+    let a4 = mat_mul(&a2, &a2, n);
+    let a6 = mat_mul(&a4, &a2, n);
+    let u_inner = mat_mul(
+        &a6,
+        &mat_combination(&[B[13], B[11], B[9]], &[&a6, &a4, &a2], n),
+        n,
+    );
+    let u_rest = mat_combination(&[B[7], B[5], B[3], B[1]], &[&a6, &a4, &a2, &identity], n);
+    let u = mat_mul(
+        &a,
+        &u_inner
+            .iter()
+            .zip(&u_rest)
+            .map(|(x, y)| x + y)
+            .collect::<Vec<_>>(),
+        n,
+    );
+    let v_inner = mat_mul(
+        &a6,
+        &mat_combination(&[B[12], B[10], B[8]], &[&a6, &a4, &a2], n),
+        n,
+    );
+    let v_rest = mat_combination(&[B[6], B[4], B[2], B[0]], &[&a6, &a4, &a2, &identity], n);
+    let v: Vec<f64> = v_inner.iter().zip(&v_rest).map(|(x, y)| x + y).collect();
+    let mut x = solve(u, v);
+    for _ in 0..s {
+        x = mat_mul(&x, &x, n);
+    }
+    x
+}
+
+/// Lower Cholesky factor, or None if the matrix is not positive definite (as
+/// numpy.linalg.cholesky raising LinAlgError).
+fn cholesky_checked(a: &[f64], n: usize) -> Option<Vec<f64>> {
+    let mut l = vec![0.0; n * n];
+    for i in 0..n {
+        for j in 0..=i {
+            let mut s = a[i * n + j];
+            for k in 0..j {
+                s -= l[i * n + k] * l[j * n + k];
+            }
+            if i == j {
+                if s.is_nan() || s <= 0.0 || s.is_infinite() {
+                    return None;
+                }
+                l[i * n + j] = s.sqrt();
+            } else {
+                l[i * n + j] = s / l[j * n + j];
+            }
+        }
+    }
+    Some(l)
+}
+
+/// expm for tests against SciPy.
+#[pyfunction]
+fn expm_py<'py>(py: Python<'py>, a: PyReadonlyArray2<'py, f64>) -> Bound<'py, PyArray2<f64>> {
+    let a = a.as_array();
+    let n = a.shape()[0];
+    let flat: Vec<f64> = a.iter().copied().collect();
+    Array2::from_shape_vec((n, n), expm(&flat, n))
+        .unwrap()
+        .into_pyarray(py)
+}
+
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 fn matlab_lme_step(
@@ -1092,6 +1279,7 @@ fn matlab_lme_step(
     rows: Vec<usize>,
     cols: Vec<usize>,
     chol: bool,
+    full: bool,
     n_obs: f64,
     reml: bool,
     tol_x: f64,
@@ -1103,7 +1291,28 @@ fn matlab_lme_step(
     let q = xw.len_of(Axis(2)) - 1;
     let objective = |theta: &[f64]| -> f64 {
         let mut delta = Array2::<f64>::zeros((r, r));
+        if !chol && full {
+            // Delta = chol(expm(S))' with S symmetric from theta (upper triangle).
+            let mut s_mat = vec![0.0; r * r];
+            for (k, (&i, &j)) in rows.iter().zip(&cols).enumerate() {
+                s_mat[i * r + j] = theta[k];
+                s_mat[j * r + i] = theta[k];
+            }
+            match cholesky_checked(&expm(&s_mat, r), r) {
+                Some(lower) => {
+                    for i in 0..r {
+                        for j in 0..=i {
+                            delta[[j, i]] = lower[i * r + j];
+                        }
+                    }
+                }
+                None => return 1.0 / f64::EPSILON, // chol failure in nlmefit
+            }
+        }
         for (k, (&i, &j)) in rows.iter().zip(&cols).enumerate() {
+            if !chol && full {
+                break;
+            }
             delta[[i, j]] = if chol {
                 theta[k]
             } else {
@@ -1113,6 +1322,9 @@ fn matlab_lme_step(
                 }
                 e.sqrt()
             };
+        }
+        if delta.iter().any(|v| !v.is_finite()) {
+            return 1.0 / f64::EPSILON; // as negloglik for a non-finite Delta
         }
         let d = delta_qr_core(z, xw, delta.view());
         let resid_norm = d.r_x[[q, q]].abs();
@@ -1754,5 +1966,6 @@ fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(conditional_modes, m)?)?;
     m.add_function(wrap_pyfunction!(linearized_marginal, m)?)?;
     m.add_function(wrap_pyfunction!(saem_mcmc, m)?)?;
+    m.add_function(wrap_pyfunction!(expm_py, m)?)?;
     Ok(())
 }

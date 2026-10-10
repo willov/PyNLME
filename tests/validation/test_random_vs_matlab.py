@@ -96,9 +96,12 @@ def test_matches_matlab(runs, name, caplog):
         caplog.at_level(logging.INFO, logger="pynlme"),
     ):
         warnings.simplefilter("always")
-        beta, psi, stats, _ = nlmefit(
-            *d.fit_args(), **d.kwargs, ApproximationType=approx
-        )
+        try:
+            beta, psi, stats, _ = nlmefit(
+                *d.fit_args(), **d.kwargs, ApproximationType=approx
+            )
+        except Exception as error:  # report the seed to reproduce it
+            raise AssertionError(f"{context}: {error!r}") from error
     collapsed = any(
         "variance was estimated as zero" in str(w.message) for w in caught
     ) or any(

@@ -458,7 +458,7 @@ def fit_lindstrom_bates_matlab(
             return lin.negloglik(cov.to_delta(theta), reml)[0]
 
         kernels = _kernels()
-        if kernels is not None and (cov.kind == "chol" or not full_cov):
+        if kernels is not None:
             theta_hat, objective_value, ok = kernels.matlab_lme_step(
                 lin.Z,
                 lin.Xw,
@@ -466,6 +466,7 @@ def fit_lindstrom_bates_matlab(
                 [int(i) for i in cov.rows],
                 [int(j) for j in cov.cols],
                 cov.kind == "chol",
+                bool(full_cov),
                 float(N),
                 reml,
                 lme_tol["tol_x"],

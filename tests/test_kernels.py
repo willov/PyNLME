@@ -323,3 +323,71 @@ def test_saem_kernel_same_chain(error_model, chains):
     np.testing.assert_allclose(beta_rs, beta_np, rtol=1e-9)
     np.testing.assert_allclose(psi_rs, psi_np, rtol=1e-9)
     np.testing.assert_allclose(stats_rs.errorparam, stats_np.errorparam, rtol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_expm_matches_scipy(seed):
+    """The Rust matrix exponential (Pade, scaling and squaring) against SciPy's."""
+    from scipy import linalg
+
+    rng = np.random.default_rng(seed)
+    for _ in range(50):
+        n = int(rng.integers(1, 6))
+        A = rng.normal(size=(n, n)) * 10 ** rng.uniform(-4, 1)
+        if rng.integers(0, 2):
+            A = A + A.T
+        expected = linalg.expm(A)
+        np.testing.assert_allclose(
+            lb._kernels.expm_py(A),
+            expected,
+            rtol=0,
+            atol=1e-11 * np.abs(expected).max(),
+        )
+
+
+@pytest.mark.parametrize("seed", range(10))
+def test_full_logm_lme_step(seed):
+    """MATLAB mode, full covariance with the logm parameterisation: the Rust LME
+    step's objective (expm, Cholesky, LMEnegloglikelihood) is the Python one, at
+    well-conditioned points (the start and small perturbations of it). Far out,
+    where expm(S) has eigenvalues near 1e-18, the objective depends on the rounding
+    of expm (in SciPy, Rust and MATLAB alike); the MATLAB comparison covers fits."""
+    from pynlme import matlab_lb
+
+    rng = np.random.default_rng(100 + seed)
+    lme, L, _ = random_problem(rng, scale=rng.uniform(0.3, 3))
+    r = lme.Z.shape[2]
+    lin = matlab_lb._Linearised.__new__(matlab_lb._Linearised)
+    lin.model, lin.Z, lin.Xw = SimpleNamespace(n_obs=lme.n), lme.Z, lme.Xw
+    cov = matlab_lb._Covariance(r, True, "logm")
+    theta0 = cov.to_theta(np.linalg.cholesky(np.linalg.inv(L @ L.T)).T)
+    reml = bool(rng.integers(0, 2))
+
+    def rust_value(theta):
+        # With no iterations, the best point of the initial simplex around theta.
+        return lb._kernels.matlab_lme_step(
+            lin.Z,
+            lin.Xw,
+            [float(v) for v in theta],
+            [int(i) for i in cov.rows],
+            [int(j) for j in cov.cols],
+            False,
+            True,
+            float(lme.n),
+            reml,
+            1e-6,
+            1e-6,
+            0,
+        )[:2]
+
+    kernels = lb._kernels
+    try:
+        for _ in range(5):
+            theta = theta0 + rng.normal(size=theta0.size) * 0.05
+            lb._kernels = kernels
+            theta_k, value_k = rust_value(theta)
+            lb._kernels = None
+            value_p = lin.negloglik(cov.to_delta(np.asarray(theta_k)), reml)[0]
+            assert value_k == pytest.approx(value_p, rel=1e-10, abs=1e-9)
+    finally:
+        lb._kernels = kernels
