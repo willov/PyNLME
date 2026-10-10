@@ -49,6 +49,7 @@ with full covariance, Emax) are defined in
 | `r/benchmark.R` | R `nlme`/`saemix` timings (best of repeated runs) for `benchmark.py`, written to `reference/r_timings.json` |
 | `matlab/benchmark.m` | MATLAB `nlmefit`/`nlmefitsa` timings (best of repeated runs after a warm-up, `SinglePhi` and `Full`), written to `reference/matlab_timings.json` |
 | `benchmark.py` | Times pynlme on the benchmark cases against those timings; `--markdown` prints the README's tables and the machine's specifications |
+| `r/nlmixr2_benchmark.R`, `nlmixr2_compare.py` | nlmixr2 (FOCEi, SAEM) on the benchmark cases, and pynlme's and MATLAB's FOCE and SAEM scored with the same exact log-likelihood (see below) |
 
 The case definitions (model, start values, options) are in
 [tests/validation/cases.py](../tests/validation/cases.py), mirrored in the R and
@@ -204,6 +205,47 @@ MATLAB scripts.
   (largest: -13% for log(ka) in the oral model, 90% coverage; others within
   1%), shared with R `nlme`. Variance components are ~3-11% low, as expected
   for ML with 30 groups.
+
+## Comparison with nlmixr2
+
+nlmixr2 is not a replicate target (its FOCEi is NONMEM's method, not MATLAB's), but it
+is widely used for PK/PD, so `nlmixr2_compare.py` compares FOCE and SAEM with it on the
+benchmark cases (nlmixr2 7.0.1, nlmixr2est 7.1.0, rxode2 5.1.7.1; same machine as the
+README's speed tables; best of 3 runs after a warm-up). The programs report different
+likelihood approximations, so all estimates are scored with the same exact
+log-likelihood (importance sampling, `tests/validation/likelihood.py`; higher is
+better, Monte Carlo error ~0.01). With an additive error model FOCEi is FOCE.
+
+| Case | Method | Program | Time (ms) | Exact log-likelihood |
+|---|---|---|---|---|
+| indometh | FOCE | pynlme | 4437 | 56.116 |
+| indometh | FOCE | MATLAB `nlmefit` | 1471 | 56.115 |
+| indometh | FOCE | nlmixr2 FOCEi | 1319 | 56.055 |
+| theoph | FOCE | pynlme | 3816 | -177.750 |
+| theoph | FOCE | MATLAB `nlmefit` | 1736 | -178.446 |
+| theoph | FOCE | nlmixr2 FOCEi | 321 | -177.756 |
+| theoph | SAEM | pynlme `nlmefitsa` | 249 | -177.761 |
+| theoph | SAEM | nlmixr2 SAEM | 1392 | -178.138 |
+| orange | FOCE | pynlme | 402 | -131.575 |
+| orange | FOCE | MATLAB `nlmefit` | 96 | -131.575 |
+| orange | FOCE | nlmixr2 FOCEi | 279 | -131.576 |
+| orange | SAEM | pynlme `nlmefitsa` | 177 | -131.593 |
+| orange | SAEM | nlmixr2 SAEM | 618 | -158.405 |
+| linear | FOCE | pynlme | 317 | -67.484 |
+| linear | FOCE | MATLAB `nlmefit` | 139 | -67.484 |
+| linear | FOCE | nlmixr2 FOCEi | 198 | -67.481 |
+| linear | SAEM | pynlme `nlmefitsa` | 158 | -67.559 |
+| linear | SAEM | nlmixr2 SAEM | – | failed: chol(): decomposition failed |
+
+- **FOCE**: the three programs reach the same optimum (within 0.06 in log-likelihood;
+  MATLAB 0.7 lower on theoph). pynlme's FOCE is the slowest, 1.4-12 times slower than
+  nlmixr2's FOCEi (which compiles the model).
+- **SAEM**: on theoph (all parameters log-transformed) pynlme's SAEM is faster than
+  nlmixr2's and ends higher. In our setup nlmixr2's SAEM left the parameters without
+  a transform (indometh `tp1`/`tp3`, orange `tasym`, linear `ta`/`tb`) at their start
+  values with their variances at zero, and failed on the linear case. We are not
+  nlmixr2 experts: this may be a matter of how we specified the models (start values
+  of the variances and the error are our guesses, see the script).
 
 ## Regenerating references
 
