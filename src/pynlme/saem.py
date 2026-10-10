@@ -30,6 +30,7 @@ import numpy as np
 from scipy import optimize
 from scipy import stats as sps
 
+from . import lindstrom_bates
 from .model import GroupedModel
 
 TAU = 0.97  # simulated-annealing decay per iteration, as saemix's alpha.sa
@@ -130,6 +131,7 @@ class _SAEM:
         self.M = self.m * n_chains
         lengths = np.array([len(model.y[i]) for i in self.sub])
         self.starts = np.concatenate([[0], np.cumsum(lengths)[:-1]])
+        self.lengths = [int(n) for n in lengths]
         self.row_of_obs = np.repeat(np.arange(self.M), lengths)
         self.y = np.concatenate([model.y[i] for i in self.sub])
         self.n = model.n_obs
@@ -205,6 +207,8 @@ class _SAEM:
         mu = self.mu()[self.sub]
         omega_inv = np.linalg.inv(omega)
         chol = np.linalg.cholesky(omega)
+        if lindstrom_bates._kernels is not None:
+            return self._mcmc_kernel(Phi, F, mu, omega_inv, chol, n_kernel, scales)
         U = self.nll(F)
         lp = self.log_prior(Phi, mu, omega_inv)
 
@@ -237,6 +241,43 @@ class _SAEM:
                 Phi + scales[1] * self.rng.standard_normal((m, r)), with_prior=True
             )
             scales[1] *= 1 + 0.4 * (ok.mean() - TARGET_ACCEPT)
+
+    def _mcmc_kernel(self, Phi, F, mu, omega_inv, chol, n_kernel, scales):
+        """mcmc by the Rust kernel. The random numbers are drawn here, in the
+        order the NumPy code draws them, so both give the same chain."""
+        m, r = self.M, self.d
+        normals, uniforms = [], []
+        for _ in range(n_kernel[0]):
+            normals.append(self.rng.standard_normal((m, r)).ravel())
+            uniforms.append(self.rng.random(m))
+        for _ in range(n_kernel[1]):
+            for _ in range(r):
+                normals.append(self.rng.standard_normal(m))
+                uniforms.append(self.rng.random(m))
+        for _ in range(n_kernel[2]):
+            normals.append(self.rng.standard_normal((m, r)).ravel())
+            uniforms.append(self.rng.random(m))
+        kind = {"proportional": 1, "combined": 2}.get(self.err.kind, 0)
+        phi, f, single, full = lindstrom_bates._kernels.saem_mcmc(
+            self.predict,
+            np.ascontiguousarray(Phi, dtype=float),
+            np.ascontiguousarray(F, dtype=float),
+            np.ascontiguousarray(mu, dtype=float),
+            np.ascontiguousarray(omega_inv, dtype=float),
+            np.ascontiguousarray(chol, dtype=float),
+            np.ascontiguousarray(self.y, dtype=float),
+            self.lengths,
+            (kind, float(self.err.a), float(self.err.b)),
+            tuple(int(k) for k in n_kernel),
+            ([float(v) for v in scales[0]], [float(v) for v in scales[1]]),
+            np.concatenate(normals) if normals else np.zeros(0),
+            np.concatenate(uniforms) if uniforms else np.zeros(0),
+        )
+        # In place, as the NumPy code updates them (scales may be views).
+        Phi[...] = phi
+        F[...] = f
+        scales[0][...] = single
+        scales[1][...] = full
 
     # -- M-step ---------------------------------------------------------------
     def update_beta_R(self, s1, omega):

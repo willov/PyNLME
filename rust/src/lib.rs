@@ -1492,6 +1492,254 @@ fn linearized_marginal<'py>(
     Ok((logdet, quad))
 }
 
+/// The sampler's state after an E-step: latent parameters, predictions, and the
+/// single-coordinate and full-vector random-walk scales.
+type McmcState<'py> = (
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Vec<f64>,
+    Vec<f64>,
+);
+
+/// SAEM's target acceptance rate for the random-walk kernels.
+const TARGET_ACCEPT: f64 = 0.4;
+
+/// Error model of the SAEM likelihood: standard deviation g(f) = a (constant),
+/// max(b |f|, eps) (proportional) or max(a + b |f|, eps) (combined).
+struct SaemError {
+    kind: u8, // 0 constant, 1 proportional, 2 combined
+    a: f64,
+    b: f64,
+}
+
+impl SaemError {
+    fn sd(&self, f: f64) -> f64 {
+        match self.kind {
+            1 => (self.b * f.abs()).max(f64::EPSILON),
+            2 => (self.a + self.b * f.abs()).max(f64::EPSILON),
+            _ => self.a,
+        }
+    }
+
+    /// 0.5 sum(((y - f) / g)^2) + sum(log g) over one row; infinite if not finite.
+    fn nll(&self, y: &[f64], f: &[f64]) -> f64 {
+        let value: f64 = y
+            .iter()
+            .zip(f)
+            .map(|(&yk, &fk)| {
+                let g = self.sd(fk);
+                0.5 * ((yk - fk) / g).powi(2) + g.ln()
+            })
+            .sum();
+        if value.is_finite() {
+            value
+        } else {
+            f64::INFINITY
+        }
+    }
+}
+
+/// -0.5 (phi - mu)' Omega^-1 (phi - mu) for one row.
+fn log_prior(phi: &[f64], mu: &[f64], omega_inv: &ArrayView2<f64>) -> f64 {
+    let d = phi.len();
+    let diff: Vec<f64> = (0..d).map(|c| phi[c] - mu[c]).collect();
+    let mut value = 0.0;
+    for i in 0..d {
+        for j in 0..d {
+            value += diff[i] * omega_inv[[i, j]] * diff[j];
+        }
+    }
+    -0.5 * value
+}
+
+/// The state of SAEM's Metropolis-Hastings sampler over all rows (subjects x
+/// chains): latent parameters, flat predictions, and per-row likelihood terms.
+struct Sampler<'a> {
+    phi: Vec<Vec<f64>>,
+    f: Vec<f64>,
+    nll: Vec<f64>,
+    prior: Vec<f64>,
+    mu: ArrayView2<'a, f64>,
+    omega_inv: ArrayView2<'a, f64>,
+    y: &'a [f64],
+    starts: Vec<usize>,
+    lengths: Vec<usize>,
+    error: SaemError,
+}
+
+impl Sampler<'_> {
+    /// Evaluate proposals for all rows and accept each with the Metropolis-Hastings
+    /// rule (with the prior ratio unless proposed from the prior); returns which
+    /// rows accepted.
+    fn propose(
+        &mut self,
+        py: Python<'_>,
+        predict: &Py<PyAny>,
+        proposal: Vec<Vec<f64>>,
+        with_prior: bool,
+        uniforms: &[f64],
+    ) -> PyResult<Vec<bool>> {
+        let (rows, d) = (proposal.len(), self.phi[0].len());
+        let array = Array2::from_shape_vec((rows, d), proposal.concat()).unwrap();
+        let out = predict.call1(py, (array.into_pyarray(py),))?;
+        let (values, valid): (PyReadonlyArray1<f64>, PyReadonlyArray1<bool>) = out.extract(py)?;
+        let (values, valid) = (values.as_slice()?, valid.as_slice()?);
+        let mut accepted = vec![false; rows];
+        for k in 0..rows {
+            let (o, n) = (self.starts[k], self.lengths[k]);
+            let nll_new = if valid[k] {
+                self.error.nll(&self.y[o..o + n], &values[o..o + n])
+            } else {
+                f64::INFINITY
+            };
+            let mu_k: Vec<f64> = self.mu.row(k).to_vec();
+            let prior_new = log_prior(&proposal[k], &mu_k, &self.omega_inv);
+            let mut log_ratio = self.nll[k] - nll_new;
+            if with_prior {
+                log_ratio += prior_new - self.prior[k];
+            }
+            if uniforms[k].ln() < log_ratio {
+                accepted[k] = true;
+                self.phi[k] = proposal[k].clone();
+                self.nll[k] = nll_new;
+                self.prior[k] = prior_new;
+                self.f[o..o + n].copy_from_slice(&values[o..o + n]);
+            }
+        }
+        Ok(accepted)
+    }
+}
+
+fn acceptance(accepted: &[bool]) -> f64 {
+    accepted.iter().filter(|&&a| a).count() as f64 / accepted.len() as f64
+}
+
+/// One E-step of SAEM, as saem._SAEM.mcmc: Metropolis-Hastings with three kernels
+/// (independent draws from the prior, single-coordinate random walks, full-vector
+/// random walks) over all rows. The random numbers come from Python, in the order
+/// the NumPy code draws them (for each proposal its normals, then one uniform per
+/// row), so both give the same chain. `predict(phi) -> (values, valid)` evaluates
+/// the model. Returns the new latent parameters, predictions and random-walk
+/// scales.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn saem_mcmc<'py>(
+    py: Python<'py>,
+    predict: Py<PyAny>,
+    phi: PyReadonlyArray2<'py, f64>,
+    f: PyReadonlyArray1<'py, f64>,
+    mu: PyReadonlyArray2<'py, f64>,
+    omega_inv: PyReadonlyArray2<'py, f64>,
+    chol: PyReadonlyArray2<'py, f64>,
+    y: PyReadonlyArray1<'py, f64>,
+    lengths: Vec<usize>,
+    error: (u8, f64, f64),
+    n_kernel: (usize, usize, usize),
+    scales: (Vec<f64>, Vec<f64>),
+    normals: PyReadonlyArray1<'py, f64>,
+    uniforms: PyReadonlyArray1<'py, f64>,
+) -> PyResult<McmcState<'py>> {
+    let phi_in = phi.as_array();
+    let (rows, d) = (phi_in.shape()[0], phi_in.shape()[1]);
+    let chol = chol.as_array();
+    let (normals, uniforms) = (normals.as_slice()?, uniforms.as_slice()?);
+    let mut starts = vec![0; rows];
+    for k in 1..rows {
+        starts[k] = starts[k - 1] + lengths[k - 1];
+    }
+    let mut sampler = Sampler {
+        phi: (0..rows).map(|k| phi_in.row(k).to_vec()).collect(),
+        f: f.as_slice()?.to_vec(),
+        nll: Vec::new(),
+        prior: Vec::new(),
+        mu: mu.as_array(),
+        omega_inv: omega_inv.as_array(),
+        y: y.as_slice()?,
+        starts,
+        lengths,
+        error: SaemError {
+            kind: error.0,
+            a: error.1,
+            b: error.2,
+        },
+    };
+    sampler.nll = (0..rows)
+        .map(|k| {
+            let (o, n) = (sampler.starts[k], sampler.lengths[k]);
+            sampler
+                .error
+                .nll(&sampler.y[o..o + n], &sampler.f[o..o + n])
+        })
+        .collect();
+    sampler.prior = (0..rows)
+        .map(|k| {
+            log_prior(
+                &sampler.phi[k],
+                &sampler.mu.row(k).to_vec(),
+                &sampler.omega_inv,
+            )
+        })
+        .collect();
+    let (mut single_scales, mut full_scales) = scales;
+    let (mut z, mut u) = (0, 0); // positions in the random numbers
+
+    // Kernel 1: independent proposals from the prior, mu + chol z.
+    for _ in 0..n_kernel.0 {
+        let proposal: Vec<Vec<f64>> = (0..rows)
+            .map(|k| {
+                (0..d)
+                    .map(|c| {
+                        sampler.mu[[k, c]]
+                            + (0..d)
+                                .map(|j| normals[z + k * d + j] * chol[[c, j]])
+                                .sum::<f64>()
+                    })
+                    .collect()
+            })
+            .collect();
+        z += rows * d;
+        sampler.propose(py, &predict, proposal, false, &uniforms[u..u + rows])?;
+        u += rows;
+    }
+    // Kernel 2: single-coordinate random walks.
+    for _ in 0..n_kernel.1 {
+        for j in 0..d {
+            let mut proposal = sampler.phi.clone();
+            for (k, row) in proposal.iter_mut().enumerate() {
+                row[j] += single_scales[j] * normals[z + k];
+            }
+            z += rows;
+            let accepted = sampler.propose(py, &predict, proposal, true, &uniforms[u..u + rows])?;
+            u += rows;
+            single_scales[j] *= 1.0 + 0.4 * (acceptance(&accepted) - TARGET_ACCEPT);
+        }
+    }
+    // Kernel 3: full-vector random walks.
+    for _ in 0..n_kernel.2 {
+        let proposal: Vec<Vec<f64>> = (0..rows)
+            .map(|k| {
+                (0..d)
+                    .map(|c| sampler.phi[k][c] + full_scales[c] * normals[z + k * d + c])
+                    .collect()
+            })
+            .collect();
+        z += rows * d;
+        let accepted = sampler.propose(py, &predict, proposal, true, &uniforms[u..u + rows])?;
+        u += rows;
+        let factor = 1.0 + 0.4 * (acceptance(&accepted) - TARGET_ACCEPT);
+        for scale in full_scales.iter_mut() {
+            *scale *= factor;
+        }
+    }
+    let phi_out = Array2::from_shape_vec((rows, d), sampler.phi.concat()).unwrap();
+    Ok((
+        phi_out.into_pyarray(py),
+        Array1::from_vec(sampler.f).into_pyarray(py),
+        single_scales,
+        full_scales,
+    ))
+}
+
 #[pymodule]
 fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lme_solve, m)?)?;
@@ -1505,5 +1753,6 @@ fn _kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fminsearch_py, m)?)?;
     m.add_function(wrap_pyfunction!(conditional_modes, m)?)?;
     m.add_function(wrap_pyfunction!(linearized_marginal, m)?)?;
+    m.add_function(wrap_pyfunction!(saem_mcmc, m)?)?;
     Ok(())
 }

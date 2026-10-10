@@ -283,3 +283,43 @@ def test_foce_kernels_match_numpy(seed):
     # stops can differ by ~sqrt(eps) between the two (summation order).
     np.testing.assert_allclose(U_rs, U_np, rtol=1e-6, atol=1e-8)
     np.testing.assert_allclose(ll_rs, ll_np, rtol=1e-12)
+
+
+@pytest.mark.parametrize(
+    "error_model, chains",
+    [("constant", 1), ("proportional", 2), ("combined", 1), ("exponential", 3)],
+)
+def test_saem_kernel_same_chain(error_model, chains):
+    """SAEM with the Rust MCMC kernel takes the same chain as the NumPy code (the
+    random numbers are drawn in the same order), so the estimates agree."""
+    from pynlme import nlmefitsa
+    from tests.validation.cases import theoph, vectorized
+
+    case = vectorized(theoph())
+    keep = (case.y > 0) & (case.X > 0)
+
+    def run():
+        return nlmefitsa(
+            case.X[keep],
+            case.y[keep],
+            case.group[keep],
+            case.V,
+            case.modelfun,
+            case.beta0,
+            **case.kwargs,
+            ErrorModel=error_model,
+            NChains=chains,
+            NIterations=[40, 20, 20],
+            random_state=3,
+        )
+
+    kernels = lb._kernels
+    try:
+        lb._kernels = None
+        beta_np, psi_np, stats_np, _ = run()
+    finally:
+        lb._kernels = kernels
+    beta_rs, psi_rs, stats_rs, _ = run()
+    np.testing.assert_allclose(beta_rs, beta_np, rtol=1e-9)
+    np.testing.assert_allclose(psi_rs, psi_np, rtol=1e-9)
+    np.testing.assert_allclose(stats_rs.errorparam, stats_np.errorparam, rtol=1e-9)
