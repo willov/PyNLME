@@ -149,10 +149,10 @@ times from `validation/reference/`).
 
 | Case | MATLAB mode | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |
 |---|---|---|---|---|---|---|---|---|---|
-| indometh | 133 | 346 | 78.3 | 35.1 | 44.0 | 4520 | 49195 | – | – |
-| theoph | 27.1 | 52.6 | 107 | 28.2 | 39.0 | 3375 | 41763 | 246 | 1318 |
-| orange | 9.1 | 50.7 | 13.0 | 3.5 | 7.0 | 450 | 14513 | 176 | 1209 |
-| linear | 23.8 | 43.5 | 11.1 | 6.6 | 7.0 | 680 | 47310 | 155 | 451 |
+| indometh | 133 | 346 | 81.9 | 18.6 | 44.0 | 4366 | 49195 | – | – |
+| theoph | 27.2 | 52.6 | 107 | 24.2 | 39.0 | 3505 | 41763 | 244 | 1318 |
+| orange | 9.2 | 50.7 | 13.1 | 3.3 | 7.0 | 547 | 14513 | 176 | 1209 |
+| linear | 23.6 | 43.5 | 11.2 | 4.6 | 7.0 | 680 | 47310 | 154 | 451 |
 
 The Rust kernels (`kernels/`, optional package `pynlme-kernels`, used automatically when
 installed: `pip install ./kernels`) compile the R mode's inner loops; the MATLAB mode

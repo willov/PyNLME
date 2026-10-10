@@ -259,6 +259,7 @@ class LinearizedLME:
             if self.reml:
                 logl -= np.sum(np.log(np.abs(np.diag(R_xx))))
             self._last = (L, beta, u, rss, R_zz)
+            self._logdet = logdet
             return logl, beta, sigma2, R_xx.T @ R_xx, u
         top = np.concatenate([self.Z @ L, self.Xw], axis=2)
         R = np.linalg.qr(np.concatenate([top, self.penalty], axis=1), mode="r")
@@ -280,6 +281,7 @@ class LinearizedLME:
         # Conditional modes of the spherical random effects (BLUPs in u-space).
         u = np.linalg.solve(R_zz, (r_zw - R_zx @ beta)[..., None])[..., 0]
         self._last = (L, beta, u, rss, R_zz)
+        self._logdet = logdet
         return logl, beta, sigma2, R_xx.T @ R_xx, u
 
     def gradient(self) -> np.ndarray:
@@ -290,6 +292,10 @@ class LinearizedLME:
         d log|I + L'Z'ZL| / dL = 2 Z'Z L M^-1.
         """
         L, beta, u, rss, R_zz = self._last
+        if _kernels is not None:
+            return _kernels.lme_gradient(self.Z, self.Xw, np.ascontiguousarray(L), np.ascontiguousarray(beta),
+                                         np.ascontiguousarray(u), float(rss), np.ascontiguousarray(R_zz),
+                                         float(self.n))
         f = self.f
         resid = self.Xw[..., f] - self.Xw[..., :f] @ beta - np.einsum("mnr,mr->mn", self.Z @ L, u)
         d_rss = -2.0 * np.einsum("mnj,mn,mk->jk", self.Z, resid, u)
@@ -697,8 +703,9 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
 
 def _nlm_factor(lme: "LinearizedLME", L: np.ndarray, full: bool) -> np.ndarray:
     """nlme_increment's optif9 refinement of the factor after EM."""
+    if _kernels is not None:
+        return _kernels.nlm_factor(lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full)
     r = L.shape[0]
-    const = 0.5 * lme.n * (1.0 + np.log(2 * np.pi) - np.log(lme.n))
     cols = [(i, j) for j in range(r) for i in range(j)]  # column-major upper part
 
     def to_L(theta):
@@ -716,10 +723,14 @@ def _nlm_factor(lme: "LinearizedLME", L: np.ndarray, full: bool) -> np.ndarray:
         return np.concatenate([np.log(np.diag(U)), [U[i, j] for i, j in cols]])
 
     def fcn(theta):
+        # nlme's internal_loglik, negated: 0.5 (N log RSS + log det), computed
+        # directly (not as -(logl + const), which cancels digits that the
+        # finite-difference gradients need).
         try:
-            return -(lme.solve(to_L(theta))[0] + const)
+            lme.solve(to_L(theta))
         except np.linalg.LinAlgError:
             return np.inf
+        return 0.5 * (lme.n * np.log(lme._last[3]) + lme._logdet)
 
     return to_L(_optif9(fcn, from_L(L)))
 
