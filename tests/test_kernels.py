@@ -138,8 +138,8 @@ SMOOTH = {
 
 
 @pytest.mark.parametrize("name", SMOOTH)
-def test_optif9_port(name):
-    """The Rust optif9 takes the Python port's steps (up to BFGS-update rounding)."""
+def test_optif9_rust_vs_python(name):
+    """The Rust optif9 takes the Python version's steps (up to BFGS-update rounding)."""
     f, x0 = SMOOTH[name]
     for itnlim in (1, 2, 5, 20):
         a = np.asarray(lb._kernels.optif9_py(f, list(x0), itnlim))
@@ -174,8 +174,8 @@ def test_nlm_kernel(seed):
 
 
 @pytest.mark.parametrize("name", SMOOTH)
-def test_fminsearch_port(name):
-    """The Rust Nelder-Mead takes exactly the Python port's (MATLAB's) steps."""
+def test_fminsearch_rust_vs_python(name):
+    """The Rust Nelder-Mead takes exactly the Python version's steps (MATLAB's)."""
     from pynlme.matlab_lb import fminsearch
 
     f, x0 = SMOOTH[name]

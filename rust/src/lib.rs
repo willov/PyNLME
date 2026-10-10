@@ -651,8 +651,8 @@ fn nlm_factor<'py>(
     nlm_core(z.as_array(), xw.as_array(), l.as_array(), n_obs, full).into_pyarray(py)
 }
 
-/// optif9 on a Python function (for testing the port against pynlme's Python
-/// version on smooth functions).
+/// optif9 on a Python function (for testing the Rust implementation against
+/// pynlme's Python version on smooth functions).
 #[pyfunction]
 fn optif9_py(py: Python<'_>, fcn: Py<PyAny>, x0: Vec<f64>, itnlim: usize) -> PyResult<Vec<f64>> {
     let mut err = None;
@@ -1043,8 +1043,8 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(
     (simplex[0].clone(), values[0], converged)
 }
 
-/// fminsearch on a Python function (for testing the port against pynlme's
-/// Python version).
+/// fminsearch on a Python function (for testing the Rust implementation against
+/// pynlme's Python version).
 #[pyfunction]
 fn fminsearch_py(
     py: Python<'_>,
