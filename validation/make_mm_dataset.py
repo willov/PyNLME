@@ -20,7 +20,9 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 TRUTH = {
-    "beta": np.log([1.0, 10.0, 2.0, 1.5]),  # log ka (1/h), log V (L), log Vmax (mg/h), log Km (mg/L)
+    "beta": np.log(
+        [1.0, 10.0, 2.0, 1.5]
+    ),  # log ka (1/h), log V (L), log Vmax (mg/h), log Km (mg/L)
     "sd": [0.2, 0.25],  # random effects on log V and log Vmax
     "sigma": 0.15,  # mg/L
 }
@@ -31,7 +33,15 @@ def concentrations(ka, V, vmax, km, dose, t):
         a, c = s
         return [-ka * a, ka * a / V - vmax * c / (km + c)]
 
-    sol = solve_ivp(rhs, (0.0, float(t.max())), [dose, 0.0], t_eval=t, method="LSODA", rtol=1e-10, atol=1e-12)
+    sol = solve_ivp(
+        rhs,
+        (0.0, float(t.max())),
+        [dose, 0.0],
+        t_eval=t,
+        method="LSODA",
+        rtol=1e-10,
+        atol=1e-12,
+    )
     return sol.y[1]
 
 
@@ -40,7 +50,13 @@ def main() -> None:
     rows = []
     for subject in range(1, 17):
         dose = rng.choice([50.0, 75.0, 100.0])
-        t = np.sort(rng.choice([0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 24], size=rng.integers(7, 11), replace=False))
+        t = np.sort(
+            rng.choice(
+                [0.25, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 24],
+                size=rng.integers(7, 11),
+                replace=False,
+            )
+        )
         eta = TRUTH["beta"].copy()
         eta[1:3] += rng.normal(0, TRUTH["sd"])
         ka, V, vmax, km = np.exp(eta)

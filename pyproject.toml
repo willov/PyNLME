@@ -134,7 +134,7 @@ select = [
     "UP", # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long, handled by formatter
+    "E501",  # long lines (mostly comments) are fine; the formatter handles code
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
 ]

@@ -12,17 +12,35 @@ from pynlme.nlmefit import _build_model, _parse_options
 from pynlme.utils import validate_inputs
 
 
-def loglik_at(case, beta, psi, error_model, errorparam, chains=8, iterations=300, draws=20000, seed=0):
-    """log L(beta, psi, errorparam) by MCMC conditional moments + importance sampling."""
+def loglik_at(
+    case,
+    beta,
+    psi,
+    error_model,
+    errorparam,
+    chains=8,
+    iterations=300,
+    draws=20000,
+    seed=0,
+):
+    """log L(beta, psi, errorparam): MCMC conditional moments + importance sampling."""
     parsed, matlab_style = _parse_options(case.kwargs)
     options = NLMEOptions(**parsed)
     X, y, g, V, b0 = validate_inputs(case.X, case.y, case.group, case.V, case.beta0)
     model = _build_model(X, y, g, V, case.modelfun, b0, options, matlab_style)
     errorparam = np.ravel(errorparam)
-    params = {"proportional": (0.0, errorparam[0]), "combined": tuple(errorparam)}.get(error_model, (errorparam[0], 0.0))
+    params = {"proportional": (0.0, errorparam[0]), "combined": tuple(errorparam)}.get(
+        error_model, (errorparam[0], 0.0)
+    )
     rng = np.random.default_rng(seed)
-    s = saem._SAEM(model, np.asarray(beta, float), psi.shape[0] > 1 and np.any(psi - np.diag(np.diag(psi))),
-                   rng, chains, saem.ErrorModel(error_model, params))
+    s = saem._SAEM(
+        model,
+        np.asarray(beta, float),
+        psi.shape[0] > 1 and np.any(psi - np.diag(np.diag(psi))),
+        rng,
+        chains,
+        saem.ErrorModel(error_model, params),
+    )
     r = s.r
     Phi = s.mu()[s.sub]
     F, _ = s.predict(Phi)

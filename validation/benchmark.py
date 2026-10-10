@@ -41,7 +41,14 @@ def best_of(n, fn) -> float:
 
 def matlab_time(name: str, method: str, options: str = "tight") -> float:
     if method == "saem":
-        return float(np.mean([load_reference(f"matlab_{name}_saem_seed{s}.json")["elapsed_s"] for s in range(1, 6)]))
+        return float(
+            np.mean(
+                [
+                    load_reference(f"matlab_{name}_saem_seed{s}.json")["elapsed_s"]
+                    for s in range(1, 6)
+                ]
+            )
+        )
     return load_reference(f"matlab_{name}_{method}_{options}.json")["elapsed_s"]
 
 
@@ -61,7 +68,16 @@ def kernels(on: bool):
 
 
 def fit(case, f=nlmefit, **kw):
-    return lambda: f(case.X, case.y, case.group, case.V, case.modelfun, case.beta0, **case.kwargs, **kw)
+    return lambda: f(
+        case.X,
+        case.y,
+        case.group,
+        case.V,
+        case.modelfun,
+        case.beta0,
+        **case.kwargs,
+        **kw,
+    )
 
 
 def main() -> None:
@@ -74,20 +90,62 @@ def main() -> None:
         c = factory()
         cv = vectorized(c)
         # Like for like: each mode follows its reference's iteration and options.
-        rows.append((name, "LME, compat matlab", best_of(5, fit(c)), best_of(5, fit(cv)),
-                     "", f"MATLAB {matlab_time(name, 'lme', 'default'):.2f}"))
-        rows.append((name, "LME, compat r", best_of(5, fit(c, **R_CONTROL)), best_of(5, fit(cv, **R_CONTROL)),
-                     f"R nlme {r['nlme'][name]:.3f}", ""))
-        rows.append((name, "nlmefit FOCE", best_of(1, fit(c, ApproximationType="FOCE")),
-                     best_of(1, fit(cv, ApproximationType="FOCE")), "", f"MATLAB {matlab_time(name, 'foce'):.2f}"))
+        rows.append(
+            (
+                name,
+                "LME, compat matlab",
+                best_of(5, fit(c)),
+                best_of(5, fit(cv)),
+                "",
+                f"MATLAB {matlab_time(name, 'lme', 'default'):.2f}",
+            )
+        )
+        rows.append(
+            (
+                name,
+                "LME, compat r",
+                best_of(5, fit(c, **R_CONTROL)),
+                best_of(5, fit(cv, **R_CONTROL)),
+                f"R nlme {r['nlme'][name]:.3f}",
+                "",
+            )
+        )
+        rows.append(
+            (
+                name,
+                "nlmefit FOCE",
+                best_of(1, fit(c, ApproximationType="FOCE")),
+                best_of(1, fit(cv, ApproximationType="FOCE")),
+                "",
+                f"MATLAB {matlab_time(name, 'foce'):.2f}",
+            )
+        )
         if name != "indometh":  # not a usable SAEM case (see README)
-            rows.append((name, "nlmefitsa", best_of(1, fit(c, nlmefitsa, random_state=1)),
-                         best_of(2, fit(cv, nlmefitsa, random_state=1)), "", f"MATLAB {matlab_time(name, 'saem'):.2f}"))
-            rows.append((name, "nlmefitsa 1 chain", best_of(1, fit(c, nlmefitsa, random_state=1, NChains=1)),
-                         best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1)),
-                         f"saemix {r['saemix'][name]:.3f}", ""))
+            rows.append(
+                (
+                    name,
+                    "nlmefitsa",
+                    best_of(1, fit(c, nlmefitsa, random_state=1)),
+                    best_of(2, fit(cv, nlmefitsa, random_state=1)),
+                    "",
+                    f"MATLAB {matlab_time(name, 'saem'):.2f}",
+                )
+            )
+            rows.append(
+                (
+                    name,
+                    "nlmefitsa 1 chain",
+                    best_of(1, fit(c, nlmefitsa, random_state=1, NChains=1)),
+                    best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1)),
+                    f"saemix {r['saemix'][name]:.3f}",
+                    "",
+                )
+            )
 
-    print(f"{'case':<10}{'method':<20}{'SinglePhi (s)':>14}{'Full (s)':>10}   reference (s)")
+    print(
+        f"{'case':<10}{'method':<20}{'SinglePhi (s)':>14}{'Full (s)':>10}   reference "
+        "(s)"
+    )
     for name, method, t1, t2, ref_r, ref_m in rows:
         refs = ", ".join(x for x in (ref_r, ref_m) if x)
         print(f"{name:<10}{method:<20}{t1:>14.3f}{t2:>10.3f}   {refs}")
@@ -101,8 +159,11 @@ def markdown() -> None:
     def ms(t):
         return f"{1000 * t:.0f}" if t >= 0.1 else f"{1000 * t:.1f}"
 
-    print("| Case | MATLAB mode | MATLAB mode, Rust kernels | MATLAB | R mode | R mode, Rust kernels | R `nlme` |"
-          " FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |")
+    print(
+        "| Case | MATLAB mode | MATLAB mode, Rust kernels | MATLAB | R mode | R mode, "
+        "Rust kernels | R `nlme` |"
+        " FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |"
+    )
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     for name, factory in CASES.items():
         cv = vectorized(factory())
@@ -110,17 +171,29 @@ def markdown() -> None:
         lme_m = best_of(5, fit(cv))
         lme_r = best_of(5, fit(cv, **R_CONTROL))
         foce = best_of(1, fit(cv, ApproximationType="FOCE"))
-        saem = best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1)) if name != "indometh" else None
+        saem = (
+            best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1))
+            if name != "indometh"
+            else None
+        )
         lme_mk = lme_rk = None
         if has_kernels:
             kernels(True)
             lme_mk = best_of(5, fit(cv))
             lme_rk = best_of(5, fit(cv, **R_CONTROL))
-        cells = [name, ms(lme_m), "–" if lme_mk is None else ms(lme_mk), ms(matlab_time(name, "lme", "default")),
-                 ms(lme_r),
-                 "–" if lme_rk is None else ms(lme_rk), ms(r["nlme"][name]), ms(foce),
-                 ms(matlab_time(name, "foce")), "–" if saem is None else ms(saem),
-                 "–" if saem is None else ms(r["saemix"][name])]
+        cells = [
+            name,
+            ms(lme_m),
+            "–" if lme_mk is None else ms(lme_mk),
+            ms(matlab_time(name, "lme", "default")),
+            ms(lme_r),
+            "–" if lme_rk is None else ms(lme_rk),
+            ms(r["nlme"][name]),
+            ms(foce),
+            ms(matlab_time(name, "foce")),
+            "–" if saem is None else ms(saem),
+            "–" if saem is None else ms(r["saemix"][name]),
+        ]
         print("| " + " | ".join(cells) + " |")
     kernels(True)
 

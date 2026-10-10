@@ -101,7 +101,7 @@ def analyze_model_fit(X, y, group, beta, psi, stats, model_name):
         print(f"  β{i + 1}: {param:.4f}")
 
     print("\nRandom Effects Covariance (Ψ):")
-    for i, row in enumerate(psi):
+    for row in psi:
         print(f"  {row}")
 
     # Model diagnostics

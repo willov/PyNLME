@@ -6,7 +6,9 @@ nlmefitsa model function.
     from pynlme import nlmefit, sund_model
 
     sund.install_model("mm_pk.txt")
-    model = sund_model("mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
+    model = sund_model(
+        "mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"]
+    )
     nlmefit(time, conc, subject, dose, model, beta0, ParamTransform=[1, 1, 1, 1],
             Vectorization="Full")
 
@@ -118,7 +120,9 @@ def sund_model(
 
     options = {"rel_tol": rel_tol, "abs_tol": abs_tol}
     if activities is not None and not isinstance(model, str):
-        raise ValueError("activities need the model as the name of an installed SUND model")
+        raise ValueError(
+            "activities need the model as the name of an installed SUND model"
+        )
     if isinstance(model, str):
         single = sund.load_model(model)
         model_class = sund.import_model(model)
@@ -137,7 +141,9 @@ def sund_model(
     observed = list(feature) if multiple else [feature]
     missing = [f for f in observed if f not in feature_names]
     if missing:
-        raise ValueError(f"unknown SUND features {missing}; the model has {feature_names}")
+        raise ValueError(
+            f"unknown SUND features {missing}; the model has {feature_names}"
+        )
     feature_index = np.array([feature_names.index(f) for f in observed], dtype=int)
     p_idx = np.array([param_names.index(p) for p in parameters], dtype=int)
     vs_idx = np.array([state_names.index(s) for s in v_states], dtype=int)
@@ -149,10 +155,14 @@ def sund_model(
     if activity_column is None:
         activity_column = n_vs + len(vp_idx)
     if activities is not None and not isinstance(activities, dict):
-        raise TypeError("activities must be a dict from experiment ID to activities (or a function "
-                        "container -> activities); person-specific inputs go in the model, e.g. a "
-                        "dose per kg times a body-weight parameter set from V")
-    by_experiment = {float(k): a for k, a in activities.items()} if activities is not None else None
+        raise TypeError(
+            "activities must be a dict from experiment ID to activities (or a function "
+            "container -> activities); person-specific inputs go in the model, e.g. a "
+            "dose per kg times a body-weight parameter set from V"
+        )
+    by_experiment = (
+        {float(k): a for k, a in activities.items()} if activities is not None else None
+    )
     activity_sims: dict = {}
 
     def as_list(acts):
@@ -163,11 +173,15 @@ def sund_model(
         or a builder ``container -> activities`` (then subjects are batched in
         containers)."""
         if v_row is None or len(v_row) <= activity_column:
-            raise ValueError(f"activities need the experiment ID in column {activity_column} of V")
+            raise ValueError(
+                f"activities need the experiment ID in column {activity_column} of V"
+            )
         key = float(v_row[activity_column])
         if key not in by_experiment:
-            raise KeyError(f"no activities for experiment {v_row[activity_column]:g} "
-                           f"(have {sorted(by_experiment)})")
+            raise KeyError(
+                f"no activities for experiment {v_row[activity_column]:g} "
+                f"(have {sorted(by_experiment)})"
+            )
         return key, by_experiment[key]
 
     def is_builder(spec) -> bool:
@@ -176,7 +190,11 @@ def sund_model(
     def activity_simulation(key, acts):
         """One model with these activities (cached per experiment or subject)."""
         if key not in activity_sims:
-            sim = sund.Simulation(models=[sund.load_model(model)], activities=as_list(acts), time_unit=unit)
+            sim = sund.Simulation(
+                models=[sund.load_model(model)],
+                activities=as_list(acts),
+                time_unit=unit,
+            )
             sim.set_options(options)
             activity_sims[key] = sim
         return activity_sims[key]
@@ -186,9 +204,16 @@ def sund_model(
         activities its builder makes for that container (cached per batch)."""
         if ("built", keys) not in activity_sims:
             containers = [f"pynlme{j}" for j in range(len(builders))]
-            acts = [a for c, build in zip(containers, builders, strict=True) for a in as_list(build(c))]
-            sim = sund.Simulation(models=[model_class(container=c) for c in containers], activities=acts,
-                                  time_unit=unit)
+            acts = [
+                a
+                for c, build in zip(containers, builders, strict=True)
+                for a in as_list(build(c))
+            ]
+            sim = sund.Simulation(
+                models=[model_class(container=c) for c in containers],
+                activities=acts,
+                time_unit=unit,
+            )
             sim.set_options(options)
             activity_sims["built", keys] = sim
         return activity_sims["built", keys]
@@ -207,22 +232,32 @@ def sund_model(
         k = len(P)
         grid = times if times[0] == t0 else np.concatenate([[t0], times])
         sim = simulation(k) if sim is None else sim
-        sim.simulate(time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel())
+        sim.simulate(
+            time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel()
+        )
         # Columns: model copy j, feature i at j * n_f + i.
-        values = np.asarray(sim.feature_values)[:, : k * n_f].reshape(len(grid), k, n_f)[:, :, feature_index]
+        values = np.asarray(sim.feature_values)[:, : k * n_f].reshape(
+            len(grid), k, n_f
+        )[:, :, feature_index]
         return values if times[0] == t0 else values[1:]
 
     def model_fn(phi, x, v=None):
         x = np.asarray(x, dtype=float).reshape(len(x), -1)
         t = x[:, 0]
         n = len(t)
-        which = _feature_rows(x, feature_column, len(observed)) if multiple else np.zeros(n, dtype=int)
+        which = (
+            _feature_rows(x, feature_column, len(observed))
+            if multiple
+            else np.zeros(n, dtype=int)
+        )
         phi = np.asarray(phi, dtype=float)
         if phi.ndim == 1:
             phi = np.broadcast_to(phi, (n, phi.size))
         if v is not None:
             v = np.asarray(v, dtype=float)
-            v = np.broadcast_to(v.reshape(1, -1) if v.ndim <= 1 else v, (n, v.shape[-1]))
+            v = np.broadcast_to(
+                v.reshape(1, -1) if v.ndim <= 1 else v, (n, v.shape[-1])
+            )
 
         # Systems are runs of identical (phi, v) rows.
         key = phi if v is None else np.hstack([phi, v])
@@ -246,7 +281,9 @@ def sund_model(
                     continue
                 rows = system == s  # plain activities: one subject at a time
                 times = np.unique(t[rows])
-                f = values_for(P[s : s + 1], X0[s : s + 1], times, activity_simulation(key, spec))
+                f = values_for(
+                    P[s : s + 1], X0[s : s + 1], times, activity_simulation(key, spec)
+                )
                 out[rows] = f[np.searchsorted(times, t[rows]), 0, which[rows]]
             # Subjects of the same experiment together: a batch then shares its
             # dose and switch times, at which the integrator restarts.
@@ -256,9 +293,13 @@ def sund_model(
                 systems = np.array([s for s, _, _ in chunk])
                 rows = np.isin(system, systems)
                 times = np.unique(t[rows])
-                sim = built_simulation(tuple(k for _, k, _ in chunk), [b for _, _, b in chunk])
+                sim = built_simulation(
+                    tuple(k for _, k, _ in chunk), [b for _, _, b in chunk]
+                )
                 f = values_for(P[systems], X0[systems], times, sim)
-                order = np.argsort(systems)  # copy j holds systems[j]; find each row's copy
+                order = np.argsort(
+                    systems
+                )  # copy j holds systems[j]; find each row's copy
                 copy = order[np.searchsorted(systems[order], system[rows])]
                 out[rows] = f[np.searchsorted(times, t[rows]), copy, which[rows]]
             return out
@@ -267,7 +308,9 @@ def sund_model(
             rows = (system >= start) & (system < stop)
             times = np.unique(t[rows])
             f = values_for(P[start:stop], X0[start:stop], times)
-            out[rows] = f[np.searchsorted(times, t[rows]), system[rows] - start, which[rows]]
+            out[rows] = f[
+                np.searchsorted(times, t[rows]), system[rows] - start, which[rows]
+            ]
         return out
 
     return model_fn
@@ -280,5 +323,8 @@ def _feature_rows(x: np.ndarray, column: int, n_features: int) -> np.ndarray:
     index = x[:, column]
     which = index.astype(int)
     if np.any(which != index) or np.any(which < 0) or np.any(which >= n_features):
-        raise ValueError(f"feature indices in column {column} of X must be integers 0..{n_features - 1}")
+        raise ValueError(
+            f"feature indices in column {column} of X must be integers "
+            f"0..{n_features - 1}"
+        )
     return which

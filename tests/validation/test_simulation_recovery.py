@@ -30,7 +30,9 @@ N_GROUPS = 30
 TRUTHS = {
     "linear": Truth(np.array([1.0, 0.5]), np.array([[0.25, 0.03], [0.03, 0.04]]), 0.4),
     "oral": Truth(np.log([0.1, 1.5, 0.04]), np.diag([0.3**2, 0.25**2]), 0.5),
-    "logistic": Truth(np.array([200.0, 700.0, 300.0]), np.diag([20.0**2, 40.0**2]), 6.0),
+    "logistic": Truth(
+        np.array([200.0, 700.0, 300.0]), np.diag([20.0**2, 40.0**2]), 6.0
+    ),
     "emax": Truth(np.array([10.0, 50.0, np.log(8.0)]), np.diag([2.0**2, 0.25**2]), 2.0),
 }
 
@@ -43,7 +45,9 @@ def run_study(family: str, replicates: int, seed: int = 1):
         d = simulate(family, rng, m=N_GROUPS, truth=truth)
         with warnings.catch_warnings():
             # Non-convergence fails; MATLAB's informational PNLS warnings do not.
-            warnings.filterwarnings("error", message="nlmefit did not converge", category=RuntimeWarning)
+            warnings.filterwarnings(
+                "error", message="nlmefit did not converge", category=RuntimeWarning
+            )
             b, p, stats, _ = nlmefit(*d.fit_args(), **d.kwargs)
         beta.append(b)
         psi.append(p)

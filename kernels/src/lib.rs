@@ -116,7 +116,11 @@ fn lme_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, l: ArrayView2<f64>) -> LmeR
         }
         for i in 0..q1 {
             for c in 0..q1 {
-                blocks[(g * q1 + i) * q1 + c] = if c >= i { a[(r + i) * cols + r + c] } else { 0.0 };
+                blocks[(g * q1 + i) * q1 + c] = if c >= i {
+                    a[(r + i) * cols + r + c]
+                } else {
+                    0.0
+                };
             }
         }
     }
@@ -152,9 +156,15 @@ fn lme_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, l: ArrayView2<f64>) -> LmeR
             u[[g, i]] = rhs[i];
         }
     }
-    LmeResult { logdet, beta: Array1::from(beta), rss, r_xx, u, r_zz }
+    LmeResult {
+        logdet,
+        beta: Array1::from(beta),
+        rss,
+        r_xx,
+        u,
+        r_zz,
+    }
 }
-
 
 /// Lower Cholesky factor of a symmetric positive-definite n x n matrix.
 fn cholesky_lower(a: &[f64], n: usize) -> Vec<f64> {
@@ -165,7 +175,11 @@ fn cholesky_lower(a: &[f64], n: usize) -> Vec<f64> {
             for k in 0..j {
                 s -= l[i * n + k] * l[j * n + k];
             }
-            l[i * n + j] = if i == j { s.max(0.0).sqrt() } else { s / l[j * n + j] };
+            l[i * n + j] = if i == j {
+                s.max(0.0).sqrt()
+            } else {
+                s / l[j * n + j]
+            };
         }
     }
     l
@@ -175,8 +189,14 @@ fn cholesky_lower(a: &[f64], n: usize) -> Vec<f64> {
 /// the QR-based LME solve in each step (as nlme does): Psi / sigma^2 =
 /// mean_i(Var(b_i | y) / sigma^2 + b_i b_i' / sigma^2), Var(b_i | y) / sigma^2 =
 /// L R_i^-1 R_i^-T L'. Returns the updated factor L (r, r).
-fn em_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, l0: ArrayView2<f64>, n_obs: f64, full: bool,
-           n_iter: usize) -> Array2<f64> {
+fn em_core(
+    z: ArrayView3<f64>,
+    xw: ArrayView3<f64>,
+    l0: ArrayView2<f64>,
+    n_obs: f64,
+    full: bool,
+    n_iter: usize,
+) -> Array2<f64> {
     let (m, _, r) = z.dim();
     let mut l = l0.to_owned();
     for _ in 0..n_iter {
@@ -255,7 +275,15 @@ fn em_factor<'py>(
     full: bool,
     n_iter: usize,
 ) -> Bound<'py, PyArray2<f64>> {
-    em_core(z.as_array(), xw.as_array(), l.as_array(), n_obs, full, n_iter).into_pyarray(py)
+    em_core(
+        z.as_array(),
+        xw.as_array(),
+        l.as_array(),
+        n_obs,
+        full,
+        n_iter,
+    )
+    .into_pyarray(py)
 }
 
 // ----- R's optif9 (nlm) as nlme_increment calls it -------------------------
@@ -305,6 +333,12 @@ fn norm(v: &[f64]) -> f64 {
 /// typsiz 1, fscale 1, ndigit 15, gradtl eps^(1/3), steptl sqrt(eps), default
 /// stepmx, at most `itnlim` iterations). Returns the vector optif9 leaves in
 /// its input argument: the last accepted iterate before the terminating one.
+// Names and their counterparts in R's uncmin.c (Dennis & Schnabel's notation):
+//   max_step (stepmx), noise (rnf), grad_tol (gradtl), step_tol (steptl);
+//   line search: slope (slp), newton_len (sln), rel_len (rln), min_step (rmnlmb),
+//   step / prev_step (lambda / plmbda), prev_value (pfpls), trial (tlmbda),
+//   took_max (mxtake), status (iretcd); stopping: rel_change (rsx);
+//   BFGS update: sy (den1), s_hs (den2), scale (alp).
 fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec<f64> {
     let n = x0.len();
     let eps = f64::EPSILON;
@@ -315,7 +349,11 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
     let max_step = 1000.0 * norm(&x).max(1.0);
     let mut evaluate = |v: &[f64]| {
         let value = fcn(v);
-        if value.is_finite() { value } else { DBL_MAX }
+        if value.is_finite() {
+            value
+        } else {
+            DBL_MAX
+        }
     };
     let forward_gradient = |evaluate: &mut dyn FnMut(&[f64]) -> f64, v: &[f64], fv: f64| {
         let mut g = vec![0.0; n];
@@ -383,7 +421,8 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
                 rel_len = rel_len.max(p[j].abs() / x[j].abs().max(1.0));
             }
             let min_step = step_tol / rel_len;
-            let (mut step, mut first_backtrack, mut prev_step, mut prev_value) = (1.0_f64, true, 0.0_f64, 0.0_f64);
+            let (mut step, mut first_backtrack, mut prev_step, mut prev_value) =
+                (1.0_f64, true, 0.0_f64, 0.0_f64);
             let result = loop {
                 let x_new: Vec<f64> = x.iter().zip(&p).map(|(a, b)| a + step * b).collect();
                 let f_new = evaluate(&x_new);
@@ -407,18 +446,31 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
                     let c2 = prev_value - f - prev_step * slope;
                     let c3 = 1.0 / (step - prev_step);
                     let cubic_a = 3.0 * c3 * (c1 / (step * step) - c2 / (prev_step * prev_step));
-                    let b = c3 * (c2 * step / (prev_step * prev_step) - c1 * prev_step / (step * step));
+                    let b =
+                        c3 * (c2 * step / (prev_step * prev_step) - c1 * prev_step / (step * step));
                     let discriminant = b * b - cubic_a * slope;
                     trial = if discriminant > b * b {
-                        (-b + if cubic_a < 0.0 { -discriminant.sqrt() } else { discriminant.sqrt() }) / cubic_a
+                        (-b + if cubic_a < 0.0 {
+                            -discriminant.sqrt()
+                        } else {
+                            discriminant.sqrt()
+                        }) / cubic_a
                     } else {
-                        (-b + if cubic_a < 0.0 { discriminant.sqrt() } else { -discriminant.sqrt() }) / cubic_a
+                        (-b + if cubic_a < 0.0 {
+                            discriminant.sqrt()
+                        } else {
+                            -discriminant.sqrt()
+                        }) / cubic_a
                     };
                     trial = trial.min(step * 0.5);
                 }
                 prev_step = step;
                 prev_value = f_new;
-                step = if trial < step * 0.1 { step * 0.1 } else { trial };
+                step = if trial < step * 0.1 {
+                    step * 0.1
+                } else {
+                    trial
+                };
             };
             if result.2 == 1 && !central {
                 central = true; // retry with central differences
@@ -430,7 +482,11 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
         if status == 1 {
             return x;
         }
-        let g_new = if central { central_gradient(&mut evaluate, &x_new) } else { forward_gradient(&mut evaluate, &x_new, f_new) };
+        let g_new = if central {
+            central_gradient(&mut evaluate, &x_new)
+        } else {
+            forward_gradient(&mut evaluate, &x_new, f_new)
+        };
         if converged_gradient(&x_new, f_new, &g_new) {
             return x;
         }
@@ -476,7 +532,8 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
                 }
             }
             let reltol = if central { noise } else { noise.sqrt() };
-            let skip_update = (0..n).all(|i| (y[i] - w[i]).abs() < reltol * g[i].abs().max(g_new[i].abs()));
+            let skip_update =
+                (0..n).all(|i| (y[i] - w[i]).abs() < reltol * g[i].abs().max(g_new[i].abs()));
             if !skip_update {
                 for i in 0..n {
                     w[i] = y[i] - scale * w[i];
@@ -509,7 +566,13 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
 /// nlme_increment's refinement of the factor after EM: optif9 on
 /// 0.5 (N log RSS + log det) (nlme's internal_loglik, negated) over log Delta
 /// (pdDiag) or the log-Cholesky parameters of the precision factor (pdLogChol).
-fn nlm_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, l0: ArrayView2<f64>, n_obs: f64, full: bool) -> Array2<f64> {
+fn nlm_core(
+    z: ArrayView3<f64>,
+    xw: ArrayView3<f64>,
+    l0: ArrayView2<f64>,
+    n_obs: f64,
+    full: bool,
+) -> Array2<f64> {
     let r = l0.len_of(Axis(0));
     let cols: Vec<(usize, usize)> = (0..r).flat_map(|j| (0..j).map(move |i| (i, j))).collect();
     let to_l = |theta: &[f64]| -> Option<Array2<f64>> {
@@ -594,7 +657,10 @@ fn nlm_factor<'py>(
 fn optif9_py(py: Python<'_>, fcn: Py<PyAny>, x0: Vec<f64>, itnlim: usize) -> PyResult<Vec<f64>> {
     let mut err = None;
     let x = optif9(
-        |v: &[f64]| match fcn.call1(py, (v.to_vec(),)).and_then(|r| r.extract::<f64>(py)) {
+        |v: &[f64]| match fcn
+            .call1(py, (v.to_vec(),))
+            .and_then(|r| r.extract::<f64>(py))
+        {
             Ok(value) => value,
             Err(e) => {
                 err.get_or_insert(e);
@@ -625,7 +691,14 @@ fn lme_gradient<'py>(
     r_zz: PyReadonlyArray3<'py, f64>,
     n_obs: f64,
 ) -> Bound<'py, PyArray2<f64>> {
-    let (z, xw, l, beta, u, r_zz) = (z.as_array(), xw.as_array(), l.as_array(), beta.as_array(), u.as_array(), r_zz.as_array());
+    let (z, xw, l, beta, u, r_zz) = (
+        z.as_array(),
+        xw.as_array(),
+        l.as_array(),
+        beta.as_array(),
+        u.as_array(),
+        r_zz.as_array(),
+    );
     let (m, k, r) = z.dim();
     let f = beta.len();
     let mut d_rss = vec![0.0; r * r];
@@ -713,6 +786,7 @@ fn lme_gradient<'py>(
 
 // ----- MATLAB nlmefit's LME objective --------------------------------------
 
+/// QR blocks of [Z_i X_i w_i; Delta 0] (nlmefit.m: R11, [R10 c1], R00).
 struct DeltaQr {
     r_b: Array3<f64>,
     r_bx: Array3<f64>,
@@ -770,15 +844,26 @@ fn delta_qr_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, delta: ArrayView2<f64>
     DeltaQr { r_b, r_bx, r_x }
 }
 
+/// (R_b, R_bx, R_x) as NumPy arrays.
+type DeltaQrArrays<'py> = (
+    Bound<'py, PyArray3<f64>>,
+    Bound<'py, PyArray3<f64>>,
+    Bound<'py, PyArray2<f64>>,
+);
+
 #[pyfunction]
 fn delta_qr<'py>(
     py: Python<'py>,
     z: PyReadonlyArray3<'py, f64>,
     xw: PyReadonlyArray3<'py, f64>,
     delta: PyReadonlyArray2<'py, f64>,
-) -> (Bound<'py, PyArray3<f64>>, Bound<'py, PyArray3<f64>>, Bound<'py, PyArray2<f64>>) {
+) -> DeltaQrArrays<'py> {
     let d = delta_qr_core(z.as_array(), xw.as_array(), delta.as_array());
-    (d.r_b.into_pyarray(py), d.r_bx.into_pyarray(py), d.r_x.into_pyarray(py))
+    (
+        d.r_b.into_pyarray(py),
+        d.r_bx.into_pyarray(py),
+        d.r_x.into_pyarray(py),
+    )
 }
 
 /// nlmefit's LMEnegloglikelihood (varying part of Pinheiro & Bates eq. 2.21 or
@@ -822,7 +907,13 @@ fn matlab_negloglik<'py>(
 /// MATLAB's eps(x).
 fn spacing(x: f64) -> f64 {
     let a = x.abs();
-    if a == 0.0 { f64::from_bits(1) } else if !a.is_finite() { f64::NAN } else { f64::from_bits(a.to_bits() + 1) - a }
+    if a == 0.0 {
+        f64::from_bits(1)
+    } else if !a.is_finite() {
+        f64::NAN
+    } else {
+        f64::from_bits(a.to_bits() + 1) - a
+    }
 }
 
 // Nelder-Mead coefficients
@@ -833,8 +924,14 @@ const SHRINK: f64 = 0.5;
 
 /// Nelder-Mead as MATLAB's fminsearch (Lagarias et al. 1998), as pynlme's
 /// matlab_lb.fminsearch. Returns (x, f(x), converged).
-fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_fun: f64, max_iter: usize,
-                                      max_fun_evals: f64) -> (Vec<f64>, f64, bool) {
+fn fminsearch<F: FnMut(&[f64]) -> f64>(
+    mut fun: F,
+    x0: &[f64],
+    tol_x: f64,
+    tol_fun: f64,
+    max_iter: usize,
+    max_fun_evals: f64,
+) -> (Vec<f64>, f64, bool) {
     let n = x0.len();
     let mut simplex: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
     let mut values: Vec<f64> = Vec::with_capacity(n + 1);
@@ -842,24 +939,42 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_f
     values.push(fun(x0));
     for j in 0..n {
         let mut vertex = x0.to_vec();
-        vertex[j] = if vertex[j] != 0.0 { (1.0 + 0.05) * vertex[j] } else { 0.00025 };
+        vertex[j] = if vertex[j] != 0.0 {
+            (1.0 + 0.05) * vertex[j]
+        } else {
+            0.00025
+        };
         values.push(fun(&vertex));
         simplex.push(vertex);
     }
     let sort = |simplex: &mut Vec<Vec<f64>>, values: &mut Vec<f64>| {
         let mut idx: Vec<usize> = (0..values.len()).collect();
-        idx.sort_by(|&a, &b| values[a].partial_cmp(&values[b]).unwrap_or(std::cmp::Ordering::Equal)); // stable
+        idx.sort_by(|&a, &b| {
+            values[a]
+                .partial_cmp(&values[b])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }); // stable
         *simplex = idx.iter().map(|&i| simplex[i].clone()).collect();
         *values = idx.iter().map(|&i| values[i]).collect();
     };
     sort(&mut simplex, &mut values);
     let (mut n_evals, mut iterations) = ((n + 1) as f64, 1usize);
     while n_evals < max_fun_evals && iterations < max_iter {
-        let fspread = (1..=n).map(|j| (values[0] - values[j]).abs()).fold(0.0, f64::max);
-        let xspread = (1..=n).flat_map(|j| (0..n).map({ let simplex = &simplex; move |i| (simplex[j][i] - simplex[0][i]).abs() }))
+        let fspread = (1..=n)
+            .map(|j| (values[0] - values[j]).abs())
+            .fold(0.0, f64::max);
+        let xspread = (1..=n)
+            .flat_map(|j| {
+                (0..n).map({
+                    let simplex = &simplex;
+                    move |i| (simplex[j][i] - simplex[0][i]).abs()
+                })
+            })
             .fold(0.0, f64::max);
         let vmax = simplex[0].iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        if fspread <= tol_fun.max(10.0 * spacing(values[0])) && xspread <= tol_x.max(10.0 * spacing(vmax)) {
+        if fspread <= tol_fun.max(10.0 * spacing(values[0]))
+            && xspread <= tol_x.max(10.0 * spacing(vmax))
+        {
             break;
         }
         let mut centroid = vec![0.0; n];
@@ -869,7 +984,9 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_f
             }
         }
         centroid.iter_mut().for_each(|x| *x /= n as f64);
-        let affine = |a: f64, b: f64, vertex: &Vec<f64>| -> Vec<f64> { (0..n).map(|i| a * centroid[i] + b * vertex[i]).collect() };
+        let affine = |a: f64, b: f64, vertex: &Vec<f64>| -> Vec<f64> {
+            (0..n).map(|i| a * centroid[i] + b * vertex[i]).collect()
+        };
         let reflected = affine(1.0 + REFLECT, -REFLECT, &simplex[n]);
         let f_reflected = fun(&reflected);
         n_evals += 1.0;
@@ -878,7 +995,13 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_f
             let expanded = affine(1.0 + REFLECT * EXPAND, -REFLECT * EXPAND, &simplex[n]);
             let f_expanded = fun(&expanded);
             n_evals += 1.0;
-            if f_expanded < f_reflected { simplex[n] = expanded; values[n] = f_expanded; } else { simplex[n] = reflected; values[n] = f_reflected; }
+            if f_expanded < f_reflected {
+                simplex[n] = expanded;
+                values[n] = f_expanded;
+            } else {
+                simplex[n] = reflected;
+                values[n] = f_reflected;
+            }
         } else if f_reflected < values[n - 1] {
             simplex[n] = reflected;
             values[n] = f_reflected;
@@ -886,16 +1009,28 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_f
             let outside = affine(1.0 + CONTRACT * REFLECT, -CONTRACT * REFLECT, &simplex[n]);
             let f_outside = fun(&outside);
             n_evals += 1.0;
-            if f_outside <= f_reflected { simplex[n] = outside; values[n] = f_outside; } else { do_shrink = true; }
+            if f_outside <= f_reflected {
+                simplex[n] = outside;
+                values[n] = f_outside;
+            } else {
+                do_shrink = true;
+            }
         } else {
             let inside = affine(1.0 - CONTRACT, CONTRACT, &simplex[n]);
             let f_inside = fun(&inside);
             n_evals += 1.0;
-            if f_inside < values[n] { simplex[n] = inside; values[n] = f_inside; } else { do_shrink = true; }
+            if f_inside < values[n] {
+                simplex[n] = inside;
+                values[n] = f_inside;
+            } else {
+                do_shrink = true;
+            }
         }
         if do_shrink {
             for j in 1..=n {
-                let vertex: Vec<f64> = (0..n).map(|i| simplex[0][i] + SHRINK * (simplex[j][i] - simplex[0][i])).collect();
+                let vertex: Vec<f64> = (0..n)
+                    .map(|i| simplex[0][i] + SHRINK * (simplex[j][i] - simplex[0][i]))
+                    .collect();
                 values[j] = fun(&vertex);
                 simplex[j] = vertex;
             }
@@ -911,18 +1046,31 @@ fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_f
 /// fminsearch on a Python function (for testing the port against pynlme's
 /// Python version).
 #[pyfunction]
-fn fminsearch_py(py: Python<'_>, fcn: Py<PyAny>, x0: Vec<f64>, tol_x: f64, tol_fun: f64, max_iter: usize)
-                 -> PyResult<(Vec<f64>, f64, bool)> {
+fn fminsearch_py(
+    py: Python<'_>,
+    fcn: Py<PyAny>,
+    x0: Vec<f64>,
+    tol_x: f64,
+    tol_fun: f64,
+    max_iter: usize,
+) -> PyResult<(Vec<f64>, f64, bool)> {
     let mut err = None;
     let out = fminsearch(
-        |v: &[f64]| match fcn.call1(py, (v.to_vec(),)).and_then(|r| r.extract::<f64>(py)) {
+        |v: &[f64]| match fcn
+            .call1(py, (v.to_vec(),))
+            .and_then(|r| r.extract::<f64>(py))
+        {
             Ok(value) => value,
             Err(e) => {
                 err.get_or_insert(e);
                 f64::INFINITY
             }
         },
-        &x0, tol_x, tol_fun, max_iter, f64::INFINITY,
+        &x0,
+        tol_x,
+        tol_fun,
+        max_iter,
+        f64::INFINITY,
     );
     match err {
         Some(e) => Err(e),
@@ -977,16 +1125,25 @@ fn matlab_lme_step(
                 log_ratio -= d.r_b[[g, i, i]].abs().ln();
             }
         }
-        let value = if reml {
+        if reml {
             let log_rx: f64 = (0..q).map(|i| d.r_x[[i, i]].abs().ln()).sum();
             (n_obs - q as f64) * resid_norm.ln() + log_rx - log_ratio
         } else {
             n_obs * resid_norm.ln() - log_ratio
-        };
-        value
+        }
     };
     fminsearch(objective, &theta0, tol_x, tol_fun, max_iter, f64::INFINITY)
 }
+
+/// (logdet, beta, rss, R_xx, u, R_zz) as Python values.
+type LmeArrays<'py> = (
+    f64,
+    Bound<'py, PyArray1<f64>>,
+    f64,
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray2<f64>>,
+    Bound<'py, PyArray3<f64>>,
+);
 
 /// LME core for all groups: returns (logdet, beta, rss, R_xx, u, R_zz), as
 /// LinearizedLME.solve computes them (R up to row signs).
@@ -996,7 +1153,7 @@ fn lme_solve<'py>(
     z: PyReadonlyArray3<'py, f64>,
     xw: PyReadonlyArray3<'py, f64>,
     l: PyReadonlyArray2<'py, f64>,
-) -> (f64, Bound<'py, PyArray1<f64>>, f64, Bound<'py, PyArray2<f64>>, Bound<'py, PyArray2<f64>>, Bound<'py, PyArray3<f64>>) {
+) -> LmeArrays<'py> {
     let res = lme_core(z.as_array(), xw.as_array(), l.as_array());
     (
         res.logdet,

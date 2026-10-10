@@ -77,7 +77,9 @@ def _sd_cov(sd, corr=0.0):
 
 
 def _times(rng, m, n_lo, n_hi, lo, hi):
-    return [np.sort(rng.uniform(lo, hi, rng.integers(n_lo, n_hi + 1))) for _ in range(m)]
+    return [
+        np.sort(rng.uniform(lo, hi, rng.integers(n_lo, n_hi + 1))) for _ in range(m)
+    ]
 
 
 FAMILIES = {
@@ -88,11 +90,20 @@ FAMILIES = {
         re_index=np.array([1, 2]),
         uses_v=True,
         draw_truth=lambda rng: Truth(
-            beta=np.log([rng.uniform(0.05, 0.15), rng.uniform(0.8, 2.5), rng.uniform(0.02, 0.06)]),
+            beta=np.log(
+                [
+                    rng.uniform(0.05, 0.15),
+                    rng.uniform(0.8, 2.5),
+                    rng.uniform(0.02, 0.06),
+                ]
+            ),
             psi=_sd_cov(rng.uniform(0.1, 0.5, 2)),
             sigma=rng.uniform(0.3, 0.8),
         ),
-        draw_design=lambda rng, m: (_times(rng, m, 5, 12, 0.1, 24), rng.uniform(3, 6, m)),
+        draw_design=lambda rng, m: (
+            _times(rng, m, 5, 12, 0.1, 24),
+            rng.uniform(3, 6, m),
+        ),
         draw_start=lambda rng, beta: beta + rng.normal(0, 0.1, beta.size),
         m_range=(8, 40),
     ),
@@ -105,10 +116,16 @@ FAMILIES = {
         draw_truth=lambda rng: (
             lambda b: Truth(
                 beta=b,
-                psi=_sd_cov([rng.uniform(0.05, 0.2) * b[0], rng.uniform(0.02, 0.1) * b[1]]),
+                psi=_sd_cov(
+                    [rng.uniform(0.05, 0.2) * b[0], rng.uniform(0.02, 0.1) * b[1]]
+                ),
                 sigma=0.03 * b[0],
             )
-        )(np.array([rng.uniform(100, 300), rng.uniform(400, 900), rng.uniform(200, 400)])),
+        )(
+            np.array(
+                [rng.uniform(100, 300), rng.uniform(400, 900), rng.uniform(200, 400)]
+            )
+        ),
         draw_design=lambda rng, m: (_times(rng, m, 5, 10, 100, 1600), None),
         draw_start=lambda rng, beta: beta * rng.uniform(0.9, 1.1, beta.size),
         m_range=(6, 30),
@@ -135,15 +152,23 @@ FAMILIES = {
         re_index=np.array([0, 2]),
         uses_v=False,
         draw_truth=lambda rng: Truth(
-            beta=np.array([rng.uniform(5, 20), rng.uniform(20, 80), np.log(rng.uniform(2, 20))]),
+            beta=np.array(
+                [rng.uniform(5, 20), rng.uniform(20, 80), np.log(rng.uniform(2, 20))]
+            ),
             psi=_sd_cov([rng.uniform(1, 4), rng.uniform(0.1, 0.4)]),
             sigma=rng.uniform(1, 3),
         ),
         draw_design=lambda rng, m: (
-            [np.sort(np.exp(rng.uniform(np.log(0.1), np.log(100), rng.integers(4, 9)))) for _ in range(m)],
+            [
+                np.sort(
+                    np.exp(rng.uniform(np.log(0.1), np.log(100), rng.integers(4, 9)))
+                )
+                for _ in range(m)
+            ],
             None,
         ),
-        draw_start=lambda rng, beta: beta * np.array([*rng.uniform(0.85, 1.15, 2), 1]) + np.array([0, 0, rng.normal(0, 0.2)]),
+        draw_start=lambda rng, beta: beta * np.array([*rng.uniform(0.85, 1.15, 2), 1])
+        + np.array([0, 0, rng.normal(0, 0.2)]),
         m_range=(10, 40),
     ),
 }
@@ -202,7 +227,14 @@ def write_for_r(datasets: list[SimulatedDataset], directory: Path) -> Path:
             w = csv.writer(fh)
             w.writerow(["id", "x", "y", "v"])
             w.writerows(zip(d.group.astype(int), d.X, d.y, v_by_obs, strict=True))
-        manifest.append({"name": d.name, "family": d.family, "file": str(path), "start": d.beta0.tolist()})
+        manifest.append(
+            {
+                "name": d.name,
+                "family": d.family,
+                "file": str(path),
+                "start": d.beta0.tolist(),
+            }
+        )
     out = directory / "manifest.json"
     out.write_text(json.dumps(manifest))
     return out

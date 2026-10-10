@@ -28,7 +28,9 @@ import numpy as np
 from pynlme import nlmefit
 
 DATA = Path(__file__).resolve().parents[1] / "validation" / "datasets" / "indometh.csv"
-OUTPUT_DIR = os.path.join("examples", "matlab_documentation_examples_output", "example2_indomethacin")
+OUTPUT_DIR = os.path.join(
+    "examples", "matlab_documentation_examples_output", "example2_indomethacin"
+)
 
 # Printed in the MATLAB documentation (4 decimals).
 MATLAB_BETA = np.array([0.4606, -1.3459, 2.8277, 0.7729])
@@ -53,7 +55,9 @@ def main():
 
     phi0 = [1, 1, 1, 1]
     xform = [0, 1, 0, 1]
-    beta, psi, stats, b = nlmefit(time, concentration, subject, None, model, phi0, ParamTransform=xform)
+    beta, psi, stats, b = nlmefit(
+        time, concentration, subject, None, model, phi0, ParamTransform=xform
+    )
 
     # The start [1 1 1 1] is symmetric in the two exponential terms, so the
     # fit may label them in the opposite order to MATLAB. Put the slow term
@@ -68,8 +72,12 @@ def main():
     print(f"  MATLAB beta    = {MATLAB_BETA}")
     print(f"  diag(psi)      = {np.diag(psi)}")
     print(f"  MATLAB psi     = {MATLAB_PSI_DIAG}")
-    print(f"  logl = {stats.logl:.4f}, rmse = {stats.rmse:.4f}, sebeta = {stats.sebeta}")
-    match = np.allclose(beta, MATLAB_BETA, atol=5e-5) and np.allclose(np.diag(psi), MATLAB_PSI_DIAG, atol=5e-5)
+    print(
+        f"  logl = {stats.logl:.4f}, rmse = {stats.rmse:.4f}, sebeta = {stats.sebeta}"
+    )
+    match = np.allclose(beta, MATLAB_BETA, atol=5e-5) and np.allclose(
+        np.diag(psi), MATLAB_PSI_DIAG, atol=5e-5
+    )
     print(f"  Matches MATLAB to the printed 4 decimals: {match}")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -82,9 +90,17 @@ def main():
         mask = subject == s
         ax.plot(time[mask], concentration[mask], "o", label=f"subject {s}")
     ax.plot(tt, model(phi_pop, tt), "k-", lw=2, label="population fit")
-    ax.set(xlabel="Time (hours)", ylabel="Concentration (mcg/ml)", title="Indomethacin elimination")
+    ax.set(
+        xlabel="Time (hours)",
+        ylabel="Concentration (mcg/ml)",
+        title="Indomethacin elimination",
+    )
     ax.legend()
-    fig.savefig(os.path.join(OUTPUT_DIR, "indomethacin_population.png"), dpi=150, bbox_inches="tight")
+    fig.savefig(
+        os.path.join(OUTPUT_DIR, "indomethacin_population.png"),
+        dpi=150,
+        bbox_inches="tight",
+    )
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for i, s in enumerate(np.unique(subject)):
@@ -93,9 +109,15 @@ def main():
         phi_i[[1, 3]] = np.exp(phi_i[[1, 3]])
         (line,) = ax.plot(time[mask], concentration[mask], "o", label=f"subject {s}")
         ax.plot(tt, model(phi_i, tt), "-", color=line.get_color())
-    ax.set(xlabel="Time (hours)", ylabel="Concentration (mcg/ml)", title="Individual fits")
+    ax.set(
+        xlabel="Time (hours)", ylabel="Concentration (mcg/ml)", title="Individual fits"
+    )
     ax.legend()
-    fig.savefig(os.path.join(OUTPUT_DIR, "indomethacin_individual.png"), dpi=150, bbox_inches="tight")
+    fig.savefig(
+        os.path.join(OUTPUT_DIR, "indomethacin_individual.png"),
+        dpi=150,
+        bbox_inches="tight",
+    )
     print(f"  Plots saved to {OUTPUT_DIR}")
 
 

@@ -80,7 +80,8 @@ def main():
             )
         )
         print(
-            f"   Fixed effects: amplitude={beta_matlab_mle[0]:.3f}, decay={beta_matlab_mle[1]:.3f}"
+            f"   Fixed effects: amplitude={beta_matlab_mle[0]:.3f}, "
+            f"decay={beta_matlab_mle[1]:.3f}"
         )
         if stats_matlab_mle.logl is not None:
             print(f"   Log-likelihood: {stats_matlab_mle.logl:.3f}")
@@ -95,7 +96,8 @@ def main():
             )
         )
         print(
-            f"   Fixed effects: amplitude={beta_matlab_saem[0]:.3f}, decay={beta_matlab_saem[1]:.3f}"
+            f"   Fixed effects: amplitude={beta_matlab_saem[0]:.3f}, "
+            f"decay={beta_matlab_saem[1]:.3f}"
         )
         if stats_matlab_saem.logl is not None:
             print(f"   Log-likelihood: {stats_matlab_saem.logl:.3f}")
@@ -123,7 +125,8 @@ def main():
             **fit_options,
         )
         print(
-            f"   Fixed effects: amplitude={beta_python_ml[0]:.3f}, decay={beta_python_ml[1]:.3f}"
+            f"   Fixed effects: amplitude={beta_python_ml[0]:.3f}, "
+            f"decay={beta_python_ml[1]:.3f}"
         )
         if stats_python_ml.logl is not None:
             print(f"   Log-likelihood: {stats_python_ml.logl:.3f}")
@@ -145,7 +148,8 @@ def main():
             )
         )
         print(
-            f"   Fixed effects: amplitude={beta_python_saem[0]:.3f}, decay={beta_python_saem[1]:.3f}"
+            f"   Fixed effects: amplitude={beta_python_saem[0]:.3f}, "
+            f"decay={beta_python_saem[1]:.3f}"
         )
         if stats_python_saem.logl is not None:
             print(f"   Log-likelihood: {stats_python_saem.logl:.3f}")

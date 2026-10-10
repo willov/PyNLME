@@ -38,7 +38,15 @@ class FirstOrderResult:
     error_param: np.ndarray | None = None
 
 
-def conditional_modes(model: GroupedModel, beta, L, U0, max_iter: int = 100, tol: float = 1e-12, weights=None):
+def conditional_modes(
+    model: GroupedModel,
+    beta,
+    L,
+    U0,
+    max_iter: int = 100,
+    tol: float = 1e-12,
+    weights=None,
+):
     """u_i minimising ||w_i (y_i - f_i(beta, L u_i))||^2 + ||u_i||^2 for each group."""
     r = model.n_random
     U = U0.copy()
@@ -153,7 +161,9 @@ def fit_first_order(
     J0 = model.jacobian_padded(eta0)
     res0 = model.mask * (model.y_pad - model.predict_padded(eta0))
     lme0 = LinearizedLME(model, beta, np.zeros((r, m)), res0, J0, reml=False)
-    theta, _ = lme0.maximize(factor, factor.from_matrix(initial_factor(model, J0)), tight=False)
+    theta, _ = lme0.maximize(
+        factor, factor.from_matrix(initial_factor(model, J0)), tight=False
+    )
 
     state = {"U": np.zeros((m, r)), "weights": None}
 
@@ -166,7 +176,9 @@ def fit_first_order(
         beta_x, L = x[:f], factor.to_matrix(x[f:])
         try:
             U = modes(beta_x, L)
-            logl, _, _ = linearized_marginal(model, beta_x, L, U, weights=state["weights"])
+            logl, _, _ = linearized_marginal(
+                model, beta_x, L, U, weights=state["weights"]
+            )
         except (np.linalg.LinAlgError, FloatingPointError):
             return np.inf
         if not np.isfinite(logl):
@@ -188,7 +200,11 @@ def fit_first_order(
 
     def optimise(x0):
         result = optimize.minimize(
-            objective, x0, jac=gradient, method="L-BFGS-B", bounds=bounds,
+            objective,
+            x0,
+            jac=gradient,
+            method="L-BFGS-B",
+            bounds=bounds,
             options={"maxiter": max_iter, "ftol": 1e-13, "gtol": 1e-7},
         )
         converged = bool(result.success)
@@ -196,7 +212,11 @@ def fit_first_order(
             # The line search could not improve further: usually the optimum
             # at the precision of the numerical gradient. Confirm with a restart.
             retry = optimize.minimize(
-                objective, result.x, jac=gradient, method="L-BFGS-B", bounds=bounds,
+                objective,
+                result.x,
+                jac=gradient,
+                method="L-BFGS-B",
+                bounds=bounds,
                 options={"maxiter": max_iter, "ftol": 1e-13, "gtol": 1e-7},
             )
             converged = retry.fun > result.fun - 1e-6 * (1 + abs(result.fun))
@@ -210,14 +230,21 @@ def fit_first_order(
     for _ in range(max_iter if reweight else 1):
         result, converged = optimise(x)
         if verbose:
-            print(f"{'FOCE' if conditional else 'FO'}: {result.message} after {result.nit} iterations")
+            print(
+                f"{'FOCE' if conditional else 'FO'}: {result.message} after "
+                f"{result.nit} iterations"
+            )
         step = np.max(np.abs(result.x - x) / np.maximum(np.abs(x), 1e-8))
         x = result.x
         if not reweight:
             break
         beta, L = x[:f], factor.to_matrix(x[f:])
         U = modes(beta, L)
-        fb = np.concatenate(model.predict_many(np.arange(m), [model.eta(i, beta, L @ U[i]) for i in range(m)]))
+        fb = np.concatenate(
+            model.predict_many(
+                np.arange(m), [model.eta(i, beta, L @ U[i]) for i in range(m)]
+            )
+        )
         w_flat, ab = update_weights(error_model, np.concatenate(model.y), fb, ab)
         state["weights"] = np.split(w_flat, np.cumsum([len(yi) for yi in model.y])[:-1])
         if step < tol_x:
@@ -225,9 +252,14 @@ def fit_first_order(
 
     beta, L = x[:f], factor.to_matrix(x[f:])
     U = modes(beta, L)
-    logl, sigma2, parts = linearized_marginal(model, beta, L, U, weights=state["weights"])
+    logl, sigma2, parts = linearized_marginal(
+        model, beta, L, U, weights=state["weights"]
+    )
     # Standard errors from the GLS information of the linearised model.
-    fim = sum(X.T @ np.linalg.solve(np.eye(len(X)) + H @ H.T, X) for X, H in parts) / sigma2
+    fim = (
+        sum(X.T @ np.linalg.solve(np.eye(len(X)) + H @ H.T, X) for X, H in parts)
+        / sigma2
+    )
     return FirstOrderResult(
         beta=beta,
         psi=sigma2 * L @ L.T,

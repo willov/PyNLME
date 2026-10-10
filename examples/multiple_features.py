@@ -40,19 +40,31 @@ X, y, subject, dose = [], [], [], []
 for i in range(12):
     phi = truth * np.exp(np.r_[rng.normal(0, 0.3), 0, 0, rng.normal(0, 0.2), 0, 0])
     d = rng.choice([20.0, 40.0])
-    x = np.column_stack([np.tile(times, 2), np.repeat([0, 1], len(times))])  # time, feature
+    x = np.column_stack(
+        [np.tile(times, 2), np.repeat([0, 1], len(times))]
+    )  # time, feature
     f = model(phi, x, np.array([d]))
     X.append(x)
     y.append(f * (1 + 0.1 * rng.normal(size=f.size)))
     subject.append(np.full(len(f), i))
     dose.append(d)
-X, y, subject, dose = np.vstack(X), np.concatenate(y), np.concatenate(subject), np.array(dose)[:, None]
+X, y, subject, dose = (
+    np.vstack(X),
+    np.concatenate(y),
+    np.concatenate(subject),
+    np.array(dose)[:, None],
+)
 
 beta, psi, stats, b = nlmefit(
-    X, y, subject, dose, model, np.log(truth * 1.2),
-    ParamTransform=[1] * 6,      # all parameters positive (log scale)
-    REParamsSelect=[1, 4],       # ka and km vary between subjects
-    ErrorModel="proportional",   # the features are on different scales
+    X,
+    y,
+    subject,
+    dose,
+    model,
+    np.log(truth * 1.2),
+    ParamTransform=[1] * 6,  # all parameters positive (log scale)
+    REParamsSelect=[1, 4],  # ka and km vary between subjects
+    ErrorModel="proportional",  # the features are on different scales
     Vectorization="Full",
 )
 for name, est, true in zip(names, np.exp(beta), truth, strict=True):

@@ -49,17 +49,29 @@ def stacked_data(m=12, seed=0):
         y.append(f * (1 + 0.1 * rng.normal(size=f.size)))
         group.append(np.full(len(f), i))
         dose.append(d)
-    return np.vstack(X), np.concatenate(y), np.concatenate(group), np.array(dose)[:, None]
+    return (
+        np.vstack(X),
+        np.concatenate(y),
+        np.concatenate(group),
+        np.array(dose)[:, None],
+    )
 
 
 def test_ode_model_reads_out_each_rows_feature():
-    single = {k: ode_model(rhs, y0, lambda y, p, d, k=k: outputs(y, p, d)[:, k]) for k in (0, 1)}
+    single = {
+        k: ode_model(rhs, y0, lambda y, p, d, k=k: outputs(y, p, d)[:, k])
+        for k in (0, 1)
+    }
     stacked = ode_model(rhs, y0, outputs)
     times = np.array([0.5, 1.0, 3.0])
     x = np.column_stack([np.r_[times, times], [0, 0, 0, 1, 1, 1]])
     out = stacked(TRUTH, x, np.array([30.0]))
-    np.testing.assert_allclose(out[:3], single[0](TRUTH, times[:, None], np.array([30.0])))
-    np.testing.assert_allclose(out[3:], single[1](TRUTH, times[:, None], np.array([30.0])))
+    np.testing.assert_allclose(
+        out[:3], single[0](TRUTH, times[:, None], np.array([30.0]))
+    )
+    np.testing.assert_allclose(
+        out[3:], single[1](TRUTH, times[:, None], np.array([30.0]))
+    )
     with pytest.raises(ValueError, match="column 1"):
         stacked(TRUTH, times[:, None], np.array([30.0]))
     with pytest.raises(ValueError, match="0..1"):
@@ -73,8 +85,12 @@ def test_sund_model_reads_out_each_rows_feature():
     sund.install_model(os.path.relpath(MODELS / "mm_pkpd_sund.txt"))
     X, y, group, dose = stacked_data(m=3)
     reference = ode_model(rhs, y0, outputs, rtol=1e-12, atol=1e-14)
-    for model in (sund_model("mm_pkpd", ["conc", "effect"], PARAMS, v_states=["gut"]),
-                  sund_model("mm_pkpd", ["conc", "effect"], PARAMS, v_states=["gut"], batch_size=1)):
+    for model in (
+        sund_model("mm_pkpd", ["conc", "effect"], PARAMS, v_states=["gut"]),
+        sund_model(
+            "mm_pkpd", ["conc", "effect"], PARAMS, v_states=["gut"], batch_size=1
+        ),
+    ):
         # Full vectorization: one row of phi and V per observation, three subjects.
         phi = np.tile(TRUTH, (len(y), 1)) * (1 + 0.1 * group[:, None])
         v = dose[group]
@@ -90,8 +106,18 @@ def test_stacked_fit_recovers_both_features():
     beta0 = np.log(TRUTH * np.array([1.3, 0.8, 1.2, 0.8, 1.2, 0.8]))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
-        beta, psi, stats, b = nlmefit(X, y, group, dose, model, beta0, ParamTransform=[1] * 6,
-                                      REParamsSelect=[1, 4], ErrorModel="proportional", Vectorization="Full")
+        beta, psi, stats, b = nlmefit(
+            X,
+            y,
+            group,
+            dose,
+            model,
+            beta0,
+            ParamTransform=[1] * 6,
+            REParamsSelect=[1, 4],
+            ErrorModel="proportional",
+            Vectorization="Full",
+        )
     # 12 subjects, 10% error: the effect parameters come only from the effect rows.
     np.testing.assert_allclose(np.exp(beta), TRUTH, rtol=0.25)
     assert stats.errorparam[0] == pytest.approx(0.1, rel=0.3)

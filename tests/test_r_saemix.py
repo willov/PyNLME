@@ -33,14 +33,23 @@ def one_compartment_v(psi, id, xidep):  # noqa: A002
 
 @pytest.fixture(scope="module")
 def theoph():
-    return saemixData(load_csv("theoph.csv"), name_group="subject", name_predictors=["dose", "time"],
-                      name_response="conc", name_covariates=["wt"])
+    return saemixData(
+        load_csv("theoph.csv"),
+        name_group="subject",
+        name_predictors=["dose", "time"],
+        name_response="conc",
+        name_covariates=["wt"],
+    )
 
 
 @pytest.fixture(scope="module")
 def runs(theoph):
-    model = saemixModel(one_compartment, psi0={"ke": np.exp(-2.5), "ka": np.exp(0.5), "cl": np.exp(-3.2)},
-                        transform_par=[1, 1, 1], covariance_model=np.diag([0, 1, 1]))
+    model = saemixModel(
+        one_compartment,
+        psi0={"ke": np.exp(-2.5), "ka": np.exp(0.5), "cl": np.exp(-3.2)},
+        transform_par=[1, 1, 1],
+        covariance_model=np.diag([0, 1, 1]),
+    )
     return [saemix(model, theoph, {"seed": s}) for s in range(3)]
 
 
@@ -54,7 +63,10 @@ def test_matches_saemix(runs):
     se = np.sqrt(np.square(ref["beta_sd"]) * (1 / 10 + 1 / 3))
     assert np.all(np.abs(beta - ref["beta_mean"]) < 5 * se)
     se = np.sqrt(np.square(ref["psi_diag_sd"]) * (1 / 10 + 1 / 3))
-    assert np.all(np.abs(omega - ref["psi_diag_mean"]) < 5 * se + 0.02 * np.array(ref["psi_diag_mean"]))
+    assert np.all(
+        np.abs(omega - ref["psi_diag_mean"])
+        < 5 * se + 0.02 * np.array(ref["psi_diag_mean"])
+    )
     assert sigma == pytest.approx(ref["sigma_mean"], rel=0.01)
     assert logl == pytest.approx(ref["logl_mean"], abs=0.2)
 
@@ -64,10 +76,16 @@ def test_outputs(runs, theoph):
     assert list(coef(fit)["fixed"]) == ["ke", "ka", "cl"]
     # Delta-method SEs of the natural-scale parameters.
     for n in ("ka", "cl"):
-        assert fit["se_population"][n] == pytest.approx(fit["population"][n] * fit["se"][n])
+        assert fit["se_population"][n] == pytest.approx(
+            fit["population"][n] * fit["se"][n]
+        )
     y = theoph["data"]["conc"]
-    np.testing.assert_allclose(predict(fit, type="icpred"), y - fit["stats"]["ires"], rtol=1e-8, atol=1e-12)
-    np.testing.assert_allclose(predict(fit, type="ppred"), y - fit["stats"]["pres"], rtol=1e-8, atol=1e-12)
+    np.testing.assert_allclose(
+        predict(fit, type="icpred"), y - fit["stats"]["ires"], rtol=1e-8, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        predict(fit, type="ppred"), y - fit["stats"]["pres"], rtol=1e-8, atol=1e-12
+    )
     assert np.all(np.isfinite(predict(fit, type="ypred")))
     # Modes are close to, but not the same as, the conditional means.
     mode, mean = psi(fit)[1], psi(fit, "mean")[1]
@@ -81,10 +99,15 @@ def test_outputs(runs, theoph):
 
 def test_covariate_model_matches_saemix(theoph):
     """R: saemix(..., covariate.model = matrix(c(0, 0, 1), ncol = 3)), seed 1:
-    ka 1.455 (SE 0.311), V 0.439 (0.012), CL 0.116 (0.090), beta_wt(CL) -0.0150 (0.0111),
-    a.1 0.797, -2LL 380.39."""
-    model = saemixModel(one_compartment_v, psi0={"ka": [1, 0], "V": [20, 0], "CL": [0.5, 0]},
-                        transform_par=[1, 1, 1], covariate_model=[[0, 0, 1]], covariance_model=np.diag([1, 0, 1]))
+    ka 1.455 (SE 0.311), V 0.439 (0.012), CL 0.116 (0.090),
+    beta_wt(CL) -0.0150 (0.0111), a.1 0.797, -2LL 380.39."""
+    model = saemixModel(
+        one_compartment_v,
+        psi0={"ka": [1, 0], "V": [20, 0], "CL": [0.5, 0]},
+        transform_par=[1, 1, 1],
+        covariate_model=[[0, 0, 1]],
+        covariance_model=np.diag([1, 0, 1]),
+    )
     fit = saemix(model, theoph, {"seed": 1})
     pop = fit["population"]
     assert pop["ka"] == pytest.approx(1.455, rel=0.05)
@@ -102,13 +125,20 @@ def test_covariate_model_matches_saemix(theoph):
 
 
 def test_errors(theoph):
-    model = saemixModel(one_compartment, psi0={"ke": 0.1, "ka": 1.6, "cl": 0.04}, transform_par=[1, 1, 1])
+    model = saemixModel(
+        one_compartment,
+        psi0={"ke": 0.1, "ka": 1.6, "cl": 0.04},
+        transform_par=[1, 1, 1],
+    )
     with pytest.raises(ValueError, match="unsupported control"):
         saemix(model, theoph, {"nbiter.saem": [10, 10]})
     with pytest.raises(NotImplementedError):
         saemixModel(one_compartment, psi0={"ke": 0.1}, omega_init=np.eye(1))
     with pytest.raises(NotImplementedError):
-        saemixModel(one_compartment, psi0={"a": 1, "b": 1, "c": 1},
-                    covariance_model=[[1, 1, 0], [1, 1, 0], [0, 0, 1]])
+        saemixModel(
+            one_compartment,
+            psi0={"a": 1, "b": 1, "c": 1},
+            covariance_model=[[1, 1, 0], [1, 1, 0], [0, 0, 1]],
+        )
     with pytest.raises(TypeError):
         saemix(theoph, model)

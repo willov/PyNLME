@@ -34,27 +34,52 @@ def load_data():
 
 def main():
     # Compile and load the SUND model (sund.install_model wants a relative path).
-    sund.install_model(os.path.relpath(ROOT / "validation" / "models" / "mm_pk_sund.txt"))
+    sund.install_model(
+        os.path.relpath(ROOT / "validation" / "models" / "mm_pk_sund.txt")
+    )
 
     # phi = [ka, V, vmax, km]; the group predictor (dose) sets the initial gut
     # amount. Given the model name, sund_model simulates many subjects per call
     # using SUND containers (with Vectorization="Full").
-    model = sund_model("mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"])
+    model = sund_model(
+        "mm_pk", feature="conc", parameters=["ka", "V", "vmax", "km"], v_states=["gut"]
+    )
 
     time, conc, subject, dose = load_data()
     beta0 = np.log([0.8, 12.0, 2.5, 1.0])
-    options = {"ParamTransform": [1, 1, 1, 1], "REParamsSelect": [2, 3], "Vectorization": "Full"}
+    options = {
+        "ParamTransform": [1, 1, 1, 1],
+        "REParamsSelect": [2, 3],
+        "Vectorization": "Full",
+    }
 
     beta, psi, stats, b = nlmefit(time, conc, subject, dose, model, beta0, **options)
     print("nlmefit (LME)")
-    print("  ka, V, Vmax, Km =", np.round(np.exp(beta), 3), " (simulated with 1, 10, 2, 1.5)")
-    print("  SD of random effects on log V, log Vmax =", np.round(np.sqrt(np.diag(psi)), 3), " (0.2, 0.25)")
+    print(
+        "  ka, V, Vmax, Km =",
+        np.round(np.exp(beta), 3),
+        " (simulated with 1, 10, 2, 1.5)",
+    )
+    print(
+        "  SD of random effects on log V, log Vmax =",
+        np.round(np.sqrt(np.diag(psi)), 3),
+        " (0.2, 0.25)",
+    )
     print("  error SD =", np.round(stats.errorparam, 3), " (0.15)")
 
     # SAEM uses the exact likelihood; it simulates every subject several times
     # per iteration, so fewer iterations here for a quick look.
-    beta, psi, stats, b = nlmefitsa(time, conc, subject, dose, model, beta0, **options,
-                                    NIterations=[50, 50, 50], random_state=1)
+    beta, psi, stats, b = nlmefitsa(
+        time,
+        conc,
+        subject,
+        dose,
+        model,
+        beta0,
+        **options,
+        NIterations=[50, 50, 50],
+        random_state=1,
+    )
     print("nlmefitsa (SAEM, shortened)")
     print("  ka, V, Vmax, Km =", np.round(np.exp(beta), 3))
 

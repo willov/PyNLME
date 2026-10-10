@@ -4,7 +4,8 @@ PyNLME Demo - Nonlinear Mixed-Effects Models
 =============================================
 
 This demo shows the basic usage of PyNLME for fitting nonlinear mixed-effects models
-with both Python API (fit_nlme, fit_mle, fit_saem) and MATLAB-compatible (nlmefit, nlmefitsa).
+with both the Python API (fit_nlme, fit_mle, fit_saem) and the MATLAB-compatible
+functions (nlmefit, nlmefitsa).
 """
 
 import os
@@ -51,7 +52,7 @@ def generate_pharmacokinetic_data():
         conc_obs = conc * np.exp(np.random.normal(0, 0.15, len(t)))
 
         # Store data
-        for i, (time, obs) in enumerate(zip(t, conc_obs, strict=False)):
+        for time, obs in zip(t, conc_obs, strict=False):
             all_data.append([subj_id, time, obs])
 
     data = np.array(all_data)
@@ -78,14 +79,14 @@ def main():
     print("-" * 60)
 
     beta_mle, psi_mle, stats_mle, b_mle = fit_nlme(
-        X, y, group, None, exponential_model, beta0, method='MLE', verbose=1
+        X, y, group, None, exponential_model, beta0, method="MLE", verbose=1
     )
 
     print("Fixed effects:")
     print(f"  Amplitude: {beta_mle[0]:.3f}")
     print(f"  Decay rate: {beta_mle[1]:.3f}")
     print("Random effects covariance matrix:")
-    for i, row in enumerate(psi_mle):
+    for row in psi_mle:
         print(f"  {row}")
     print(f"Log-likelihood: {stats_mle.logl:.3f}")
     print(f"AIC: {stats_mle.aic:.3f}")
@@ -96,14 +97,22 @@ def main():
     print("-" * 62)
 
     beta_saem, psi_saem, stats_saem, b_saem = fit_nlme(
-        X, y, group, None, exponential_model, beta0, method='SAEM', max_iter=50, verbose=1
+        X,
+        y,
+        group,
+        None,
+        exponential_model,
+        beta0,
+        method="SAEM",
+        max_iter=50,
+        verbose=1,
     )
 
     print("Fixed effects:")
     print(f"  Amplitude: {beta_saem[0]:.3f}")
     print(f"  Decay rate: {beta_saem[1]:.3f}")
     print("Random effects covariance matrix:")
-    for i, row in enumerate(psi_saem):
+    for row in psi_saem:
         print(f"  {row}")
     if stats_saem.logl is not None:
         print(f"Log-likelihood: {stats_saem.logl:.3f}")

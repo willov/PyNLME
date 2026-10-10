@@ -218,7 +218,8 @@ def compare_algorithms():
 
         print("MLE Results:")
         print(
-            f"  Fixed effects: amplitude={beta_mle[0]:.3f}, decay_rate={beta_mle[1]:.3f}"
+            f"  Fixed effects: amplitude={beta_mle[0]:.3f}, "
+            f"decay_rate={beta_mle[1]:.3f}"
         )
         print("  Random effects covariance:")
         print(f"    {psi_mle}")
@@ -248,7 +249,8 @@ def compare_algorithms():
 
         print("SAEM Results:")
         print(
-            f"  Fixed effects: amplitude={beta_saem[0]:.3f}, decay_rate={beta_saem[1]:.3f}"
+            f"  Fixed effects: amplitude={beta_saem[0]:.3f}, "
+            f"decay_rate={beta_saem[1]:.3f}"
         )
         print("  Random effects covariance:")
         print(f"    {psi_saem}")
@@ -332,7 +334,9 @@ def plot_results(results):
     if results is None:
         return
 
-    if isinstance(results, tuple):  # pharmacokinetic_example results (log-scale parameters)
+    if isinstance(
+        results, tuple
+    ):  # pharmacokinetic_example results (log-scale parameters)
         beta, psi, stats, b, (X, y, group) = results
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))

@@ -23,9 +23,7 @@ class TestNLMEStats:
 
     def test_creation_with_values(self):
         """Test creating NLMEStats with specific values."""
-        stats = NLMEStats(
-            logl=-100.5, aic=205.0, bic=210.2, dfe=50, mse=0.25, rmse=0.5
-        )
+        stats = NLMEStats(logl=-100.5, aic=205.0, bic=210.2, dfe=50, mse=0.25, rmse=0.5)
         assert stats.logl == -100.5
         assert stats.aic == 205.0
         assert stats.bic == 210.2

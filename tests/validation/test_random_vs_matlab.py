@@ -41,7 +41,9 @@ from pynlme import nlmefit
 from ..conftest import matlab_command
 from .simulate import FAMILIES, simulate, write_for_r
 
-pytestmark = pytest.mark.skipif(matlab_command() is None, reason="set PYNLME_MATLAB to run against MATLAB")
+pytestmark = pytest.mark.skipif(
+    matlab_command() is None, reason="set PYNLME_MATLAB to run against MATLAB"
+)
 
 SEED = int(os.environ.get("PYNLME_RANDOM_SEED", secrets.randbelow(2**31)))
 N_PER_FAMILY = int(os.environ.get("PYNLME_RANDOM_N", 5))
@@ -55,13 +57,22 @@ def _run_matlab(manifest: Path, results: Path, approx: str) -> None:
     while command and "=" in command[0]:
         key, value = command.pop(0).split("=", 1)
         env[key] = value
-    call = f"addpath('{SCRIPT_DIR}'); fit_manifest('{manifest}', '{results}', '{approx}')"
+    call = (
+        f"addpath('{SCRIPT_DIR}'); fit_manifest('{manifest}', '{results}', '{approx}')"
+    )
     # Output to a file, not a pipe: MATLAB starts background helpers (MathWorks
     # ServiceHost, CrashReporter) that inherit stdout/stderr and keep a pipe open
     # after MATLAB exits, so reading it to the end would never return.
     with open(results.with_suffix(".log"), "w") as log:
-        subprocess.run([*command, "-batch", call], check=True, stdout=log, stderr=subprocess.STDOUT,
-                       stdin=subprocess.DEVNULL, env=env, timeout=1800)
+        subprocess.run(
+            [*command, "-batch", call],
+            check=True,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            env=env,
+            timeout=1800,
+        )
 
 
 @pytest.fixture(scope="module", params=["LME", "RELME"])
@@ -80,21 +91,40 @@ def test_matches_matlab(runs, name, caplog):
     approx, datasets, results = runs
     d, r = datasets[name], results[name]
     context = f"seed={SEED} dataset={name} {approx}"
-    with warnings.catch_warnings(record=True) as caught, caplog.at_level(logging.INFO, logger="pynlme"):
+    with (
+        warnings.catch_warnings(record=True) as caught,
+        caplog.at_level(logging.INFO, logger="pynlme"),
+    ):
         warnings.simplefilter("always")
-        beta, psi, stats, _ = nlmefit(*d.fit_args(), **d.kwargs, ApproximationType=approx)
-    collapsed = any("variance was estimated as zero" in str(w.message) for w in caught) or any(
-        "variance was zero during the iterations" in rec.getMessage() for rec in caplog.records)
+        beta, psi, stats, _ = nlmefit(
+            *d.fit_args(), **d.kwargs, ApproximationType=approx
+        )
+    collapsed = any(
+        "variance was estimated as zero" in str(w.message) for w in caught
+    ) or any(
+        "variance was zero during the iterations" in rec.getMessage()
+        for rec in caplog.records
+    )
     assert np.all(np.isfinite(beta)) and np.all(np.isfinite(psi)), context
     if "error" in r:
         return  # MATLAB failed; pynlme only needs finite estimates.
     if collapsed:
-        assert stats.logl >= r["logl"] - 2.0, f"{context}: logl {stats.logl} vs {r['logl']} (flat path)"
+        assert stats.logl >= r["logl"] - 2.0, (
+            f"{context}: logl {stats.logl} vs {r['logl']} (flat path)"
+        )
         return
     ref_psi = np.atleast_2d(r["psi"])
-    assert stats.logl == pytest.approx(r["logl"], abs=1e-3), f"{context}: logl {stats.logl} vs {r['logl']}"
+    assert stats.logl == pytest.approx(r["logl"], abs=1e-3), (
+        f"{context}: logl {stats.logl} vs {r['logl']}"
+    )
     scale = np.maximum(np.abs(r["beta"]), 1.0)
-    assert np.all(np.abs(beta - r["beta"]) <= 1e-4 * scale), f"{context}: beta={beta} MATLAB={r['beta']}"
-    np.testing.assert_allclose(psi, ref_psi, rtol=1e-2, atol=1e-3 * np.max(np.diag(ref_psi)), err_msg=context)
+    assert np.all(np.abs(beta - r["beta"]) <= 1e-4 * scale), (
+        f"{context}: beta={beta} MATLAB={r['beta']}"
+    )
+    np.testing.assert_allclose(
+        psi, ref_psi, rtol=1e-2, atol=1e-3 * np.max(np.diag(ref_psi)), err_msg=context
+    )
     # Record how often the fit is MATLAB's to rounding (see the module docstring).
-    print(f"{context}: max |dbeta|/scale = {np.max(np.abs(beta - r['beta']) / scale):.1e}")
+    print(
+        f"{context}: max |dbeta|/scale = {np.max(np.abs(beta - r['beta']) / scale):.1e}"
+    )

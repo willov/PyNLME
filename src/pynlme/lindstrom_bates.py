@@ -73,7 +73,9 @@ class CovarianceFactor:
         self.is_diag = self.rows == self.cols
         # Lower bounds only: when every variable has both bounds, L-BFGS-B
         # takes a full-gradient first step, which can jump to an extreme L.
-        self.bounds = [(self.LOG_MIN, None) if d else (None, None) for d in self.is_diag]
+        self.bounds = [
+            (self.LOG_MIN, None) if d else (None, None) for d in self.is_diag
+        ]
 
     @property
     def n_params(self) -> int:
@@ -127,7 +129,18 @@ def update_weights(error_model, y, f, ab):
     if error_model == "proportional":
         w = 1.0 / np.abs(f)
     elif error_model == "combined":
-        ab = np.abs(optimize.fmin(error_ab, ab, args=(y, f), disp=False, xtol=1e-10, ftol=1e-12, maxiter=5000, maxfun=10000))
+        ab = np.abs(
+            optimize.fmin(
+                error_ab,
+                ab,
+                args=(y, f),
+                disp=False,
+                xtol=1e-10,
+                ftol=1e-12,
+                maxiter=5000,
+                maxfun=10000,
+            )
+        )
         w = 1.0 / np.abs(ab[0] + ab[1] * np.abs(f))
     else:
         return np.ones_like(f), ab
@@ -179,7 +192,10 @@ def pnls(
         improved = False
         while lam < 1e12:
             Vd = V + lam * np.diag(np.diag(V) + 1e-12)
-            Ud = Ublocks + lam * eye_r[None] * np.diagonal(Ublocks, axis1=1, axis2=2)[:, None, :]
+            Ud = (
+                Ublocks
+                + lam * eye_r[None] * np.diagonal(Ublocks, axis1=1, axis2=2)[:, None, :]
+            )
             d_beta, d_u = _lm_step_solve(Vd, Wb, Ud, g_beta, g_u)
             try:
                 new_res, new_S = evaluate(beta + d_beta, U + d_u)
@@ -196,7 +212,10 @@ def pnls(
         decrease = S - new_S
         res, S = new_res, new_S
         lam = max(lam / 10, 1e-12)
-        step = max(np.max(np.abs(d_beta) / (np.abs(beta) + 1e-8)), np.max(np.abs(d_u), initial=0.0))
+        step = max(
+            np.max(np.abs(d_beta) / (np.abs(beta) + 1e-8)),
+            np.max(np.abs(d_u), initial=0.0),
+        )
         if decrease <= tol * (S + tol) and step < 1e-8:
             break
 
@@ -252,7 +271,9 @@ class LinearizedLME:
         """Profiled log-likelihood and the GLS quantities at factor L."""
         f, r = self.f, self.r
         if _kernels is not None:
-            logdet, beta, rss, R_xx, u, R_zz = _kernels.lme_solve(self.Z, self.Xw, np.ascontiguousarray(L))
+            logdet, beta, rss, R_xx, u, R_zz = _kernels.lme_solve(
+                self.Z, self.Xw, np.ascontiguousarray(L)
+            )
             dof = self.n - f if self.reml else self.n
             sigma2 = rss / dof
             logl = -0.5 * dof * (1.0 + np.log(2.0 * np.pi * sigma2)) - 0.5 * logdet
@@ -293,24 +314,42 @@ class LinearizedLME:
         """
         L, beta, u, rss, R_zz = self._last
         if _kernels is not None:
-            return _kernels.lme_gradient(self.Z, self.Xw, np.ascontiguousarray(L), np.ascontiguousarray(beta),
-                                         np.ascontiguousarray(u), float(rss), np.ascontiguousarray(R_zz),
-                                         float(self.n))
+            return _kernels.lme_gradient(
+                self.Z,
+                self.Xw,
+                np.ascontiguousarray(L),
+                np.ascontiguousarray(beta),
+                np.ascontiguousarray(u),
+                float(rss),
+                np.ascontiguousarray(R_zz),
+                float(self.n),
+            )
         f = self.f
-        resid = self.Xw[..., f] - self.Xw[..., :f] @ beta - np.einsum("mnr,mr->mn", self.Z @ L, u)
+        resid = (
+            self.Xw[..., f]
+            - self.Xw[..., :f] @ beta
+            - np.einsum("mnr,mr->mn", self.Z @ L, u)
+        )
         d_rss = -2.0 * np.einsum("mnj,mn,mk->jk", self.Z, resid, u)
         R_inv = np.linalg.solve(R_zz, np.broadcast_to(np.eye(self.r), R_zz.shape))
         M_inv = R_inv @ np.swapaxes(R_inv, 1, 2)
         d_logdet = 2.0 * np.einsum("mjk,kl,mlp->jp", self.ZtZ, L, M_inv)
         return -0.5 * self.n / rss * d_rss - 0.5 * d_logdet
 
-    def maximize(self, factor: CovarianceFactor, theta0: np.ndarray, tight: bool = True, restart: bool = True):
+    def maximize(
+        self,
+        factor: CovarianceFactor,
+        theta0: np.ndarray,
+        tight: bool = True,
+        restart: bool = True,
+    ):
         """Maximise over the covariance factor.
 
         Returns the optimum and whether a restart of collapsed components
         found a better one. ``tight`` selects the final, strict tolerances;
         early outer iterations do not need them.
         """
+
         def nll(theta):
             try:
                 value = -self.solve(factor.to_matrix(theta))[0]
@@ -364,7 +403,11 @@ class LinearizedLME:
         tol = {"ftol": 1e-15, "gtol": 1e-10} if tight else {"ftol": 1e-10, "gtol": 1e-6}
         results = [
             optimize.minimize(
-                objective, start, jac=jac, method="L-BFGS-B", bounds=factor.bounds,
+                objective,
+                start,
+                jac=jac,
+                method="L-BFGS-B",
+                bounds=factor.bounds,
                 options={**tol, "maxiter": 1000},
             )
             for start in starts
@@ -390,7 +433,10 @@ def _stagnated(history, tol, window: int = 8) -> bool:
     scale = np.maximum(np.abs(betas).mean(axis=0), 1e-8)
     span = np.ptp(betas, axis=0)
     net = np.abs(betas[-1] - betas[0])
-    jitter_only = np.all(net <= 0.5 * span + 1e-15) and abs(logls[-1] - logls[0]) <= 0.5 * np.ptp(logls) + 1e-15
+    jitter_only = (
+        np.all(net <= 0.5 * span + 1e-15)
+        and abs(logls[-1] - logls[0]) <= 0.5 * np.ptp(logls) + 1e-15
+    )
     return bool(np.max(span / scale) < tol and jitter_only)
 
 
@@ -451,7 +497,9 @@ def fit_lindstrom_bates(
     J0 = model.jacobian_padded(eta0)
     res0 = model.mask * (model.y_pad - model.predict_padded(eta0))
     lme0 = LinearizedLME(model, beta, np.zeros((r, m)), res0, J0, reml)
-    theta, _ = lme0.maximize(factor, factor.from_matrix(initial_factor(model, J0)), tight=False)
+    theta, _ = lme0.maximize(
+        factor, factor.from_matrix(initial_factor(model, J0)), tight=False
+    )
     prev = None
     near = False  # estimates close to converged: use strict tolerances
     history = []
@@ -470,7 +518,9 @@ def fit_lindstrom_bates(
         # convergence.
         if iteration % 25 == 0:
             damping /= 2
-        theta_new, helped = lme.maximize(factor, theta, tight=near, restart=skip_restart == 0)
+        theta_new, helped = lme.maximize(
+            factor, theta, tight=near, restart=skip_restart == 0
+        )
         # A restart that does not help is unlikely to help in the next few
         # iterations either; it is the most expensive part of the LME step.
         skip_restart = 0 if helped else (skip_restart - 1 if skip_restart else 4)
@@ -480,8 +530,14 @@ def fit_lindstrom_bates(
         logl += float(np.sum(np.log(weights[model.mask])))
         psi = sigma2 * L_new @ L_new.T
         state = LBResult(
-            beta=beta.copy(), psi=psi, sigma2=sigma2, b=B_hat, logl=logl,
-            covb=sigma2 * np.linalg.inv(A), iterations=iteration, converged=False,
+            beta=beta.copy(),
+            psi=psi,
+            sigma2=sigma2,
+            b=B_hat,
+            logl=logl,
+            covb=sigma2 * np.linalg.inv(A),
+            iterations=iteration,
+            converged=False,
             error_param=ab.copy(),
         )
         if error_model in ("proportional", "combined"):
@@ -495,7 +551,9 @@ def fit_lindstrom_bates(
             print(f"LB iteration {iteration}: logl={logl:.6f} beta={beta}")
 
         if prev is not None:
-            beta_change = np.max(np.abs(beta - prev[0]) / np.maximum(np.abs(prev[0]), 1e-8))
+            beta_change = np.max(
+                np.abs(beta - prev[0]) / np.maximum(np.abs(prev[0]), 1e-8)
+            )
             psi_scale = max(np.max(np.abs(np.diag(psi))), 1e-300)
             psi_change = np.max(np.abs(psi - prev[1])) / psi_scale
             logl_change = abs(logl - prev[2]) / (abs(prev[2]) + 1.0)
@@ -549,23 +607,30 @@ def fit_lindstrom_bates(
 # settings in nlme.
 
 
-def _em_factor(lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20) -> np.ndarray:
+def _em_factor(
+    lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20
+) -> np.ndarray:
     """nlme's EM update of the relative factor (internal_EM, ML), with the
     QR-based LME solve in each step, as nlme does: Psi/sigma^2 =
     mean_i(Var(b_i | y)/sigma^2 + b_i b_i'/sigma^2)."""
     if _kernels is not None:
-        return _kernels.em_factor(lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full, n_iter)
+        return _kernels.em_factor(
+            lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full, n_iter
+        )
     eye = np.eye(L.shape[0])
     for _ in range(n_iter):
         _, _, _, _, u = lme.solve(L)
         sigma2 = lme._last[3] / lme.n  # ML, as nlme's EM (RML = 0)
         R_zz = lme._last[4]
         R_inv = np.linalg.solve(R_zz, np.broadcast_to(eye, R_zz.shape))
-        cond_cov = L @ (R_inv @ np.swapaxes(R_inv, 1, 2)) @ L.T  # Var(b_i | y) / sigma^2
+        cond_cov = (
+            L @ (R_inv @ np.swapaxes(R_inv, 1, 2)) @ L.T
+        )  # Var(b_i | y) / sigma^2
         b = u @ L.T
         psi = np.mean(cond_cov + np.einsum("mi,mj->mij", b, b) / sigma2, axis=0)
         L = np.linalg.cholesky(psi) if full else np.diag(np.sqrt(np.diag(psi)))
     return L
+
 
 _DBL_MAX = np.finfo(float).max
 _EPS = np.finfo(float).eps
@@ -576,6 +641,12 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
     derivatives, typsiz 1, fscale 1, ndigit 15, grad_tol eps^(1/3), step_tol
     sqrt(eps), default max_step). Returns the vector optif9 leaves in its input
     argument: the last accepted iterate before the terminating one."""
+    # Names and their counterparts in R's uncmin.c (Dennis & Schnabel's notation):
+    #   max_step (stepmx), noise (rnf), grad_tol (gradtl), step_tol (steptl);
+    #   line search: slope (slp), newton_len (sln), rel_len (rln), min_step
+    #   (rmnlmb), step / prev_step (lambda / plmbda), prev_value (pfpls), trial
+    #   (tlmbda), took_max (mxtake), status (iretcd); stopping: rel_change (rsx);
+    #   BFGS update: sy (den1), s_hs (den2), scale (alp).
     x = np.asarray(x, dtype=float).copy()
     n = x.size
     noise = max(1e-15, _EPS)
@@ -606,7 +677,10 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
         return g
 
     def converged_gradient(v, fv, g):
-        return np.max(np.abs(g) * np.maximum(np.abs(v), 1.0)) / max(abs(fv), 1.0) <= grad_tol
+        return (
+            np.max(np.abs(g) * np.maximum(np.abs(v), 1.0)) / max(abs(fv), 1.0)
+            <= grad_tol
+        )
 
     def line_search(x, f, g, p):
         """A6.3.1: backtracking (quadratic, then cubic) with the Armijo test."""
@@ -641,9 +715,23 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
                 b = c3 * (c2 * step / prev_step**2 - c1 * prev_step / step**2)
                 discriminant = b * b - cubic_a * slope
                 if discriminant > b * b:
-                    trial = (-b + (-np.sqrt(discriminant) if cubic_a < 0 else np.sqrt(discriminant))) / cubic_a
+                    trial = (
+                        -b
+                        + (
+                            -np.sqrt(discriminant)
+                            if cubic_a < 0
+                            else np.sqrt(discriminant)
+                        )
+                    ) / cubic_a
                 else:
-                    trial = (-b + (np.sqrt(discriminant) if cubic_a < 0 else -np.sqrt(discriminant))) / cubic_a
+                    trial = (
+                        -b
+                        + (
+                            np.sqrt(discriminant)
+                            if cubic_a < 0
+                            else -np.sqrt(discriminant)
+                        )
+                    ) / cubic_a
                 trial = min(trial, step * 0.5)
             prev_step, prev_value = step, f_new
             step = step * 0.1 if trial < step * 0.1 else trial
@@ -671,7 +759,10 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
         # iteration limit, five consecutive maximal steps.
         if converged_gradient(x_new, f_new, g_new):
             return x
-        if np.max(np.abs(x_new - x) / np.maximum(np.abs(x_new), 1.0)) <= step_tol or iteration >= itnlim:
+        if (
+            np.max(np.abs(x_new - x) / np.maximum(np.abs(x_new), 1.0)) <= step_tol
+            or iteration >= itnlim
+        ):
             return x
         if took_max:
             n_max_steps += 1
@@ -692,7 +783,9 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
                 s_hs, scale = sy, 1.0
             w = L @ u
             reltol = noise if central else np.sqrt(noise)
-            if not np.all(np.abs(y - w) < reltol * np.maximum(np.abs(g), np.abs(g_new))):
+            if not np.all(
+                np.abs(y - w) < reltol * np.maximum(np.abs(g), np.abs(g_new))
+            ):
                 w = y - scale * w
                 u = u * (scale / sy)
                 R = np.linalg.qr(L.T + np.outer(u, w), mode="r")
@@ -704,7 +797,9 @@ def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
 def _nlm_factor(lme: "LinearizedLME", L: np.ndarray, full: bool) -> np.ndarray:
     """nlme_increment's optif9 refinement of the factor after EM."""
     if _kernels is not None:
-        return _kernels.nlm_factor(lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full)
+        return _kernels.nlm_factor(
+            lme.Z, lme.Xw, np.ascontiguousarray(L), float(lme.n), full
+        )
     r = L.shape[0]
     cols = [(i, j) for j in range(r) for i in range(j)]  # column-major upper part
 
@@ -740,8 +835,16 @@ def _penalty(B: np.ndarray, L: np.ndarray) -> float:
     return float(np.sum(np.linalg.solve(L, B.T) ** 2))
 
 
-def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, min_scale: float = 1e-3,
-              tol: float = 1e-3):
+def pnls_nlme(
+    model: GroupedModel,
+    L,
+    beta,
+    B,
+    full: bool,
+    max_iter: int = 7,
+    min_scale: float = 1e-3,
+    tol: float = 1e-3,
+):
     """nlme's PNLS step. B is (m, r) random effects on the parameter scale.
 
     Returns beta, B, the EM-updated factor L, the residuals and Jacobian at the
@@ -749,6 +852,7 @@ def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, mi
     step halving failed.
     """
     m, r, f = model.n_groups, model.n_random, model.n_fixed
+    # nlme's names: n_coef (nparTot), resid_dof (nrdof), predicted (predObj).
     n_coef = m * r + f
     resid_dof = model.n_obs - n_coef
 
@@ -766,7 +870,9 @@ def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, mi
         _, beta_gls, _, _, u = lme.solve(L)
         predicted = lme._last[3]
         d_beta, d_B = beta_gls - beta, u @ L.T - B
-        criterion = np.sqrt(resid_dof * max(objective - predicted, 0.0) / (n_coef * predicted))
+        criterion = np.sqrt(
+            resid_dof * max(objective - predicted, 0.0) / (n_coef * predicted)
+        )
         if criterion < tol:
             return beta, B, L, res, J, objective, iteration, False
         while True:
@@ -784,7 +890,16 @@ def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, mi
         step = min(4 * step, 1.0)
         beta, B, res, eta = new_beta, new_B, new_res, new_eta
         J = model.jacobian_padded(eta) * model.mask[..., None]
-    return beta, B, L, res, J, float(np.sum(res * res)) + _penalty(B, L), max_iter, False
+    return (
+        beta,
+        B,
+        L,
+        res,
+        J,
+        float(np.sum(res * res)) + _penalty(B, L),
+        max_iter,
+        False,
+    )
 
 
 def _nlme_coef(L: np.ndarray, full: bool) -> np.ndarray:
@@ -841,48 +956,77 @@ def fit_lindstrom_bates_nlme(
         old_coef, L_lme = _nlme_coef(L, full_cov), factor.to_matrix(theta)
         if verbose:
             # Laid out as nlme's verbose output (its reStruct coefficients).
-            print(f"**Iteration {iteration}\nLME step: Loglik: {lme.solve(L_lme)[0]:.7g}\n"
-                  f"reStruct parameters: {np.array2string(_nlme_coef(L_lme, full_cov), precision=7)}")
+            print(
+                f"**Iteration {iteration}\nLME step: Loglik: "
+                f"{lme.solve(L_lme)[0]:.7g}\n"
+                "reStruct parameters: "
+                f"{np.array2string(_nlme_coef(L_lme, full_cov), precision=7)}"
+            )
         old_beta = beta
         beta, B, L, res, J, objective, n_pnls, failed = pnls_nlme(
-            model, L_lme, beta, B, full_cov, pnls_max_iter, min_scale, pnls_tol)
+            model, L_lme, beta, B, full_cov, pnls_max_iter, min_scale, pnls_tol
+        )
         pnls_failed = pnls_failed or failed
         # nlme overwrites the reStruct with PNLS's EM-updated factor before
         # comparing, so the criterion is the change between successive PNLS
         # factors (with REML these differ from the LME step's optimum).
         new_coef = _nlme_coef(L, full_cov)
         if verbose:
-            print(f"PNLS step: RSS = {objective:.7g}\n fixed effects: {np.array2string(beta, precision=7)}\n"
-                  f" iterations: {n_pnls}")
-        conv_fixed = np.max(np.abs(old_beta - beta) / np.where(np.abs(beta) < tolerance, 1.0, np.abs(beta)))
-        conv_re = np.max(np.abs(old_coef - new_coef) / np.where(np.abs(new_coef) < tolerance, 1.0, np.abs(new_coef)),
-                         initial=0.0)
+            print(
+                f"PNLS step: RSS = {objective:.7g}\n fixed effects: "
+                f"{np.array2string(beta, precision=7)}\n"
+                f" iterations: {n_pnls}"
+            )
+        conv_fixed = np.max(
+            np.abs(old_beta - beta)
+            / np.where(np.abs(beta) < tolerance, 1.0, np.abs(beta))
+        )
+        conv_re = np.max(
+            np.abs(old_coef - new_coef)
+            / np.where(np.abs(new_coef) < tolerance, 1.0, np.abs(new_coef)),
+            initial=0.0,
+        )
         # The reported log-likelihood: the model linearised at this PNLS
         # solution, with PNLS's factor.
         logl = LinearizedLME(model, beta, B.T, res, J, reml).solve(L)[0]
         if verbose:
-            print(f"Convergence crit.: fixed {conv_fixed:.6g} reStruct {conv_re:.6g} "
-                  f"(LME step: {lme.last_result.nit} iterations, gain {gain:.3g})")
+            print(
+                f"Convergence crit.: fixed {conv_fixed:.6g} reStruct {conv_re:.6g} "
+                f"(LME step: {lme.last_result.nit} iterations, gain {gain:.3g})"
+            )
         # nlme stops when all criteria are met, or when the fixed effects are
         # and its LME step (nlminb) took a single iteration. pynlme's LME step
         # uses another optimizer: where a variance has collapsed, nlminb stops
         # on the flat likelihood while L-BFGS-B moves on to the bound and PNLS
         # moves the factor back, so the factor never settles. Equivalent there:
         # the fixed effects and the reported likelihood have converged.
-        logl_settled = prev_logl is not None and abs(logl - prev_logl) <= tolerance * (abs(logl) + 1.0)
+        logl_settled = prev_logl is not None and abs(logl - prev_logl) <= tolerance * (
+            abs(logl) + 1.0
+        )
         prev_logl = logl
         if max(conv_fixed, conv_re) <= tolerance or (
-                conv_fixed <= tolerance and (lme.last_result.nit <= 1 or logl_settled)):
+            conv_fixed <= tolerance and (lme.last_result.nit <= 1 or logl_settled)
+        ):
             converged = True
             break
     if pnls_failed:
         import warnings
 
-        warnings.warn("step halving factor reduced below minimum in PNLS step (as nlme's warning)",
-                      RuntimeWarning, stacklevel=3)
+        warnings.warn(
+            "step halving factor reduced below minimum in PNLS step (as nlme's "
+            "warning)",
+            RuntimeWarning,
+            stacklevel=3,
+        )
     lme = LinearizedLME(model, beta, B.T, res, J, reml)
     logl, _, sigma2, A, _ = lme.solve(L)
     return LBResult(
-        beta=beta, psi=sigma2 * L @ L.T, sigma2=sigma2, b=B.T.copy(), logl=logl,
-        covb=sigma2 * np.linalg.inv(A), iterations=iteration, converged=converged,
+        beta=beta,
+        psi=sigma2 * L @ L.T,
+        sigma2=sigma2,
+        b=B.T.copy(),
+        logl=logl,
+        covb=sigma2 * np.linalg.inv(A),
+        iterations=iteration,
+        converged=converged,
     )

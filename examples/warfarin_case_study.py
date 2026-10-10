@@ -18,7 +18,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 import pynlme
 
@@ -192,7 +191,7 @@ def warfarin_model(beta, x, v=None):
     # Only compute for positive times
     valid_mask = time > 0
     conc = np.zeros_like(time)
-    
+
     if np.any(valid_mask):
         t_valid = time[valid_mask]
         dose_valid = dose[valid_mask]
@@ -202,7 +201,7 @@ def warfarin_model(beta, x, v=None):
 
         # Check for numerical issues (vectorized)
         diff_mask = np.abs(ka_valid - ke_valid) > 1e-6
-        
+
         # Normal case: ka != ke (vectorized)
         if np.any(diff_mask):
             idx = valid_mask.copy()
@@ -210,17 +209,20 @@ def warfarin_model(beta, x, v=None):
             conc[idx] = (
                 (f * dose_valid[diff_mask] * ka_valid[diff_mask])
                 / (v_valid[diff_mask] * (ka_valid[diff_mask] - ke_valid[diff_mask]))
-                * (np.exp(-ke_valid[diff_mask] * t_valid[diff_mask]) -
-                   np.exp(-ka_valid[diff_mask] * t_valid[diff_mask]))
+                * (
+                    np.exp(-ke_valid[diff_mask] * t_valid[diff_mask])
+                    - np.exp(-ka_valid[diff_mask] * t_valid[diff_mask])
+                )
             )
-        
+
         # Special case: ka ≈ ke (vectorized)
         if np.any(~diff_mask):
             idx = valid_mask.copy()
             idx[valid_mask] = ~diff_mask
             conc[idx] = (
                 (f * dose_valid[~diff_mask] * t_valid[~diff_mask])
-                / v_valid[~diff_mask] * np.exp(-ke_valid[~diff_mask] * t_valid[~diff_mask])
+                / v_valid[~diff_mask]
+                * np.exp(-ke_valid[~diff_mask] * t_valid[~diff_mask])
             )
 
     return np.maximum(conc, 1e-6)  # Avoid zero/negative concentrations
@@ -240,7 +242,8 @@ def main():
     print(f"Age range: {df['age'].min():.0f}-{df['age'].max():.0f} years")
     print(f"Weight range: {df['weight'].min():.0f}-{df['weight'].max():.0f} kg")
     print(
-        f"Female subjects: {df['female'].sum()}/{len(df.groupby('subject'))} ({100 * df['female'].mean():.0f}%)"
+        f"Female subjects: {df['female'].sum()}/{len(df.groupby('subject'))} "
+        f"({100 * df['female'].mean():.0f}%)"
     )
 
     # Prepare data for PyNLME
@@ -272,12 +275,17 @@ def main():
 
     try:
         beta, psi, stats, b = pynlme.fit_nlme(
-            x, y, groups, None, warfarin_model, beta0,
-            method='SAEM',   # Use SAEM for better random effects estimation
+            x,
+            y,
+            groups,
+            None,
+            warfarin_model,
+            beta0,
+            method="SAEM",  # Use SAEM for better random effects estimation
             vectorization="full",  # all subjects in one model call
-            verbose=1,       # progress output
-            max_iter=100,    # Reasonable iterations for SAEM
-            tol_fun=1e-5,    # Good convergence tolerance
+            verbose=1,  # progress output
+            max_iter=100,  # Reasonable iterations for SAEM
+            tol_fun=1e-5,  # Good convergence tolerance
             n_iterations=(40, 40, 20),  # Optimized for 50 subjects: faster convergence
             n_mcmc_iterations=(2, 2, 2),  # Keep MCMC steps reasonable
             loglik_method="lin",  # report the (linearised) log-likelihood
@@ -285,7 +293,7 @@ def main():
 
         converged = stats.logl is not None
         print(f"✅ Convergence: {'Yes' if converged else 'No'}")
-        if hasattr(stats, 'iterations') and stats.iterations is not None:
+        if hasattr(stats, "iterations") and stats.iterations is not None:
             print(f"Iterations: {stats.iterations}")
         if stats.logl is not None:
             print(f"Final log-likelihood: {stats.logl:.2f}")
@@ -326,7 +334,7 @@ def main():
     print("\n📊 Model Fit Statistics:")
     print(f"AIC: {stats.aic:.1f}")
     print(f"BIC: {stats.bic:.1f}")
-    print(f"RMSE: {np.sqrt(np.mean((y - warfarin_model(beta, x))**2)):.3f} mg/L")
+    print(f"RMSE: {np.sqrt(np.mean((y - warfarin_model(beta, x)) ** 2)):.3f} mg/L")
 
     # Create comprehensive plots
     plot_results(df, beta, psi, stats, x, y)
@@ -383,6 +391,7 @@ def plot_results(df, beta, psi, stats, x, y):
     # 4. Q-Q plot of residuals
     plt.subplot(3, 4, 4)
     from scipy import stats as scipy_stats
+
     scipy_stats.probplot(residuals, dist="norm", plot=plt)
     plt.title("Residual Q-Q Plot")
 
@@ -439,7 +448,7 @@ def plot_results(df, beta, psi, stats, x, y):
 
     # 8. Random effects covariance matrix
     plt.subplot(3, 4, 8)
-    im = plt.imshow(psi, cmap='RdBu_r', aspect='auto')
+    im = plt.imshow(psi, cmap="RdBu_r", aspect="auto")
     plt.colorbar(im)
     plt.title("Random Effects Covariance")
     plt.xlabel("Parameter")
@@ -496,19 +505,19 @@ def plot_results(df, beta, psi, stats, x, y):
     aic_str = f"{stats.aic:.1f}" if stats.aic is not None else "N/A"
     logl_str = f"{stats.logl:.2f}" if stats.logl is not None else "N/A"
     converged_str = "Yes" if stats.logl is not None else "No"
-    
+
     summary_text = f"""
     WARFARIN PK MODEL SUMMARY
-    
+
     Population Parameters:
     • CL = {np.exp(beta[0]):.3f} L/h
     • V = {np.exp(beta[1]):.3f} L/kg
     • Ka = {np.exp(beta[2]):.3f} h⁻¹
-    
+
     Covariate Effects:
     • Age: {(1 - np.exp(beta[3])) * 100:.1f}% ↓ per year
     • Female: {(1 - np.exp(beta[4])) * 100:.1f}% ↓ CL
-    
+
     Model Fit:
     • AIC: {aic_str}
     • Log-likelihood: {logl_str}

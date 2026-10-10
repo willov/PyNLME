@@ -96,13 +96,27 @@ def _random_effect_rows(model: GroupedModel) -> np.ndarray:
     if not np.allclose(B, B[0]):
         raise NotImplementedError("nlmefitsa does not support REGroupDesign yet")
     B0 = B[0]
-    if not (np.all(np.isin(B0, (0.0, 1.0))) and np.all(B0.sum(axis=0) == 1) and np.all(B0.sum(axis=1) <= 1)):
-        raise NotImplementedError("nlmefitsa supports only REParamsSelect-style random-effects designs")
+    if not (
+        np.all(np.isin(B0, (0.0, 1.0)))
+        and np.all(B0.sum(axis=0) == 1)
+        and np.all(B0.sum(axis=1) <= 1)
+    ):
+        raise NotImplementedError(
+            "nlmefitsa supports only REParamsSelect-style random-effects designs"
+        )
     return np.argmax(B0, axis=0)
 
 
 class _SAEM:
-    def __init__(self, model: GroupedModel, beta0, full_cov: bool, rng, n_chains: int, err: ErrorModel):
+    def __init__(
+        self,
+        model: GroupedModel,
+        beta0,
+        full_cov: bool,
+        rng,
+        n_chains: int,
+        err: ErrorModel,
+    ):
         self.model = model
         self.rng = rng
         self.full_cov = full_cov
@@ -124,10 +138,15 @@ class _SAEM:
         self.r = len(self.R)
         A = model.A
         in_R = np.any(A[:, self.R, :] != 0, axis=(0, 1))
-        in_F = np.any(A[:, self.F, :] != 0, axis=(0, 1)) if self.F.size else np.zeros(A.shape[2], bool)
+        in_F = (
+            np.any(A[:, self.F, :] != 0, axis=(0, 1))
+            if self.F.size
+            else np.zeros(A.shape[2], bool)
+        )
         if np.any(in_R & in_F):
             raise NotImplementedError(
-                "nlmefitsa does not support a fixed effect shared by parameters with and without random effects"
+                "nlmefitsa does not support a fixed effect shared by parameters with "
+                "and without random effects"
             )
         self.cols_R = np.flatnonzero(~in_F)  # updated in closed form
         self.cols_F = np.flatnonzero(in_F)  # updated by Gauss-Newton
@@ -138,7 +157,9 @@ class _SAEM:
         # annealing phase they are sampled too, with a pseudo-variance that
         # shrinks to ~0 (as MATLAB and saemix do), so the sampler explores
         # them globally; afterwards they are fixed and optimised.
-        self.Fx = self.F[np.any(A[:, self.F, :] != 0, axis=(0, 2))] if self.F.size else self.F
+        self.Fx = (
+            self.F[np.any(A[:, self.F, :] != 0, axis=(0, 2))] if self.F.size else self.F
+        )
         self.set_extended(False)
 
     def set_extended(self, extended: bool) -> None:
@@ -212,7 +233,9 @@ class _SAEM:
 
         # Kernel 3: full-vector random walks.
         for _ in range(n_kernel[2]):
-            ok = propose(Phi + scales[1] * self.rng.standard_normal((m, r)), with_prior=True)
+            ok = propose(
+                Phi + scales[1] * self.rng.standard_normal((m, r)), with_prior=True
+            )
             scales[1] *= 1 + 0.4 * (ok.mean() - TARGET_ACCEPT)
 
     # -- M-step ---------------------------------------------------------------
@@ -272,16 +295,26 @@ class _SAEM:
                 for k in cols:
                     step = h[:, None] * self.A_rows[:, :, k]
                     batch += [etas + step, etas - step]
-                values, _ = self.model.predict_flat(np.tile(self.sub, 1 + 2 * len(cols)), np.vstack(batch))
+                values, _ = self.model.predict_flat(
+                    np.tile(self.sub, 1 + 2 * len(cols)), np.vstack(batch)
+                )
                 f = values[:n_obs]
                 hh = h[self.row_of_obs]
-                G = np.column_stack([
-                    (values[(1 + 2 * k) * n_obs:(2 + 2 * k) * n_obs] - values[(2 + 2 * k) * n_obs:(3 + 2 * k) * n_obs]) / (2 * hh)
-                    for k in range(len(cols))
-                ])
+                G = np.column_stack(
+                    [
+                        (
+                            values[(1 + 2 * k) * n_obs : (2 + 2 * k) * n_obs]
+                            - values[(2 + 2 * k) * n_obs : (3 + 2 * k) * n_obs]
+                        )
+                        / (2 * hh)
+                        for k in range(len(cols))
+                    ]
+                )
             w = 1.0 / self.err.sd(f)
             ok = np.isfinite(f) & np.all(np.isfinite(G), axis=1)
-            step = np.linalg.lstsq(w[ok, None] * G[ok], (w * (self.y - f))[ok], rcond=None)[0]
+            step = np.linalg.lstsq(
+                w[ok, None] * G[ok], (w * (self.y - f))[ok], rcond=None
+            )[0]
             for _ in range(30):
                 candidate = objective(target + step)
                 if candidate <= current:
@@ -312,7 +345,11 @@ def fit_saem(
     verbose: int = 0,
 ) -> SAEMResult:
     rng = np.random.default_rng(random_state)
-    params = np.ones(2) if error_params is None else np.asarray(error_params, dtype=float).ravel()
+    params = (
+        np.ones(2)
+        if error_params is None
+        else np.asarray(error_params, dtype=float).ravel()
+    )
     if error_model == "proportional" and params.size == 1:
         params = np.array([0.0, params[0]])
     elif params.size == 1:
@@ -400,7 +437,10 @@ def fit_saem(
         omega = omega_new
         _update_error(err, S3 / s.n, s.y, F, k <= K1, gamma)
         if verbose > 1:
-            print(f"SAEM iteration {k}: beta={s.beta} diag(psi)={np.diag(omega)} error={err.errorparam}")
+            print(
+                f"SAEM iteration {k}: beta={s.beta} diag(psi)={np.diag(omega)} "
+                f"error={err.errorparam}"
+            )
 
     s.set_extended(False)
     mu = s.mu()
@@ -413,11 +453,19 @@ def fit_saem(
     elif loglik_method == "lin":
         logl = _loglik_linearized(s, cm1, omega)
     elif loglik_method != "none":
-        raise NotImplementedError(f"LogLikMethod '{loglik_method}' is not implemented yet")
+        raise NotImplementedError(
+            f"LogLikMethod '{loglik_method}' is not implemented yet"
+        )
 
     covb = _covb_linearized(s, cm1, omega) if compute_std_errors else None
     return SAEMResult(
-        beta=s.beta.copy(), psi=omega, errorparam=err.errorparam, b=b, logl=logl, covb=covb, iterations=total
+        beta=s.beta.copy(),
+        psi=omega,
+        errorparam=err.errorparam,
+        b=b,
+        logl=logl,
+        covb=covb,
+        iterations=total,
     )
 
 
@@ -465,7 +513,7 @@ def _limit_eigenvalue_decrease(omega_new, omega_old):
 
 
 def _linearized(s: _SAEM, Phi, omega):
-    """Per-group design X_i, residual r_i and marginal covariance V_i, linearised at Phi."""
+    """Per-group design X_i, residual r_i and marginal covariance V_i at Phi."""
     mu = s.mu()
     for i in range(s.m):
         eta = s.eta(i, Phi[i])
@@ -502,18 +550,28 @@ def _loglik_importance(s, cm1, cond_cov, omega, n_samples, rng, df=10) -> float:
     total = 0.0
     for i in range(s.m):
         n_i = len(s.model.y[i])
-        cov = cond_cov[i] + 1e-10 * np.eye(s.r) * max(np.max(np.diag(cond_cov[i])), 1e-12)
+        cov = cond_cov[i] + 1e-10 * np.eye(s.r) * max(
+            np.max(np.diag(cond_cov[i])), 1e-12
+        )
         proposal = sps.multivariate_t(loc=cm1[i], shape=cov, df=df, seed=rng)
         draws = np.atleast_2d(proposal.rvs(size=n_samples)).reshape(n_samples, s.r)
         etas = np.tile(s.model.A[i] @ s.beta, (n_samples, 1))
         etas[:, s.R] = draws
         values, valid = s.model.predict_flat(np.full(n_samples, i), etas)
         starts = np.arange(n_samples) * n_i
-        nll = np.where(valid, s.err.nll(np.tile(s.model.y[i], n_samples), values, starts), np.inf)
+        nll = np.where(
+            valid, s.err.nll(np.tile(s.model.y[i], n_samples), values, starts), np.inf
+        )
         d = draws - mu[i]
         log_w = (
-            -nll - 0.5 * n_i * np.log(2 * np.pi)
-            - 0.5 * (s.r * np.log(2 * np.pi) + logdet_omega + np.einsum("ki,ij,kj->k", d, omega_inv, d))
+            -nll
+            - 0.5 * n_i * np.log(2 * np.pi)
+            - 0.5
+            * (
+                s.r * np.log(2 * np.pi)
+                + logdet_omega
+                + np.einsum("ki,ij,kj->k", d, omega_inv, d)
+            )
         )
         log_w -= proposal.logpdf(draws)
         top = np.max(log_w)

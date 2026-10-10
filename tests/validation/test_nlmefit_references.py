@@ -24,8 +24,16 @@ def fit(request):
     case = factory()
     # compat="r": R's reporting conventions, so outputs compare directly.
     beta, psi, stats, b = nlmefit(
-        case.X, case.y, case.group, case.V, case.modelfun, case.beta0,
-        **case.kwargs, **extra, compat="r", **R_CONTROL,
+        case.X,
+        case.y,
+        case.group,
+        case.V,
+        case.modelfun,
+        case.beta0,
+        **case.kwargs,
+        **extra,
+        compat="r",
+        **R_CONTROL,
     )
     return case, load_reference(ref_file), beta, psi, stats, b
 
@@ -40,7 +48,9 @@ def test_random_effects_covariance(fit):
     ref_psi = np.atleast_2d(ref["psi"])
     # Absolute tolerance relative to the largest variance, so variance
     # components estimated at zero are compared on a sensible scale.
-    np.testing.assert_allclose(psi, ref_psi, rtol=RTOL, atol=RTOL * np.max(np.diag(ref_psi)))
+    np.testing.assert_allclose(
+        psi, ref_psi, rtol=RTOL, atol=RTOL * np.max(np.diag(ref_psi))
+    )
 
 
 def test_error_sd_and_loglikelihood(fit):
@@ -59,7 +69,9 @@ def test_bic_follows_r(fit):
     case, ref, beta, psi, stats, _ = fit
     n = len(case.y) - (len(beta) if ref["method"] == "REML" else 0)
     num_param = stats.dfe and len(case.y) - stats.dfe
-    assert stats.bic == pytest.approx(-2 * ref["logl"] + np.log(n) * num_param, abs=2e-3)
+    assert stats.bic == pytest.approx(
+        -2 * ref["logl"] + np.log(n) * num_param, abs=2e-3
+    )
 
 
 def test_random_effects(fit):
@@ -76,8 +88,17 @@ def test_default_relme_is_lmes_true_reml():
     from .cases import linear_sim
 
     c, ref = linear_sim(), load_reference("r_nlme_linear_relme.json")
-    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs,
-                                  ApproximationType="RELME", Options={"TolX": 1e-8, "TolFun": 1e-8})
+    beta, psi, stats, _ = nlmefit(
+        c.X,
+        c.y,
+        c.group,
+        None,
+        c.modelfun,
+        c.beta0,
+        **c.kwargs,
+        ApproximationType="RELME",
+        Options={"TolX": 1e-8, "TolFun": 1e-8},
+    )
     n, f = len(c.y), len(beta)
     np.testing.assert_allclose(beta, ref["beta"], rtol=RTOL)
     np.testing.assert_allclose(psi * n / (n - f), np.atleast_2d(ref["psi"]), rtol=RTOL)
@@ -93,8 +114,12 @@ def test_matlab_doc_indomethacin():
     """
     doc = load_reference("matlab_docs.json")["cases"]["indometh_lme"]
     case = indometh(beta0=(1, 1, 1, 1))
-    beta, psi, _, _ = nlmefit(case.X, case.y, case.group, None, case.modelfun, case.beta0, **case.kwargs)
+    beta, psi, _, _ = nlmefit(
+        case.X, case.y, case.group, None, case.modelfun, case.beta0, **case.kwargs
+    )
     order = [0, 1, 2, 3] if beta[0] < beta[2] else [2, 3, 0, 1]
     half_ulp = 0.5 * 10 ** -doc["decimals"] + 1e-9
     np.testing.assert_allclose(beta[order], doc["beta"], rtol=0, atol=half_ulp)
-    np.testing.assert_allclose(np.diag(psi)[order], doc["psi_diag"], rtol=0, atol=half_ulp)
+    np.testing.assert_allclose(
+        np.diag(psi)[order], doc["psi_diag"], rtol=0, atol=half_ulp
+    )

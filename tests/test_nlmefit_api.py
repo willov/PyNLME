@@ -17,8 +17,14 @@ def theoph_fit():
 def test_python_option_names_use_zero_based_indices(theoph_fit):
     c, (beta, psi, _, _) = theoph_fit
     beta2, psi2, _, _ = nlmefit(
-        c.X, c.y, c.group, c.V, c.modelfun, c.beta0,
-        param_transform=[1, 1, 1], re_params_select=[1, 2],
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        c.modelfun,
+        c.beta0,
+        param_transform=[1, 1, 1],
+        re_params_select=[1, 2],
     )
     np.testing.assert_allclose(beta2, beta, rtol=1e-10)
     np.testing.assert_allclose(psi2, psi, rtol=1e-10)
@@ -27,8 +33,14 @@ def test_python_option_names_use_zero_based_indices(theoph_fit):
 def test_logical_parameter_selection(theoph_fit):
     c, (beta, _, _, _) = theoph_fit
     beta2, _, _, _ = nlmefit(
-        c.X, c.y, c.group, c.V, c.modelfun, c.beta0,
-        ParamTransform=[1, 1, 1], REParamsSelect=np.array([False, True, True]),
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        c.modelfun,
+        c.beta0,
+        ParamTransform=[1, 1, 1],
+        REParamsSelect=np.array([False, True, True]),
     )
     np.testing.assert_allclose(beta2, beta, rtol=1e-10)
 
@@ -92,7 +104,11 @@ def test_model_requiring_third_argument_gets_none():
 )
 def test_unimplemented_options_raise(option):
     c = orange()
-    kwargs = {k: v for k, v in c.kwargs.items() if not ("CovPattern" in option and k == "REParamsSelect")}
+    kwargs = {
+        k: v
+        for k, v in c.kwargs.items()
+        if not ("CovPattern" in option and k == "REParamsSelect")
+    }
     with pytest.raises(NotImplementedError):
         nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **kwargs, **option)
 
@@ -106,7 +122,16 @@ def test_unknown_option_raises():
 def test_statset_options():
     c = orange()
     with pytest.warns(RuntimeWarning, match="did not converge"):
-        nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, Options={"MaxIter": 1}, **c.kwargs)
+        nlmefit(
+            c.X,
+            c.y,
+            c.group,
+            None,
+            c.modelfun,
+            c.beta0,
+            Options={"MaxIter": 1},
+            **c.kwargs,
+        )
 
 
 @pytest.mark.parametrize("approx", ["LME", "RELME", "FOCE"])
@@ -117,8 +142,26 @@ def test_full_vectorization_gives_identical_fits(approx):
 
     c = theoph()
     cv = vectorized(c)
-    a = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, ApproximationType=approx)
-    b = nlmefit(cv.X, cv.y, cv.group, cv.V, cv.modelfun, cv.beta0, **cv.kwargs, ApproximationType=approx)
+    a = nlmefit(
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        c.modelfun,
+        c.beta0,
+        **c.kwargs,
+        ApproximationType=approx,
+    )
+    b = nlmefit(
+        cv.X,
+        cv.y,
+        cv.group,
+        cv.V,
+        cv.modelfun,
+        cv.beta0,
+        **cv.kwargs,
+        ApproximationType=approx,
+    )
     np.testing.assert_allclose(b[0], a[0], rtol=1e-8)
     np.testing.assert_allclose(b[1], a[1], rtol=1e-6, atol=1e-12)
     assert b[2].logl == pytest.approx(a[2].logl, abs=1e-8)
@@ -131,8 +174,28 @@ def test_full_vectorization_saem_identical_with_seed():
 
     c = orange()
     cv = vectorized(c)
-    a = nlmefitsa(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs, random_state=3, NIterations=[20, 20, 20])
-    b = nlmefitsa(cv.X, cv.y, cv.group, None, cv.modelfun, cv.beta0, **cv.kwargs, random_state=3, NIterations=[20, 20, 20])
+    a = nlmefitsa(
+        c.X,
+        c.y,
+        c.group,
+        None,
+        c.modelfun,
+        c.beta0,
+        **c.kwargs,
+        random_state=3,
+        NIterations=[20, 20, 20],
+    )
+    b = nlmefitsa(
+        cv.X,
+        cv.y,
+        cv.group,
+        None,
+        cv.modelfun,
+        cv.beta0,
+        **cv.kwargs,
+        random_state=3,
+        NIterations=[20, 20, 20],
+    )
     np.testing.assert_allclose(b[0], a[0], rtol=1e-8)
     np.testing.assert_allclose(b[1], a[1], rtol=1e-6)
 
@@ -142,14 +205,35 @@ def test_compat_modes_reach_the_same_ml_fit(theoph_fit):
     tolerances); converged tightly, ML reaches the same fixed point here and
     only the reporting conventions differ."""
     c, _ = theoph_fit
-    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs,
-                                  Options={"TolX": 1e-9, "TolFun": 1e-9})
-    beta_r, psi_r, stats_r, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, compat="r",
-                                        pnls_tol=1e-8, tol_x=1e-9, max_iter=200)
+    beta, psi, stats, _ = nlmefit(
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        c.modelfun,
+        c.beta0,
+        **c.kwargs,
+        Options={"TolX": 1e-9, "TolFun": 1e-9},
+    )
+    beta_r, psi_r, stats_r, _ = nlmefit(
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        c.modelfun,
+        c.beta0,
+        **c.kwargs,
+        compat="r",
+        pnls_tol=1e-8,
+        tol_x=1e-9,
+        max_iter=200,
+    )
     np.testing.assert_allclose(beta_r, beta, rtol=1e-6)
     np.testing.assert_allclose(psi_r, psi, rtol=1e-5)
     n, f = len(c.y), len(beta)
-    np.testing.assert_allclose(stats_r.sebeta, stats.sebeta * np.sqrt(n / (n - f)), rtol=1e-4)  # forward (MATLAB) vs central differences
+    np.testing.assert_allclose(
+        stats_r.sebeta, stats.sebeta * np.sqrt(n / (n - f)), rtol=1e-4
+    )  # forward (MATLAB) vs central differences
     num_param = n - stats.dfe
     assert stats_r.bic == pytest.approx(-2 * stats_r.logl + num_param * np.log(n))
     assert stats.bic == pytest.approx(-2 * stats.logl + num_param * np.log(12))
@@ -177,7 +261,9 @@ class TestDataFormat:
     def data(self):
         rng = np.random.default_rng(0)
         t = np.array([0.5, 1.0, 2.0, 4.0])
-        y = np.array([(10 + i) * np.exp(-(0.5 + 0.05 * i) * t) for i in range(4)]) + rng.normal(0, 0.1, (4, 4))
+        y = np.array(
+            [(10 + i) * np.exp(-(0.5 + 0.05 * i) * t) for i in range(4)]
+        ) + rng.normal(0, 0.1, (4, 4))
         return np.tile(t, (4, 1)), y
 
     def test_small_stacked_data_without_group_is_an_error(self):
@@ -190,7 +276,9 @@ class TestDataFormat:
         X, y = self.data()
         group = np.repeat(np.arange(4), 4)
         a = nlmefit(X.ravel(), y.ravel(), group, None, self.model, [10.0, 0.5])
-        b = nlmefit(X.reshape(-1, 1), y.reshape(-1, 1), group, None, self.model, [10.0, 0.5])
+        b = nlmefit(
+            X.reshape(-1, 1), y.reshape(-1, 1), group, None, self.model, [10.0, 0.5]
+        )
         np.testing.assert_allclose(b[0], a[0], rtol=1e-10)
 
     def test_grouped_matrix_matches_stacked(self):
@@ -198,7 +286,15 @@ class TestDataFormat:
         group = np.repeat(np.arange(4), 4)
         stacked = nlmefit(X.ravel(), y.ravel(), group, None, self.model, [10.0, 0.5])
         grouped = nlmefit(X, y, None, None, self.model, [10.0, 0.5])
-        labelled = nlmefit(X, y, ["a", "b", "c", "d"], None, self.model, [10.0, 0.5], DataFormat="grouped")
+        labelled = nlmefit(
+            X,
+            y,
+            ["a", "b", "c", "d"],
+            None,
+            self.model,
+            [10.0, 0.5],
+            DataFormat="grouped",
+        )
         np.testing.assert_allclose(grouped[0], stacked[0], rtol=1e-10)
         np.testing.assert_allclose(labelled[0], stacked[0], rtol=1e-10)
 

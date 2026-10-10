@@ -31,7 +31,9 @@ from pynlme import nlmefit
 from ..conftest import r_available
 from .simulate import FAMILIES, simulate, write_for_r
 
-pytestmark = pytest.mark.skipif(not r_available(), reason="needs Rscript with nlme and jsonlite")
+pytestmark = pytest.mark.skipif(
+    not r_available(), reason="needs Rscript with nlme and jsonlite"
+)
 
 SEED = int(os.environ.get("PYNLME_RANDOM_SEED", secrets.randbelow(2**31)))
 N_PER_FAMILY = int(os.environ.get("PYNLME_RANDOM_N", 5))
@@ -48,7 +50,11 @@ def runs(tmp_path_factory):
     directory = tmp_path_factory.mktemp("random_vs_r")
     manifest = write_for_r(datasets, directory)
     results = directory / "r_results.json"
-    subprocess.run(["Rscript", str(R_SCRIPT), str(manifest), str(results)], check=True, capture_output=True)
+    subprocess.run(
+        ["Rscript", str(R_SCRIPT), str(manifest), str(results)],
+        check=True,
+        capture_output=True,
+    )
     return {d.name: d for d in datasets}, json.loads(results.read_text())
 
 
@@ -84,13 +90,18 @@ def test_matches_or_beats_r(runs, name):
     if collapsed and stats.logl >= r["logl"] - 1e-3:
         return
     assert stats.logl == pytest.approx(r["logl"], abs=1e-3), (
-        f"{context}: pynlme logl {stats.logl:.6f}, R {r['logl']:.6f}; beta={beta} R={r['beta']}"
+        f"{context}: pynlme logl {stats.logl:.6f}, R {r['logl']:.6f}; beta={beta} "
+        f"R={r['beta']}"
     )
     scale = np.maximum(np.abs(r["beta"]), 1.0)
-    assert np.all(np.abs(beta - r["beta"]) <= 1e-4 * scale), f"{context}: beta={beta} R={r['beta']}"
+    assert np.all(np.abs(beta - r["beta"]) <= 1e-4 * scale), (
+        f"{context}: beta={beta} R={r['beta']}"
+    )
     # A variance component near zero sits on an almost flat likelihood; where
     # nlme's optimizers stop along it depends on rounding (R's own numerical
     # derivatives), e.g. 0.013 vs 0.019 next to a variance of 0.079 with the
     # same likelihood (seed 1005, emax_7). Hence the absolute margin.
     ref_psi = np.atleast_2d(r["psi"])
-    np.testing.assert_allclose(psi, ref_psi, rtol=1e-3, atol=0.1 * np.max(np.diag(ref_psi)), err_msg=context)
+    np.testing.assert_allclose(
+        psi, ref_psi, rtol=1e-3, atol=0.1 * np.max(np.diag(ref_psi)), err_msg=context
+    )

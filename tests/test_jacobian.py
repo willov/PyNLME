@@ -18,12 +18,17 @@ from .validation.cases import (
     with_derivatives,
 )
 
-FACTORIES = {"indometh": indometh, "theoph": theoph, "orange": orange, "linear": linear_sim}
-
+FACTORIES = {
+    "indometh": indometh,
+    "theoph": theoph,
+    "orange": orange,
+    "linear": linear_sim,
+}
 
 
 # Converged tightly, so differences in the derivatives do not show.
 TIGHT = {"Options": {"TolX": 1e-8, "TolFun": 1e-8, "MaxIter": 1000}}
+
 
 def grouped_model(case):
     parsed, matlab_style = _parse_options(case.kwargs)
@@ -41,7 +46,12 @@ def test_analytic_jacobian_matches_finite_differences(name):
     beta = np.asarray(FACTORIES[name]().beta0, dtype=float)
     etas = np.array([analytic.eta(i, beta, None) for i in range(analytic.n_groups)])
     etas = etas + rng.normal(0, 0.05, etas.shape) * np.maximum(np.abs(etas), 1)
-    np.testing.assert_allclose(analytic.jacobian_padded(etas), numeric.jacobian_padded(etas), rtol=1e-5, atol=1e-7)
+    np.testing.assert_allclose(
+        analytic.jacobian_padded(etas),
+        numeric.jacobian_padded(etas),
+        rtol=1e-5,
+        atol=1e-7,
+    )
 
 
 @pytest.mark.parametrize("approx", ["LME", "RELME", "FOCE"])
@@ -49,10 +59,28 @@ def test_analytic_jacobian_matches_finite_differences(name):
 def test_fits_agree_with_finite_difference_fits(approx, full):
     numeric = vectorized(theoph())
     analytic = with_derivatives(theoph(), full=full)
-    a = nlmefit(numeric.X, numeric.y, numeric.group, numeric.V, numeric.modelfun, numeric.beta0,
-                **numeric.kwargs, ApproximationType=approx, **TIGHT)
-    b = nlmefit(analytic.X, analytic.y, analytic.group, analytic.V, analytic.modelfun, analytic.beta0,
-                **analytic.kwargs, ApproximationType=approx, **TIGHT)
+    a = nlmefit(
+        numeric.X,
+        numeric.y,
+        numeric.group,
+        numeric.V,
+        numeric.modelfun,
+        numeric.beta0,
+        **numeric.kwargs,
+        ApproximationType=approx,
+        **TIGHT,
+    )
+    b = nlmefit(
+        analytic.X,
+        analytic.y,
+        analytic.group,
+        analytic.V,
+        analytic.modelfun,
+        analytic.beta0,
+        **analytic.kwargs,
+        ApproximationType=approx,
+        **TIGHT,
+    )
     # FOCE maximises with L-BFGS-B, whose stopping point moves by ~1e-5 with the
     # derivatives used (and between SciPy versions); LME/RELME agree to ~1e-7.
     np.testing.assert_allclose(b[0], a[0], rtol=1e-4 if approx == "FOCE" else 1e-5)
@@ -64,7 +92,9 @@ def test_fits_agree_with_finite_difference_fits(approx, full):
 
 def test_still_matches_matlab_with_analytic_derivatives():
     c = with_derivatives(theoph())
-    beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, **TIGHT)
+    beta, psi, stats, _ = nlmefit(
+        c.X, c.y, c.group, c.V, c.modelfun, c.beta0, **c.kwargs, **TIGHT
+    )
     ref = load_reference("matlab_theoph_lme_tight.json")
     np.testing.assert_allclose(beta, ref["beta"], rtol=1e-5)
     np.testing.assert_allclose(stats.sebeta, ref["stats"]["sebeta"], rtol=1e-4)
@@ -75,8 +105,24 @@ def test_saem_with_analytic_derivatives():
     SAEM update uses the derivatives."""
     numeric = vectorized(theoph())
     analytic = with_derivatives(theoph())
-    a = nlmefitsa(numeric.X, numeric.y, numeric.group, numeric.V, numeric.modelfun, numeric.beta0,
-                  **numeric.kwargs, random_state=2)
-    b = nlmefitsa(analytic.X, analytic.y, analytic.group, analytic.V, analytic.modelfun, analytic.beta0,
-                  **analytic.kwargs, random_state=2)
+    a = nlmefitsa(
+        numeric.X,
+        numeric.y,
+        numeric.group,
+        numeric.V,
+        numeric.modelfun,
+        numeric.beta0,
+        **numeric.kwargs,
+        random_state=2,
+    )
+    b = nlmefitsa(
+        analytic.X,
+        analytic.y,
+        analytic.group,
+        analytic.V,
+        analytic.modelfun,
+        analytic.beta0,
+        **analytic.kwargs,
+        random_state=2,
+    )
     np.testing.assert_allclose(b[0], a[0], atol=2e-3)

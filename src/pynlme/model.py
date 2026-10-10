@@ -141,14 +141,17 @@ class GroupedModel:
         values = np.asarray(values, dtype=float).reshape(-1)
         if values.shape[0] != lengths.sum():
             raise ValueError(
-                f"modelfun returned {values.shape[0]} values for {lengths.sum()} observations "
+                f"modelfun returned {values.shape[0]} values for {lengths.sum()} "
+                "observations "
                 "(with Vectorization 'Full', phi has one row per observation)"
             )
         finite = np.isfinite(values)
         if finite.all():
             return values, np.ones(len(groups), dtype=bool)
         starts = np.concatenate([[0], np.cumsum(lengths)[:-1]])
-        valid = np.logical_and.reduceat(finite, starts) if len(starts) else np.ones(0, bool)
+        valid = (
+            np.logical_and.reduceat(finite, starts) if len(starts) else np.ones(0, bool)
+        )
         return values, valid
 
     def predict_many(self, groups, etas, allow_invalid: bool = False) -> list:
@@ -160,7 +163,9 @@ class GroupedModel:
         groups = np.asarray(groups, dtype=int)
         values, valid = self.predict_flat(groups, etas)
         if not valid.all() and not allow_invalid:
-            raise FloatingPointError(f"modelfun returned non-finite values for group {groups[~valid][0]}")
+            raise FloatingPointError(
+                f"modelfun returned non-finite values for group {groups[~valid][0]}"
+            )
         out = np.split(values, np.cumsum(self._lengths[groups])[:-1])
         return [f if ok else None for f, ok in zip(out, valid, strict=True)]
 
@@ -219,13 +224,17 @@ class GroupedModel:
         if self.vectorization == "full":
             x = np.concatenate([self.X[g] for g in groups])
             v = None if self.V is None else np.repeat(self.V[groups], lengths, axis=0)
-            J = np.asarray(self._call_jacobian(np.repeat(phis, lengths, axis=0), x, v), dtype=float)
+            J = np.asarray(
+                self._call_jacobian(np.repeat(phis, lengths, axis=0), x, v), dtype=float
+            )
             J = J.reshape(lengths.sum(), -1) * np.repeat(scale, lengths, axis=0)
         else:
             parts = []
             for k, (g, phi, sc) in enumerate(zip(groups, phis, scale, strict=True)):
                 v = None if self.V is None else self.V[g]
-                Jg = np.asarray(self._call_jacobian(phi, self.X[g], v), dtype=float).reshape(lengths[k], -1)
+                Jg = np.asarray(
+                    self._call_jacobian(phi, self.X[g], v), dtype=float
+                ).reshape(lengths[k], -1)
                 parts.append(Jg * sc)
             J = np.vstack(parts) if parts else np.zeros((0, etas.shape[1]))
         self.n_calls += 1
@@ -245,7 +254,9 @@ class GroupedModel:
         up = (etas[:, None, :] + steps).reshape(-1, p)
         down = (etas[:, None, :] - steps).reshape(-1, p)
         groups = np.repeat(np.arange(m), p)
-        values, valid = self.predict_flat(np.concatenate([groups, groups]), np.vstack([up, down]))
+        values, valid = self.predict_flat(
+            np.concatenate([groups, groups]), np.vstack([up, down])
+        )
         if not valid.all():
             raise FloatingPointError("modelfun returned non-finite values")
         # Scatter (group, param) segments into (m, p, n_max), then transpose.
@@ -300,7 +311,9 @@ class GroupedModel:
         f_up, f_down = f[: k * p], f[k * p :]
         out = []
         for j in range(k):
-            cols = [(f_up[j * p + c] - f_down[j * p + c]) / (2 * h[j, c]) for c in range(p)]
+            cols = [
+                (f_up[j * p + c] - f_down[j * p + c]) / (2 * h[j, c]) for c in range(p)
+            ]
             out.append(np.column_stack(cols))
         return out
 
@@ -373,7 +386,9 @@ class GroupedModel:
         return out
 
 
-def _design_from_select(select: Sequence | np.ndarray, p: int, one_based: bool) -> np.ndarray:
+def _design_from_select(
+    select: Sequence | np.ndarray, p: int, one_based: bool
+) -> np.ndarray:
     """p x k selection matrix from a boolean mask or a list of indices."""
     select = np.asarray(select).reshape(-1)
     if select.dtype == bool:
@@ -384,7 +399,9 @@ def _design_from_select(select: Sequence | np.ndarray, p: int, one_based: bool) 
         idx = select.astype(int) - (1 if one_based else 0)
         if np.any(idx < 0) or np.any(idx >= p):
             base = "1-based" if one_based else "0-based"
-            raise ValueError(f"Parameter selection {select.tolist()} out of range ({base}, p={p})")
+            raise ValueError(
+                f"Parameter selection {select.tolist()} out of range ({base}, p={p})"
+            )
     D = np.zeros((p, len(idx)))
     D[idx, np.arange(len(idx))] = 1.0
     return D

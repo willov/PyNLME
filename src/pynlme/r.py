@@ -42,22 +42,57 @@ from .r_saemix import (
 )
 
 __all__ = [
-    "AIC", "BIC", "SSasymp", "SSbiexp", "SSfol", "SSlogis", "SSmicmen", "VarCorr", "coef", "eta",
-    "fitted", "fixef", "logLik", "nlme", "pdDiag", "pdSymm", "phi", "predict", "psi", "ranef", "resid",
-    "residuals", "saemix", "saemixData", "saemixModel", "summary", "vcov",
+    "AIC",
+    "BIC",
+    "SSasymp",
+    "SSbiexp",
+    "SSfol",
+    "SSlogis",
+    "SSmicmen",
+    "VarCorr",
+    "coef",
+    "eta",
+    "fitted",
+    "fixef",
+    "logLik",
+    "nlme",
+    "pdDiag",
+    "pdSymm",
+    "phi",
+    "predict",
+    "psi",
+    "ranef",
+    "resid",
+    "residuals",
+    "saemix",
+    "saemixData",
+    "saemixModel",
+    "summary",
+    "vcov",
 ]
 
 _METHODS = {"ML": "LME", "REML": "RELME"}
-_CONTROL = {"maxIter": "max_iter", "tolerance": "tol_x", "pnlsTol": "pnls_tol", "pnlsMaxIter": "pnls_max_iter",
-            "minScale": "min_scale"}
+_CONTROL = {
+    "maxIter": "max_iter",
+    "tolerance": "tol_x",
+    "pnlsTol": "pnls_tol",
+    "pnlsMaxIter": "pnls_max_iter",
+    "minScale": "min_scale",
+}
 
 
 # --- Model functions of R's stats package (no self-starting: give `start`) ----
 
+
 def SSfol(Dose, input, lKe, lKa, lCl):  # noqa: N802, N803 (R names)
     """First-order compartment model (R's SSfol)."""
     ke, ka = np.exp(lKe), np.exp(lKa)
-    return Dose * np.exp(lKe + lKa - lCl) * (np.exp(-ke * input) - np.exp(-ka * input)) / (ka - ke)
+    return (
+        Dose
+        * np.exp(lKe + lKa - lCl)
+        * (np.exp(-ke * input) - np.exp(-ka * input))
+        / (ka - ke)
+    )
 
 
 def SSlogis(input, Asym, xmid, scal):  # noqa: N802, N803
@@ -81,15 +116,32 @@ def SSmicmen(input, Vm, K):  # noqa: N802, N803
 
 
 _FUNCTIONS = {
-    "exp": np.exp, "log": np.log, "log10": np.log10, "log2": np.log2, "log1p": np.log1p,
-    "expm1": np.expm1, "sqrt": np.sqrt, "abs": np.abs, "sin": np.sin, "cos": np.cos,
-    "tan": np.tan, "tanh": np.tanh, "pi": np.pi, "pmin": np.minimum, "pmax": np.maximum,
-    "ifelse": np.where, "SSfol": SSfol, "SSlogis": SSlogis, "SSbiexp": SSbiexp,
-    "SSasymp": SSasymp, "SSmicmen": SSmicmen,
+    "exp": np.exp,
+    "log": np.log,
+    "log10": np.log10,
+    "log2": np.log2,
+    "log1p": np.log1p,
+    "expm1": np.expm1,
+    "sqrt": np.sqrt,
+    "abs": np.abs,
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "tanh": np.tanh,
+    "pi": np.pi,
+    "pmin": np.minimum,
+    "pmax": np.maximum,
+    "ifelse": np.where,
+    "SSfol": SSfol,
+    "SSlogis": SSlogis,
+    "SSbiexp": SSbiexp,
+    "SSasymp": SSasymp,
+    "SSmicmen": SSmicmen,
 }
 
 
 # --- Random-effects structures -----------------------------------------------
+
 
 @dataclass(frozen=True)
 class _PD:
@@ -108,6 +160,7 @@ def pdSymm(formula: str) -> _PD:  # noqa: N802
 
 
 # --- Formula parsing -----------------------------------------------------------
+
 
 def _split(formula: str, what: str) -> tuple[str, str]:
     if formula.count("~") != 1:
@@ -128,12 +181,16 @@ def _parse_fixed(fixed) -> dict[str, list[str]]:
         lhs, rhs = _split(formula, "fixed")
         terms = _terms(rhs)
         if any(t in ("0", "-1") or t.startswith("-") for t in terms):
-            raise NotImplementedError("fixed effects without an intercept are not supported")
+            raise NotImplementedError(
+                "fixed effects without an intercept are not supported"
+            )
         covariates = [t for t in terms if t != "1"]
         for t in covariates:
             if not t.isidentifier():
                 raise NotImplementedError(
-                    f"covariate term '{t}': compute it as a data column and use its name")
+                    f"covariate term '{t}': compute it as a data column and use its "
+                    "name"
+                )
         for name in _terms(lhs):
             if name in params:
                 raise ValueError(f"'{name}' appears twice in fixed")
@@ -183,6 +240,7 @@ def _in(data, name: str) -> bool:
 
 
 # --- nlme ------------------------------------------------------------------------
+
 
 def nlme(
     model: str,
@@ -244,7 +302,10 @@ def nlme(
         raise ValueError("method must be 'ML' or 'REML'")
     unknown = set(control or {}) - set(_CONTROL)
     if unknown:
-        raise ValueError(f"unsupported control options: {sorted(unknown)} (supported: {sorted(_CONTROL)})")
+        raise ValueError(
+            f"unsupported control options: {sorted(unknown)} (supported: "
+            f"{sorted(_CONTROL)})"
+        )
     options = {**{_CONTROL[k]: v for k, v in (control or {}).items()}, **options}
     response, expression = _split(model, "model")
     params = _parse_fixed(fixed)
@@ -253,10 +314,15 @@ def nlme(
         random = " + ".join(names) + " ~ 1"
     re_names, structure, re_group = _parse_random(random)
     if set(re_names) - set(names):
-        raise ValueError(f"random names parameters not in fixed: {sorted(set(re_names) - set(names))}")
+        raise ValueError(
+            "random names parameters not in fixed: "
+            f"{sorted(set(re_names) - set(names))}"
+        )
     group = (groups or re_group or "").lstrip("~").strip()
     if not group:
-        raise ValueError("give the grouping: groups='~subject' or random='... ~ 1 | subject'")
+        raise ValueError(
+            "give the grouping: groups='~subject' or random='... ~ 1 | subject'"
+        )
 
     # Starting values, by R coefficient name.
     coefs = _coef_names(params)
@@ -274,7 +340,9 @@ def nlme(
     else:
         start = list(np.asarray(start, dtype=float).reshape(-1))
         if len(start) != len(coefs):
-            raise ValueError(f"start has {len(start)} values for {len(coefs)} coefficients {coefs}")
+            raise ValueError(
+                f"start has {len(start)} values for {len(coefs)} coefficients {coefs}"
+            )
         values = dict(zip(_rename(params), start, strict=True))
 
     # The model expression, evaluated on all rows at once.
@@ -292,7 +360,10 @@ def nlme(
     env = {**caller.f_globals, **caller.f_locals, **_FUNCTIONS, "__builtins__": {}}
     unresolved = sorted(used - set(names) - set(columns) - set(env))
     if unresolved:
-        raise NameError(f"unknown names in the model: {unresolved} (not data columns, parameters or functions)")
+        raise NameError(
+            f"unknown names in the model: {unresolved} (not data columns, parameters "
+            "or functions)"
+        )
     if not _in(data, response):
         raise KeyError(f"data has no column '{response}'")
     code = compile(tree, "<nlme model>", "eval")
@@ -303,22 +374,37 @@ def nlme(
         return np.broadcast_to(np.asarray(out, dtype=float), (n,))
 
     result = fit(
-        evaluate, data, response=response, group=group, start=values, predictors=columns,
-        random=re_names, covariates={p: c for p, c in params.items() if c},
-        method=_METHODS[method], compat="r", cov_pattern=np.ones((len(re_names),) * 2) if structure == "symm" else None,
+        evaluate,
+        data,
+        response=response,
+        group=group,
+        start=values,
+        predictors=columns,
+        random=re_names,
+        covariates={p: c for p, c in params.items() if c},
+        method=_METHODS[method],
+        compat="r",
+        cov_pattern=np.ones((len(re_names),) * 2) if structure == "symm" else None,
         **options,
     )
 
     rename = _rename(params)
     st = result["stats"]
     y = _column(data, response).astype(float)
-    sigma = float(np.atleast_1d(st["errorparam"])[0]) if result["error"]["model"] == "constant" else None
+    sigma = (
+        float(np.atleast_1d(st["errorparam"])[0])
+        if result["error"]["model"] == "constant"
+        else None
+    )
     n_obs, n_groups = len(y), len(result["random_effects"])
     data_name = next((k for k, v in caller.f_locals.items() if v is data), "data")
     result.update(
         fixef={rename[k]: v for k, v in result["fixed"].items()},
         se_fixef={rename[k]: v for k, v in (result["se"] or {}).items()},
-        ranef={g: {rename[k]: v for k, v in b.items()} for g, b in result["random_effects"].items()},
+        ranef={
+            g: {rename[k]: v for k, v in b.items()}
+            for g, b in result["random_effects"].items()
+        },
         sigma=sigma,
         logLik=st["logl"],
         AIC=st["aic"],
@@ -327,15 +413,24 @@ def nlme(
         fitted=y - st["ires"],
         residuals=st["ires"],
         call={
-            "engine": "nlme", "model": model, "data": data_name, "fixed": fixed, "random": random, "groups": group,
-            "method": method, "structure": structure, "re_names": [rename[n] for n in re_names],
-            "n_obs": n_obs, "n_groups": n_groups,
+            "engine": "nlme",
+            "model": model,
+            "data": data_name,
+            "fixed": fixed,
+            "random": random,
+            "groups": group,
+            "method": method,
+            "structure": structure,
+            "re_names": [rename[n] for n in re_names],
+            "n_obs": n_obs,
+            "n_groups": n_groups,
         },
     )
     return result
 
 
 # --- R's accessor functions ----------------------------------------------------
+
 
 def fixef(fit: dict) -> dict:
     """Fixed effects by R coefficient name."""
@@ -386,7 +481,10 @@ def VarCorr(fit: dict) -> dict:  # noqa: N802
     names = fit["call"]["re_names"]
     psi = np.asarray(fit["psi"]["matrix"], dtype=float)
     sd = np.sqrt(np.diag(psi))
-    out = {n: {"Variance": float(psi[k, k]), "StdDev": float(sd[k])} for k, n in enumerate(names)}
+    out = {
+        n: {"Variance": float(psi[k, k]), "StdDev": float(sd[k])}
+        for k, n in enumerate(names)
+    }
     if fit["sigma"] is not None:
         out["Residual"] = {"Variance": fit["sigma"] ** 2, "StdDev": fit["sigma"]}
     if fit["call"]["structure"] == "symm" and len(names) > 1:
@@ -405,9 +503,15 @@ class _Text(str):
 def _table(rows: list[str], header: list[str], cells: list[list[str]]) -> list[str]:
     width = max(len(r) for r in rows)
     cols = [max(len(h), *(len(c[j]) for c in cells)) for j, h in enumerate(header)]
-    lines = [" " * width + "".join(" " + h.rjust(w) for h, w in zip(header, cols, strict=True))]
+    lines = [
+        " " * width
+        + "".join(" " + h.rjust(w) for h, w in zip(header, cols, strict=True))
+    ]
     for r, c in zip(rows, cells, strict=True):
-        lines.append(r.ljust(width) + "".join(" " + v.rjust(w) for v, w in zip(c, cols, strict=True)))
+        lines.append(
+            r.ljust(width)
+            + "".join(" " + v.rjust(w) for v, w in zip(c, cols, strict=True))
+        )
     return lines
 
 
@@ -437,14 +541,24 @@ def summary(fit: dict) -> str:
         + ("maximum likelihood" if call["method"] == "ML" else "REML"),
         f"  Model: {call['model']}",
         f"  Data: {call['data']}",
-        *("  " + line for line in _table([""], ["AIC", "BIC", "logLik"],
-                                         [[_g(fit["AIC"]), _g(fit["BIC"]), _g(fit["logLik"])]])),
+        *(
+            "  " + line
+            for line in _table(
+                [""],
+                ["AIC", "BIC", "logLik"],
+                [[_g(fit["AIC"]), _g(fit["BIC"]), _g(fit["logLik"])]],
+            )
+        ),
         "",
         "Random effects:",
         f" Formula: list({', '.join(n + ' ~ 1' for n in fit['psi']['names'])})",
         f" Level: {call['groups']}",
-        " Structure: " + ("Diagonal" if call["structure"] == "diag"
-                          else "General positive-definite, Log-Cholesky parametrization"),
+        " Structure: "
+        + (
+            "Diagonal"
+            if call["structure"] == "diag"
+            else "General positive-definite, Log-Cholesky parametrization"
+        ),
     ]
     vc = VarCorr(fit)
     names = call["re_names"]
@@ -458,11 +572,17 @@ def summary(fit: dict) -> str:
         lines += [" " + line for line in _table(rows, ["StdDev", "Corr"], cells)]
     else:
         cols = [*names, "Residual"]
-        sds = [_g(vc[n]["StdDev"]) for n in names] + [_g(fit["sigma"]) if fit["sigma"] is not None else ""]
+        sds = [_g(vc[n]["StdDev"]) for n in names] + [
+            _g(fit["sigma"]) if fit["sigma"] is not None else ""
+        ]
         lines += _table(["StdDev:"], cols, [sds])
 
     fixed = call["fixed"]
-    lines += ["", "Fixed effects:  " + (fixed if isinstance(fixed, str) else f"list({', '.join(fixed)})")]
+    lines += [
+        "",
+        "Fixed effects:  "
+        + (fixed if isinstance(fixed, str) else f"list({', '.join(fixed)})"),
+    ]
     coefs = list(fit["fixef"])
     df = call["n_obs"] - call["n_groups"] - len(coefs) + 1
     cells = []
@@ -477,12 +597,21 @@ def summary(fit: dict) -> str:
         sd = np.sqrt(np.diag(cov))
         corr = cov / np.outer(sd, sd)
         lines.append(" Correlation: ")
-        lines += _table(coefs[1:], [c[:6] for c in coefs[:-1]],
-                        [[f"{corr[i, j]:.3f}" if j < i else "" for j in range(len(coefs) - 1)]
-                         for i in range(1, len(coefs))])
+        lines += _table(
+            coefs[1:],
+            [c[:6] for c in coefs[:-1]],
+            [
+                [f"{corr[i, j]:.3f}" if j < i else "" for j in range(len(coefs) - 1)]
+                for i in range(1, len(coefs))
+            ],
+        )
     if fit["sigma"] is not None:
         q = np.quantile(fit["residuals"] / fit["sigma"], [0, 0.25, 0.5, 0.75, 1])
         lines += ["", "Standardized Within-Group Residuals:"]
         lines += _table([""], ["Min", "Q1", "Med", "Q3", "Max"], [[_g(v) for v in q]])
-    lines += ["", f"Number of Observations: {call['n_obs']}", f"Number of Groups: {call['n_groups']}"]
+    lines += [
+        "",
+        f"Number of Observations: {call['n_obs']}",
+        f"Number of Groups: {call['n_groups']}",
+    ]
     return _Text("\n".join(lines))

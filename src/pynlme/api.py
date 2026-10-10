@@ -108,7 +108,10 @@ def fit(
     effects = {f"{n}.{c}" for n, cs in covariates.items() for c in cs}
     names = [n for n in start if n not in effects]
     if set(covariates) - set(names):
-        raise ValueError(f"covariates names unknown parameters: {sorted(set(covariates) - set(names))}")
+        raise ValueError(
+            "covariates names unknown parameters: "
+            f"{sorted(set(covariates) - set(names))}"
+        )
     method = method.upper()
     if method not in _METHODS:
         raise ValueError(f"method must be one of {sorted(_METHODS)}, not '{method}'")
@@ -139,7 +142,11 @@ def fit(
 
     y = _column(data, response).astype(float)
     groups = _column(data, group)
-    X = np.column_stack([_column(data, c).astype(float) for c in predictors]) if predictors else np.zeros((len(y), 0))
+    X = (
+        np.column_stack([_column(data, c).astype(float) for c in predictors])
+        if predictors
+        else np.zeros((len(y), 0))
+    )
     V = None
     if group_predictors:
         V = np.column_stack([_per_group(data, groups, c) for c in group_predictors])
@@ -168,24 +175,40 @@ def fit(
             p = {n: phi[..., k] for k, n in enumerate(names)}
             xd = {c: x[:, k] for k, c in enumerate(predictors)}
             if group_predictors:
-                return model.jacobian(p, xd, {c: np.asarray(v)[..., k] for k, c in enumerate(group_predictors)})
+                return model.jacobian(
+                    p,
+                    xd,
+                    {c: np.asarray(v)[..., k] for k, c in enumerate(group_predictors)},
+                )
             return model.jacobian(p, xd)
 
         wrapped.jacobian = jacobian
 
-    kwargs = {"param_transform": codes, "re_params_select": select, "vectorization": "full", **options}
+    kwargs = {
+        "param_transform": codes,
+        "re_params_select": select,
+        "vectorization": "full",
+        **options,
+    }
     if method == "SAEM":
         beta, psi, stats, b = nlmefitsa(X, y, groups, V, wrapped, beta0, **kwargs)
     else:
-        beta, psi, stats, b = nlmefit(X, y, groups, V, wrapped, beta0, approximation_type=method, **kwargs)
+        beta, psi, stats, b = nlmefit(
+            X, y, groups, V, wrapped, beta0, approximation_type=method, **kwargs
+        )
 
     labels = np.unique(groups)
     se = stats.sebeta
     return {
         "method": method,
         "fixed": dict(zip(fixed_names, map(float, beta), strict=True)),
-        "typical": {n: float(_INVERSE[c](beta[fixed_names.index(n)])) for n, c in zip(names, codes, strict=True)},
-        "se": None if se is None else dict(zip(fixed_names, map(float, se), strict=True)),
+        "typical": {
+            n: float(_INVERSE[c](beta[fixed_names.index(n)]))
+            for n, c in zip(names, codes, strict=True)
+        },
+        "se": None
+        if se is None
+        else dict(zip(fixed_names, map(float, se), strict=True)),
         "transform": {n: _NAMES[c] for n, c in zip(names, codes, strict=True)},
         "psi": {
             "names": random,
@@ -193,14 +216,24 @@ def fit(
             "variances": {n: float(psi[k, k]) for k, n in enumerate(random)},
         },
         "random_effects": {
-            _label(g): {n: float(b[k, j]) for k, n in enumerate(random)} for j, g in enumerate(labels)
+            _label(g): {n: float(b[k, j]) for k, n in enumerate(random)}
+            for j, g in enumerate(labels)
         },
-        "error": {"model": options.get("error_model", "constant"), "parameters": stats.errorparam},
+        "error": {
+            "model": options.get("error_model", "constant"),
+            "parameters": stats.errorparam,
+        },
         "stats": dict(vars(stats)),
         # What predict() needs; not part of the documented result.
         "_spec": {
-            "model": model, "data": data, "names": names, "codes": codes, "covariates": covariates,
-            "predictors": list(predictors), "group_predictors": list(group_predictors), "group": group,
+            "model": model,
+            "data": data,
+            "names": names,
+            "codes": codes,
+            "covariates": covariates,
+            "predictors": list(predictors),
+            "group_predictors": list(group_predictors),
+            "group": group,
         },
     }
 
@@ -224,17 +257,24 @@ def predict(result: dict, data=None, level: int = 1) -> np.ndarray:
     data = spec["data"] if data is None else data
     if level not in (0, 1):
         raise ValueError("level must be 0 or 1")
-    n = len(_column(data, spec["predictors"][0] if spec["predictors"] else spec["group"]))
+    n = len(
+        _column(data, spec["predictors"][0] if spec["predictors"] else spec["group"])
+    )
     b = None
     if level == 1:
         groups = [_label(g) for g in _column(data, spec["group"])]
         re = result["random_effects"]
         missing = dict.fromkeys(result["psi"]["names"], np.nan)
-        b = {n: np.array([re.get(g, missing)[n] for g in groups]) for n in result["psi"]["names"]}
+        b = {
+            n: np.array([re.get(g, missing)[n] for g in groups])
+            for n in result["psi"]["names"]
+        }
     return _evaluate(result, data, n, b)
 
 
-def _evaluate(result: dict, data, n: int, b: Mapping[str, np.ndarray] | None, fixed=None) -> np.ndarray:
+def _evaluate(
+    result: dict, data, n: int, b: Mapping[str, np.ndarray] | None, fixed=None
+) -> np.ndarray:
     """Model predictions for the rows of ``data`` with per-row random effects ``b``."""
     spec = result["_spec"]
     fixed = result["fixed"] if fixed is None else fixed
@@ -248,7 +288,9 @@ def _evaluate(result: dict, data, n: int, b: Mapping[str, np.ndarray] | None, fi
         p[name] = _INVERSE[code](eta)
     x = {c: _column(data, c).astype(float) for c in spec["predictors"]}
     if spec["group_predictors"]:
-        out = spec["model"](p, x, {c: _column(data, c).astype(float) for c in spec["group_predictors"]})
+        out = spec["model"](
+            p, x, {c: _column(data, c).astype(float) for c in spec["group_predictors"]}
+        )
     else:
         out = spec["model"](p, x)
     return np.broadcast_to(np.asarray(out, dtype=float), (n,)).copy()
@@ -259,7 +301,9 @@ def _per_group(data, groups: np.ndarray, column: str) -> np.ndarray:
     labels, first = np.unique(groups, return_index=True)
     values = _column(data, column).astype(float)
     per_group = values[first]
-    if not np.allclose(values, per_group[np.searchsorted(labels, groups)], equal_nan=True):
+    if not np.allclose(
+        values, per_group[np.searchsorted(labels, groups)], equal_nan=True
+    ):
         raise ValueError(f"'{column}' is not constant within groups")
     return per_group
 

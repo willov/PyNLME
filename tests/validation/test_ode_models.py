@@ -26,8 +26,12 @@ MODELS = Path(__file__).resolve().parents[2] / "validation" / "models"
 def _compare_to_matlab(beta, psi, stats):
     ref = load_reference("matlab_mm_pk_lme_tight.json")
     np.testing.assert_allclose(beta, ref["beta"], rtol=1e-3, atol=1e-3)
-    np.testing.assert_allclose(np.diag(psi), np.diag(np.atleast_2d(ref["psi"])), rtol=1e-2)
-    np.testing.assert_allclose(stats.errorparam, np.ravel(ref["stats"]["errorparam"]), rtol=1e-3)
+    np.testing.assert_allclose(
+        np.diag(psi), np.diag(np.atleast_2d(ref["psi"])), rtol=1e-2
+    )
+    np.testing.assert_allclose(
+        stats.errorparam, np.ravel(ref["stats"]["errorparam"]), rtol=1e-3
+    )
     assert stats.logl == pytest.approx(ref["stats"]["logl"], abs=5e-3)
 
 
@@ -45,7 +49,14 @@ def test_ode_solution_reproduces_closed_form_fit():
 def test_batched_ode_model_matches_matlab():
     c = mm_pk()
     beta, psi, stats, _ = nlmefit(
-        c.X, c.y, c.group, c.V, michaelis_menten_batched(), c.beta0, **c.kwargs, Vectorization="Full"
+        c.X,
+        c.y,
+        c.group,
+        c.V,
+        michaelis_menten_batched(),
+        c.beta0,
+        **c.kwargs,
+        Vectorization="Full",
     )
     _compare_to_matlab(beta, psi, stats)
 
@@ -57,11 +68,13 @@ def test_ode_model_single_and_full_calls_agree():
     rows = c.group == c.group[0]
     single = model(phi, c.X[rows][:, None], c.V[:1])
     two = np.concatenate([c.X[rows], c.X[rows]])[:, None]
-    phis = np.vstack([np.tile(phi, (rows.sum(), 1)), np.tile(phi * 1.1, (rows.sum(), 1))])
+    phis = np.vstack(
+        [np.tile(phi, (rows.sum(), 1)), np.tile(phi * 1.1, (rows.sum(), 1))]
+    )
     doses = np.full((len(two), 1), c.V[0])
     full = model(phis, two, doses)
     np.testing.assert_allclose(full[: rows.sum()], single, rtol=1e-8)
-    assert not np.allclose(full[rows.sum():], single)
+    assert not np.allclose(full[rows.sum() :], single)
 
 
 def test_sund_model_matches_matlab():
@@ -73,8 +86,14 @@ def test_sund_model_matches_matlab():
     c = mm_pk()
     # Batched with containers (model name), and one simulation at a time.
     batched = sund_model("mm_pk", "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
-    single = sund_model(sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h"),
-                        "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
+    single = sund_model(
+        sund.Simulation(models=[sund.load_model("mm_pk")], time_unit="h"),
+        "conc",
+        ["ka", "V", "vmax", "km"],
+        v_states=["gut"],
+    )
     for model in (batched, single):
-        beta, psi, stats, _ = nlmefit(c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full")
+        beta, psi, stats, _ = nlmefit(
+            c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full"
+        )
         _compare_to_matlab(beta, psi, stats)

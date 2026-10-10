@@ -19,7 +19,7 @@ def stack_grouped_data(
 
     Parameters
     ----------
-    X_grouped : array_like, shape (n_groups, n_obs_per_group, n_features) or (n_groups, n_obs_per_group)
+    X_grouped : array_like, shape (n_groups, n_obs_per_group[, n_features])
         Predictor variables in grouped format where:
         - n_groups: number of groups/subjects
         - n_obs_per_group: number of observations per group
@@ -60,7 +60,8 @@ def stack_grouped_data(
     # Check dimensions match
     if X_grouped.shape[:2] != y_grouped.shape[:2]:
         raise ValueError(
-            f"X_grouped and y_grouped must have same dimensions for groups and observations. "
+            "X_grouped and y_grouped must have same dimensions for groups and "
+            "observations. "
             f"Got X_grouped: {X_grouped.shape[:2]}, y_grouped: {y_grouped.shape[:2]}"
         )
 
@@ -88,7 +89,9 @@ def stack_grouped_data(
     else:
         group_ids = np.asarray(group_ids)
         if len(group_ids) != n_groups:
-            raise ValueError(f"group_ids must have length {n_groups}, got {len(group_ids)}")
+            raise ValueError(
+                f"group_ids must have length {n_groups}, got {len(group_ids)}"
+            )
 
     # Repeat group IDs for each observation
     group_stacked = np.repeat(group_ids, n_obs_per_group)
@@ -127,34 +130,34 @@ def detect_data_format(
 
     # If y is 2D, likely grouped format
     if y.ndim == 2:
-        return 'grouped'
+        return "grouped"
 
     # If X is 3D, likely grouped format
     if X.ndim == 3:
-        return 'grouped'
+        return "grouped"
 
     # If group is None and data could be grouped, check dimensions
     if group is None:
         # If X is 2D and y is 2D, grouped
         if X.ndim == 2 and y.ndim == 2:
-            return 'grouped'
+            return "grouped"
         # If X is 2D and y is 1D, but both have small first dimension, might be grouped
         if X.ndim == 2 and y.ndim == 1 and X.shape[0] <= 10 and X.shape[0] == len(y):
             # Could be either, but if no group provided, assume grouped
-            return 'grouped'
+            return "grouped"
 
     # If group is provided and has same length as y, likely stacked format
     if group is not None:
         group = np.asarray(group)
         if len(group) == len(y):
-            return 'stacked'
+            return "stacked"
 
     # If X and y have same first dimension and it's large, likely stacked
     if X.shape[0] == y.shape[0] and X.shape[0] > 10:
-        return 'stacked'
+        return "stacked"
 
     # Default to stacked format
-    return 'stacked'
+    return "stacked"
 
 
 def resolve_data_format(y, data_format: str | None = None) -> str:
@@ -168,7 +171,9 @@ def resolve_data_format(y, data_format: str | None = None) -> str:
     if data_format is not None:
         data_format = str(data_format).lower()
         if data_format not in ("stacked", "grouped"):
-            raise ValueError(f"DataFormat must be 'stacked' or 'grouped', not '{data_format}'")
+            raise ValueError(
+                f"DataFormat must be 'stacked' or 'grouped', not '{data_format}'"
+            )
         return data_format
     y = np.asarray(y)
     return "grouped" if y.ndim == 2 and min(y.shape) > 1 else "stacked"
@@ -193,7 +198,7 @@ def validate_inputs(
     X : array_like
         Predictor variables. Can be:
         - Stacked: shape (n_obs, n_features)
-        - Grouped: shape (n_groups, n_obs_per_group, n_features) or (n_groups, n_obs_per_group)
+        - Grouped: shape (n_groups, n_obs_per_group[, n_features])
     y : array_like
         Response variable. Can be:
         - Stacked: shape (n_obs,), (n_obs, 1) or (1, n_obs)
@@ -225,7 +230,7 @@ def validate_inputs(
 
     data_format = resolve_data_format(y, data_format)
 
-    if data_format == 'grouped':
+    if data_format == "grouped":
         # Convert grouped data to stacked format
         if group is not None:
             # Use provided group IDs
@@ -239,7 +244,8 @@ def validate_inputs(
         # Already in stacked format
         if group is None:
             raise ValueError(
-                "group is required for stacked data (y a vector). For grouped data, pass y "
+                "group is required for stacked data (y a vector). For grouped data, "
+                "pass y "
                 "with one row per group, or set DataFormat='grouped'."
             )
         group = np.asarray(group)
@@ -253,7 +259,8 @@ def validate_inputs(
     n_obs = len(y)
     if X.shape[0] != n_obs:
         raise ValueError(
-            f"X and y must have same number of observations. Got {X.shape[0]} and {n_obs}"
+            f"X and y must have same number of observations. Got {X.shape[0]} and "
+            f"{n_obs}"
         )
 
     if len(group) != n_obs:

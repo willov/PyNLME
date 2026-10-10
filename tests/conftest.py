@@ -5,7 +5,12 @@ import pytest
 
 
 def pytest_addoption(parser):
-    parser.addoption("--runslow", action="store_true", default=False, help="run slow simulation studies")
+    parser.addoption(
+        "--runslow",
+        action="store_true",
+        default=False,
+        help="run slow simulation studies",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -23,15 +28,16 @@ def r_available() -> bool:
         return False
     check = (
         'if (dir.exists("~/R/library")) .libPaths(c("~/R/library", .libPaths())); '
-        'quit(status = !all(sapply(c("nlme", "jsonlite"), requireNamespace, quietly = TRUE)))'
+        'quit(status = !all(sapply(c("nlme", "jsonlite"), requireNamespace, quietly = '
+        "TRUE)))"
     )
     return subprocess.run(["Rscript", "-e", check], capture_output=True).returncode == 0
 
 
 def matlab_command() -> list[str] | None:
-    """The MATLAB command from PYNLME_MATLAB (e.g. "/usr/local/MATLAB/R2023b/bin/matlab"),
-    split on whitespace; environment assignments such as LD_PRELOAD=... are allowed
-    in front. None if unset."""
+    """The MATLAB command from PYNLME_MATLAB
+    (e.g. "/usr/local/MATLAB/R2023b/bin/matlab"), split on whitespace; environment
+    assignments such as LD_PRELOAD=... are allowed in front. None if unset."""
     import os
 
     command = os.environ.get("PYNLME_MATLAB")

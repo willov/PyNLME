@@ -14,8 +14,11 @@ Example (oral dose, Michaelis-Menten elimination; states [gut, conc]):
         gut, c = y.T
         return np.column_stack([-ka * gut, ka * gut / V - vmax * c / (km + c)])
 
-    model = ode_model(rhs, y0=lambda phi, dose: np.column_stack([dose[:, 0], 0 * dose[:, 0]]),
-                      output=lambda y, phi, dose: y[:, 1])
+    model = ode_model(
+        rhs,
+        y0=lambda phi, dose: np.column_stack([dose[:, 0], 0 * dose[:, 0]]),
+        output=lambda y, phi, dose: y[:, 1],
+    )
     nlmefit(time, conc, subject, dose, model, beta0, Vectorization="Full", ...)
 """
 
@@ -76,7 +79,9 @@ def ode_model(
             phi = np.broadcast_to(phi, (n, phi.size))
         if v is not None:
             v = np.asarray(v, dtype=float)
-            v = np.broadcast_to(v.reshape(1, -1) if v.ndim <= 1 else v, (n, v.shape[-1]))
+            v = np.broadcast_to(
+                v.reshape(1, -1) if v.ndim <= 1 else v, (n, v.shape[-1])
+            )
 
         # Systems are runs of identical (phi, v) rows.
         key = phi if v is None else np.hstack([phi, v])
@@ -94,13 +99,23 @@ def ode_model(
             raise ValueError("observation times must be >= t0")
 
         def f(time, flat):
-            return np.asarray(rhs(time, flat.reshape(K, n_states), P, Vs), dtype=float).ravel()
+            return np.asarray(
+                rhs(time, flat.reshape(K, n_states), P, Vs), dtype=float
+            ).ravel()
 
         t_end = float(times[-1])
         if t_end <= t0:
             states = np.repeat(Y0[None], len(times), axis=0)
         else:
-            sol = solve_ivp(f, (t0, t_end), Y0.ravel(), t_eval=times, method=method, rtol=rtol, atol=atol)
+            sol = solve_ivp(
+                f,
+                (t0, t_end),
+                Y0.ravel(),
+                t_eval=times,
+                method=method,
+                rtol=rtol,
+                atol=atol,
+            )
             if not sol.success:
                 return np.full(n, np.nan)
             states = sol.y.T.reshape(len(times), K, n_states)
@@ -109,7 +124,9 @@ def ode_model(
         if values.ndim == 2 and values.shape[1] > 1:
             from .sund_adapter import _feature_rows
 
-            return values[np.arange(n), _feature_rows(x, feature_column, values.shape[1])]
+            return values[
+                np.arange(n), _feature_rows(x, feature_column, values.shape[1])
+            ]
         return values.reshape(n)
 
     return model

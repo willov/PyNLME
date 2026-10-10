@@ -20,7 +20,9 @@ class NLMEStats:
     aic: float | None = None  # Akaike Information Criterion
     bic: float | None = None  # Bayesian Information Criterion
     rmse: float | None = None  # Root mean squared error
-    mse: float | None = None  # Estimated error variance (MATLAB's undocumented stats.mse)
+    mse: float | None = (
+        None  # Estimated error variance (MATLAB's undocumented stats.mse)
+    )
     errorparam: np.ndarray | None = None  # Error model parameters
     sebeta: np.ndarray | None = None  # Standard errors of fixed effects
     covb: np.ndarray | None = None  # Covariance matrix of fixed effects
@@ -43,13 +45,17 @@ class NLMEOptions:
 
     # Algorithm selection
     approximation_type: str = "LME"  # "LME", "RELME" ("FO", "FOCE" not yet)
-    optim_fun: str = "fminsearch"  # LME step optimizer (compat="matlab"); only "fminsearch"
+    optim_fun: str = (
+        "fminsearch"  # LME step optimizer (compat="matlab"); only "fminsearch"
+    )
 
     # Parameter transformations
     param_transform: np.ndarray | None = None  # 0=identity, 1=log, 2=probit, 3=logit
 
     # Error model
-    error_model: str = "constant"  # "constant", "proportional", "combined", "exponential"
+    error_model: str = (
+        "constant"  # "constant", "proportional", "combined", "exponential"
+    )
     error_parameters: np.ndarray | None = None  # Starting (a,) or (a, b) for "combined"
 
     # Covariance structure

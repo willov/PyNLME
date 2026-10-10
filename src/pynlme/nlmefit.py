@@ -47,7 +47,13 @@ _MATLAB_NAMES = {
 _STATSET_NAMES = {"MaxIter": "max_iter", "TolFun": "tol_fun", "TolX": "tol_x"}
 _DISPLAY_LEVELS = {"off": 0, "final": 1, "iter": 2}
 
-_SAEM_FIELDS = ("n_iterations", "n_mcmc_iterations", "n_burn_in", "loglik_method", "n_chains")
+_SAEM_FIELDS = (
+    "n_iterations",
+    "n_mcmc_iterations",
+    "n_burn_in",
+    "loglik_method",
+    "n_chains",
+)
 
 
 def _parse_options(kwargs: dict) -> tuple[dict, set[str]]:
@@ -113,28 +119,47 @@ def _n_model_params(options: NLMEOptions, n_beta: int) -> int:
     )
 
 
-def _build_model(X, y, group, V, modelfun, beta0, options, matlab_style) -> GroupedModel:
+def _build_model(
+    X, y, group, V, modelfun, beta0, options, matlab_style
+) -> GroupedModel:
     m = int(group.max()) + 1
     rows = [np.flatnonzero(group == i) for i in range(m)]
     p = _n_model_params(options, len(beta0))
     A = build_design(
-        p, m, options.fe_params_select, options.fe_const_design,
-        options.fe_group_design, "fe_params_select" in matlab_style, "FE",
+        p,
+        m,
+        options.fe_params_select,
+        options.fe_const_design,
+        options.fe_group_design,
+        "fe_params_select" in matlab_style,
+        "FE",
     )
     B = build_design(
-        p, m, options.re_params_select, options.re_const_design,
-        options.re_group_design, "re_params_select" in matlab_style, "RE",
+        p,
+        m,
+        options.re_params_select,
+        options.re_const_design,
+        options.re_group_design,
+        "re_params_select" in matlab_style,
+        "RE",
     )
     if A.shape[1] != p or B.shape[1] != p:
-        raise ValueError("Fixed- and random-effects designs must have the same number of rows")
+        raise ValueError(
+            "Fixed- and random-effects designs must have the same number of rows"
+        )
     if A.shape[2] != len(beta0):
-        raise ValueError(f"beta0 has {len(beta0)} elements but the fixed-effects design has {A.shape[2]} columns")
+        raise ValueError(
+            f"beta0 has {len(beta0)} elements but the fixed-effects design has "
+            f"{A.shape[2]} columns"
+        )
 
     transform = None
     if options.param_transform is not None:
         transform = np.asarray(options.param_transform, dtype=int).reshape(-1)
         if transform.shape[0] != p or not np.all(np.isin(transform, [0, 1, 2, 3])):
-            raise ValueError(f"ParamTransform must have {p} elements with values 0, 1, 2 or 3")
+            raise ValueError(
+                f"ParamTransform must have {p} elements with values 0, 1, 2 or 3"
+            )
 
     # "SingleGroup" models also accept a parameter vector, so they are called
     # as "SinglePhi".
@@ -217,9 +242,9 @@ def nlmefit(
         exponential error model with FO/FOCE, which MATLAB reports without
         the -sum(log y) term); explicit options still override.
         Implemented so far:
-        ApproximationType "LME"/"RELME"/"FO"/"FOCE", ParamTransform, CovPattern (diagonal or
-        full), FE/RE ParamsSelect, ConstDesign and GroupDesign, RefineBeta0 and
-        Options (MaxIter, TolFun, TolX, Display). Other options raise
+        ApproximationType "LME"/"RELME"/"FO"/"FOCE", ParamTransform, CovPattern
+        (diagonal or full), FE/RE ParamsSelect, ConstDesign and GroupDesign,
+        RefineBeta0 and Options (MaxIter, TolFun, TolX, Display). Other options raise
         NotImplementedError.
 
     Returns
@@ -241,8 +266,12 @@ def nlmefit(
     # R's nlme iteration (see lindstrom_bates.fit_lindstrom_bates_nlme): for
     # LME/RELME with the error models nlme has (constant; exponential is
     # constant on the log scale).
-    nlme_iteration = (compat == "r" and approx in ("LME", "RELME")
-                      and str(parsed.get("error_model", "constant")).lower() in ("constant", "exponential"))
+    nlme_iteration = (
+        compat == "r"
+        and approx in ("LME", "RELME")
+        and str(parsed.get("error_model", "constant")).lower()
+        in ("constant", "exponential")
+    )
     # MATLAB's nlmefit iteration (matlab_lb.fit_lindstrom_bates_matlab) and
     # statset('nlmefit') defaults.
     matlab_iteration = compat == "matlab" and approx in ("LME", "RELME")
@@ -250,25 +279,42 @@ def nlmefit(
         parsed.setdefault("tol_x", 1e-4)
         parsed.setdefault("tol_fun", 1e-4)
         if str(parsed.get("optim_fun", "fminsearch")).lower() != "fminsearch":
-            raise NotImplementedError("OptimFun 'fminunc' is not implemented; nlmefit's default is 'fminsearch'")
+            raise NotImplementedError(
+                "OptimFun 'fminunc' is not implemented; nlmefit's default is "
+                "'fminsearch'"
+            )
     if compat == "r":
         parsed.setdefault("refine_beta0", False)  # nlme has no pre-fit
     if nlme_iteration:
         parsed.setdefault("max_iter", 50)  # nlmeControl()'s maxIter and tolerance
         parsed.setdefault("tol_x", 1e-5)
-    elif any(parsed.get(k) is not None for k in ("pnls_tol", "pnls_max_iter", "min_scale")):
+    elif any(
+        parsed.get(k) is not None for k in ("pnls_tol", "pnls_max_iter", "min_scale")
+    ):
         raise NotImplementedError(
             "pnls_tol, pnls_max_iter and min_scale apply to R's nlme iteration "
-            "(compat='r', LME/RELME, constant or exponential error model)")
+            "(compat='r', LME/RELME, constant or exponential error model)"
+        )
     options = NLMEOptions(**parsed)
     X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
 
     approx = options.approximation_type.upper()
     error_model = options.error_model.lower()
-    _require(approx in ("LME", "RELME", "FO", "FOCE"), f"Unknown ApproximationType '{options.approximation_type}'")
-    _require(error_model in _ERROR_MODELS, f"Unknown ErrorModel '{options.error_model}'")
-    _require(options.vectorization.lower() in _VECTORIZATIONS, f"Unknown Vectorization '{options.vectorization}'")
-    _require(options.fe_obs_design is None and options.re_obs_design is None, "FEObsDesign/REObsDesign are not implemented yet")
+    _require(
+        approx in ("LME", "RELME", "FO", "FOCE"),
+        f"Unknown ApproximationType '{options.approximation_type}'",
+    )
+    _require(
+        error_model in _ERROR_MODELS, f"Unknown ErrorModel '{options.error_model}'"
+    )
+    _require(
+        options.vectorization.lower() in _VECTORIZATIONS,
+        f"Unknown Vectorization '{options.vectorization}'",
+    )
+    _require(
+        options.fe_obs_design is None and options.re_obs_design is None,
+        "FEObsDesign/REObsDesign are not implemented yet",
+    )
 
     y, modelfun, logl_offset = _apply_error_transform(error_model, y, modelfun, V)
     model = _build_model(X, y, group, V, modelfun, beta0, options, matlab_style)
@@ -283,27 +329,56 @@ def nlmefit(
     }
     if approx in ("FO", "FOCE"):
         result = fit_first_order(
-            model, beta0, conditional=approx == "FOCE", error_model=error_model,
-            error_param0=options.error_parameters, **fit_args,
+            model,
+            beta0,
+            conditional=approx == "FOCE",
+            error_model=error_model,
+            error_param0=options.error_parameters,
+            **fit_args,
         )
     elif matlab_iteration:
         result = fit_lindstrom_bates_matlab(
-            model, beta0, full_cov=full_cov, reml=approx == "RELME", refine=options.refine_beta0,
-            max_iter=options.max_iter, tol_x=options.tol_x, tol_fun=options.tol_fun, error_model=error_model,
-            error_param0=options.error_parameters, parametrization=str(options.cov_parametrization).lower(),
-            x_first=float(X.flat[0]) if X.size else 1.0, verbose=options.verbose,
+            model,
+            beta0,
+            full_cov=full_cov,
+            reml=approx == "RELME",
+            refine=options.refine_beta0,
+            max_iter=options.max_iter,
+            tol_x=options.tol_x,
+            tol_fun=options.tol_fun,
+            error_model=error_model,
+            error_param0=options.error_parameters,
+            parametrization=str(options.cov_parametrization).lower(),
+            x_first=float(X.flat[0]) if X.size else 1.0,
+            verbose=options.verbose,
         )
     elif nlme_iteration:
         result = fit_lindstrom_bates_nlme(
-            model, beta0, full_cov=full_cov, reml=approx == "RELME", max_iter=options.max_iter,
-            tolerance=options.tol_x, verbose=options.verbose,
-            **{k: v for k, v in (("pnls_tol", options.pnls_tol), ("pnls_max_iter", options.pnls_max_iter),
-                                 ("min_scale", options.min_scale)) if v is not None},
+            model,
+            beta0,
+            full_cov=full_cov,
+            reml=approx == "RELME",
+            max_iter=options.max_iter,
+            tolerance=options.tol_x,
+            verbose=options.verbose,
+            **{
+                k: v
+                for k, v in (
+                    ("pnls_tol", options.pnls_tol),
+                    ("pnls_max_iter", options.pnls_max_iter),
+                    ("min_scale", options.min_scale),
+                )
+                if v is not None
+            },
         )
     else:
         result = fit_lindstrom_bates(
-            model, beta0, reml=approx == "RELME", error_model=error_model,
-            error_param0=options.error_parameters, **fit_args,
+            model,
+            beta0,
+            reml=approx == "RELME",
+            error_model=error_model,
+            error_param0=options.error_parameters,
+            **fit_args,
         )
     if not result.converged:
         warnings.warn(
@@ -333,8 +408,19 @@ def nlmefit(
         # MATLAB's FO/FOCE log-likelihood for the exponential error model
         # leaves out the -sum(log y) term that its LME/RELME include.
         logl_offset = 0.0
-    stats = _build_stats(model, y, result.beta, psi, result.b, result.logl + logl_offset,
-                         full_cov, error_model, sigma2, result.error_param, bic_groups)
+    stats = _build_stats(
+        model,
+        y,
+        result.beta,
+        psi,
+        result.b,
+        result.logl + logl_offset,
+        full_cov,
+        error_model,
+        sigma2,
+        result.error_param,
+        bic_groups,
+    )
     stats.sebeta = np.sqrt(np.diag(covb))
     stats.covb = covb
     return result.beta, psi, stats, result.b
@@ -367,7 +453,20 @@ def _apply_error_transform(error_model, y, modelfun, V):
     return log_y, log_model, -float(np.sum(log_y))
 
 
-def _build_stats(model, y, beta, psi, b, logl, full_cov, error_model, sigma2, ab, bic_groups, errorparam=None):
+def _build_stats(
+    model,
+    y,
+    beta,
+    psi,
+    b,
+    logl,
+    full_cov,
+    error_model,
+    sigma2,
+    ab,
+    bic_groups,
+    errorparam=None,
+):
     """MATLAB's stats structure. Residuals are on the fitted scale (log scale
     for the exponential error model), as in MATLAB."""
     from .lindstrom_bates import error_ab
@@ -383,8 +482,18 @@ def _build_stats(model, y, beta, psi, b, logl, full_cov, error_model, sigma2, ab
         # As MATLAB: refit (a, b) to the final individual predictions.
         from scipy import optimize
 
-        errorparam = np.abs(optimize.fmin(error_ab, ab, args=(y, fb), disp=False,
-                                          xtol=1e-10, ftol=1e-12, maxiter=5000, maxfun=10000))
+        errorparam = np.abs(
+            optimize.fmin(
+                error_ab,
+                ab,
+                args=(y, fb),
+                disp=False,
+                xtol=1e-10,
+                ftol=1e-12,
+                maxiter=5000,
+                maxfun=10000,
+            )
+        )
     else:
         errorparam = np.array([np.sqrt(sigma2)])
     res = compute_residuals(model, y, beta, b, psi, error_model, errorparam)
@@ -441,9 +550,17 @@ def nlmefitsa(
     options = NLMEOptions(**parsed)
     saem_options = SAEMOptions(**saem_kwargs)
     error_model = options.error_model.lower()
-    _require(error_model in _ERROR_MODELS, f"Unknown ErrorModel '{options.error_model}'")
-    _require(options.vectorization.lower() in _VECTORIZATIONS, f"Unknown Vectorization '{options.vectorization}'")
-    _require(options.fe_obs_design is None and options.re_obs_design is None, "FEObsDesign/REObsDesign are not implemented yet")
+    _require(
+        error_model in _ERROR_MODELS, f"Unknown ErrorModel '{options.error_model}'"
+    )
+    _require(
+        options.vectorization.lower() in _VECTORIZATIONS,
+        f"Unknown Vectorization '{options.vectorization}'",
+    )
+    _require(
+        options.fe_obs_design is None and options.re_obs_design is None,
+        "FEObsDesign/REObsDesign are not implemented yet",
+    )
 
     X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
     y, modelfun, logl_offset = _apply_error_transform(error_model, y, modelfun, V)
@@ -470,16 +587,28 @@ def nlmefitsa(
     )
 
     logl = None if result.logl is None else result.logl + logl_offset
-    stats = _build_stats(model, y, result.beta, result.psi, result.b, logl, full_cov,
-                         error_model, None, None, model.n_groups, errorparam=result.errorparam)
+    stats = _build_stats(
+        model,
+        y,
+        result.beta,
+        result.psi,
+        result.b,
+        logl,
+        full_cov,
+        error_model,
+        None,
+        None,
+        model.n_groups,
+        errorparam=result.errorparam,
+    )
     stats.sebeta = None if result.covb is None else np.sqrt(np.diag(result.covb))
     stats.covb = result.covb
     return result.beta, result.psi, stats, result.b
 
 
-# ========================================================================================
+# ======================================================================================
 # Pythonic interface
-# ========================================================================================
+# ======================================================================================
 
 
 def fit_nlme(
