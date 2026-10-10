@@ -101,9 +101,9 @@ def markdown() -> None:
     def ms(t):
         return f"{1000 * t:.0f}" if t >= 0.1 else f"{1000 * t:.1f}"
 
-    print("| Case | MATLAB mode | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE |"
-          " SAEM, 1 chain | `saemix` |")
-    print("|---|---|---|---|---|---|---|---|---|---|")
+    print("| Case | MATLAB mode | MATLAB mode, Rust kernels | MATLAB | R mode | R mode, Rust kernels | R `nlme` |"
+          " FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|")
     for name, factory in CASES.items():
         cv = vectorized(factory())
         kernels(False)
@@ -111,11 +111,13 @@ def markdown() -> None:
         lme_r = best_of(5, fit(cv, **R_CONTROL))
         foce = best_of(1, fit(cv, ApproximationType="FOCE"))
         saem = best_of(2, fit(cv, nlmefitsa, random_state=1, NChains=1)) if name != "indometh" else None
-        lme_rk = None
+        lme_mk = lme_rk = None
         if has_kernels:
             kernels(True)
+            lme_mk = best_of(5, fit(cv))
             lme_rk = best_of(5, fit(cv, **R_CONTROL))
-        cells = [name, ms(lme_m), ms(matlab_time(name, "lme", "default")), ms(lme_r),
+        cells = [name, ms(lme_m), "–" if lme_mk is None else ms(lme_mk), ms(matlab_time(name, "lme", "default")),
+                 ms(lme_r),
                  "–" if lme_rk is None else ms(lme_rk), ms(r["nlme"][name]), ms(foce),
                  ms(matlab_time(name, "foce")), "–" if saem is None else ms(saem),
                  "–" if saem is None else ms(r["saemix"][name])]

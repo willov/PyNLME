@@ -147,16 +147,17 @@ Each mode against the program it replicates, with the same options and
 `uv run python validation/benchmark.py --markdown` (pynlme on this machine; R and MATLAB
 times from `validation/reference/`).
 
-| Case | MATLAB mode | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |
-|---|---|---|---|---|---|---|---|---|---|
-| indometh | 133 | 346 | 81.9 | 18.6 | 44.0 | 4366 | 49195 | – | – |
-| theoph | 27.2 | 52.6 | 107 | 24.2 | 39.0 | 3505 | 41763 | 244 | 1318 |
-| orange | 9.2 | 50.7 | 13.1 | 3.3 | 7.0 | 547 | 14513 | 176 | 1209 |
-| linear | 23.6 | 43.5 | 11.2 | 4.6 | 7.0 | 680 | 47310 | 154 | 451 |
+| Case | MATLAB mode | MATLAB mode, Rust kernels | MATLAB | R mode | R mode, Rust kernels | R `nlme` | FOCE | MATLAB FOCE | SAEM, 1 chain | `saemix` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| indometh | 140 | 18.6 | 346 | 82.2 | 18.7 | 44.0 | 4189 | 49195 | – | – |
+| theoph | 28.1 | 16.4 | 52.6 | 108 | 24.2 | 39.0 | 3505 | 41763 | 245 | 1318 |
+| orange | 9.6 | 5.0 | 50.7 | 13.0 | 3.1 | 7.0 | 547 | 14513 | 174 | 1209 |
+| linear | 24.5 | 14.3 | 43.5 | 13.9 | 5.9 | 7.0 | 711 | 47310 | 155 | 451 |
 
 The Rust kernels (`kernels/`, optional package `pynlme-kernels`, used automatically when
-installed: `pip install ./kernels`) compile the R mode's inner loops; the MATLAB mode
-and the future custom mode will use them too. Without `Vectorization="Full"` the model is
+installed: `pip install ./kernels`) compile the inner loops of both modes (the MATLAB
+mode's LME step with a full `logm` covariance still runs in Python); the future custom
+mode will use them too. Without `Vectorization="Full"` the model is
 called once per subject: same results, several times slower. ODE models compiled with
 SUND: the validation Michaelis-Menten fit takes ~0.4 s, against 3-5 s in MATLAB with
 `ode45`.

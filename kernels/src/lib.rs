@@ -711,6 +711,278 @@ fn lme_gradient<'py>(
     grad.into_pyarray(py)
 }
 
+// ----- MATLAB nlmefit's LME objective --------------------------------------
+
+struct DeltaQr {
+    r11: Array3<f64>,
+    r10c1: Array3<f64>,
+    r00: Array2<f64>,
+}
+
+/// Per-group QR of [Z_i X_i w_i; Delta 0] (as nlmefit's LMEnegloglikelihood and
+/// GNfitPNLS), and the combined fixed-effects factor R00 (f+1, f+1).
+fn delta_qr_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, delta: ArrayView2<f64>) -> DeltaQr {
+    let (m, k, r) = z.dim();
+    let q1 = xw.len_of(Axis(2));
+    let rows = (k + r).max(r + q1);
+    let cols = r + q1;
+    let mut a = vec![0.0; rows * cols];
+    let mut r11 = Array3::<f64>::zeros((m, r, r));
+    let mut r10c1 = Array3::<f64>::zeros((m, r, q1));
+    let mut blocks = vec![0.0; m * q1 * q1];
+    for g in 0..m {
+        a.iter_mut().for_each(|x| *x = 0.0);
+        for i in 0..k {
+            for c in 0..r {
+                a[i * cols + c] = z[[g, i, c]];
+            }
+            for c in 0..q1 {
+                a[i * cols + r + c] = xw[[g, i, c]];
+            }
+        }
+        for i in 0..r {
+            for c in 0..r {
+                a[(k + i) * cols + c] = delta[[i, c]];
+            }
+        }
+        householder_r(&mut a, rows, cols);
+        for i in 0..r {
+            for c in i..r {
+                r11[[g, i, c]] = a[i * cols + c];
+            }
+            for c in 0..q1 {
+                r10c1[[g, i, c]] = a[i * cols + r + c];
+            }
+        }
+        for i in 0..q1 {
+            for c in i..q1 {
+                blocks[(g * q1 + i) * q1 + c] = a[(r + i) * cols + r + c];
+            }
+        }
+    }
+    householder_r(&mut blocks, m * q1, q1);
+    let mut r00 = Array2::<f64>::zeros((q1, q1));
+    for i in 0..q1 {
+        for c in i..q1 {
+            r00[[i, c]] = blocks[i * q1 + c];
+        }
+    }
+    DeltaQr { r11, r10c1, r00 }
+}
+
+#[pyfunction]
+fn delta_qr<'py>(
+    py: Python<'py>,
+    z: PyReadonlyArray3<'py, f64>,
+    xw: PyReadonlyArray3<'py, f64>,
+    delta: PyReadonlyArray2<'py, f64>,
+) -> (Bound<'py, PyArray3<f64>>, Bound<'py, PyArray3<f64>>, Bound<'py, PyArray2<f64>>) {
+    let d = delta_qr_core(z.as_array(), xw.as_array(), delta.as_array());
+    (d.r11.into_pyarray(py), d.r10c1.into_pyarray(py), d.r00.into_pyarray(py))
+}
+
+/// nlmefit's LMEnegloglikelihood (varying part of Pinheiro & Bates eq. 2.21 or
+/// 2.23): returns (value, c_1, R00).
+#[pyfunction]
+fn matlab_negloglik<'py>(
+    py: Python<'py>,
+    z: PyReadonlyArray3<'py, f64>,
+    xw: PyReadonlyArray3<'py, f64>,
+    delta: PyReadonlyArray2<'py, f64>,
+    n_obs: f64,
+    reml: bool,
+) -> (f64, f64, Bound<'py, PyArray2<f64>>) {
+    let delta = delta.as_array();
+    let d = delta_qr_core(z.as_array(), xw.as_array(), delta);
+    let (m, r, _) = d.r11.dim();
+    let q = d.r00.len_of(Axis(0)) - 1;
+    let c1 = d.r00[[q, q]].abs();
+    let mut log_det_delta = 0.0;
+    for i in 0..r {
+        log_det_delta += delta[[i, i]].abs().ln(); // Delta is upper triangular
+    }
+    let mut log_ratio = m as f64 * log_det_delta;
+    for g in 0..m {
+        for i in 0..r {
+            log_ratio -= d.r11[[g, i, i]].abs().ln();
+        }
+    }
+    let value = if reml {
+        let mut log_r00 = 0.0;
+        for i in 0..q {
+            log_r00 += d.r00[[i, i]].abs().ln();
+        }
+        (n_obs - q as f64) * c1.ln() + log_r00 - log_ratio
+    } else {
+        n_obs * c1.ln() - log_ratio
+    };
+    (value, c1, d.r00.into_pyarray(py))
+}
+
+/// MATLAB's eps(x).
+fn spacing(x: f64) -> f64 {
+    let a = x.abs();
+    if a == 0.0 { f64::from_bits(1) } else if !a.is_finite() { f64::NAN } else { f64::from_bits(a.to_bits() + 1) - a }
+}
+
+/// Nelder-Mead as MATLAB's fminsearch (Lagarias et al. 1998), as pynlme's
+/// matlab_lb.fminsearch. Returns (x, f(x), converged).
+fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_fun: f64, max_iter: usize,
+                                      max_fun_evals: f64) -> (Vec<f64>, f64, bool) {
+    let n = x0.len();
+    let (rho, chi, psi, sigma) = (1.0, 2.0, 0.5, 0.5);
+    let mut v: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
+    let mut fv: Vec<f64> = Vec::with_capacity(n + 1);
+    v.push(x0.to_vec());
+    fv.push(fun(x0));
+    for j in 0..n {
+        let mut y = x0.to_vec();
+        y[j] = if y[j] != 0.0 { (1.0 + 0.05) * y[j] } else { 0.00025 };
+        fv.push(fun(&y));
+        v.push(y);
+    }
+    let sort = |v: &mut Vec<Vec<f64>>, fv: &mut Vec<f64>| {
+        let mut idx: Vec<usize> = (0..fv.len()).collect();
+        idx.sort_by(|&a, &b| fv[a].partial_cmp(&fv[b]).unwrap_or(std::cmp::Ordering::Equal)); // stable
+        *v = idx.iter().map(|&i| v[i].clone()).collect();
+        *fv = idx.iter().map(|&i| fv[i]).collect();
+    };
+    sort(&mut v, &mut fv);
+    let (mut evals, mut iterations) = ((n + 1) as f64, 1usize);
+    while evals < max_fun_evals && iterations < max_iter {
+        let fspread = (1..=n).map(|j| (fv[0] - fv[j]).abs()).fold(0.0, f64::max);
+        let xspread = (1..=n).flat_map(|j| (0..n).map({ let v = &v; move |i| (v[j][i] - v[0][i]).abs() }))
+            .fold(0.0, f64::max);
+        let vmax = v[0].iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        if fspread <= tol_fun.max(10.0 * spacing(fv[0])) && xspread <= tol_x.max(10.0 * spacing(vmax)) {
+            break;
+        }
+        let mut xbar = vec![0.0; n];
+        for row in v.iter().take(n) {
+            for i in 0..n {
+                xbar[i] += row[i];
+            }
+        }
+        xbar.iter_mut().for_each(|x| *x /= n as f64);
+        let point = |a: f64, b: f64, w: &Vec<f64>| -> Vec<f64> { (0..n).map(|i| a * xbar[i] + b * w[i]).collect() };
+        let xr = point(1.0 + rho, -rho, &v[n]);
+        let fxr = fun(&xr);
+        evals += 1.0;
+        let mut shrink = false;
+        if fxr < fv[0] {
+            let xe = point(1.0 + rho * chi, -rho * chi, &v[n]);
+            let fxe = fun(&xe);
+            evals += 1.0;
+            if fxe < fxr { v[n] = xe; fv[n] = fxe; } else { v[n] = xr; fv[n] = fxr; }
+        } else if fxr < fv[n - 1] {
+            v[n] = xr;
+            fv[n] = fxr;
+        } else if fxr < fv[n] {
+            let xc = point(1.0 + psi * rho, -psi * rho, &v[n]);
+            let fxc = fun(&xc);
+            evals += 1.0;
+            if fxc <= fxr { v[n] = xc; fv[n] = fxc; } else { shrink = true; }
+        } else {
+            let xcc = point(1.0 - psi, psi, &v[n]);
+            let fxcc = fun(&xcc);
+            evals += 1.0;
+            if fxcc < fv[n] { v[n] = xcc; fv[n] = fxcc; } else { shrink = true; }
+        }
+        if shrink {
+            for j in 1..=n {
+                let w: Vec<f64> = (0..n).map(|i| v[0][i] + sigma * (v[j][i] - v[0][i])).collect();
+                fv[j] = fun(&w);
+                v[j] = w;
+            }
+            evals += n as f64;
+        }
+        sort(&mut v, &mut fv);
+        iterations += 1;
+    }
+    let converged = evals < max_fun_evals && iterations < max_iter;
+    (v[0].clone(), fv[0], converged)
+}
+
+/// fminsearch on a Python function (for testing the port against pynlme's
+/// Python version).
+#[pyfunction]
+fn fminsearch_py(py: Python<'_>, fcn: Py<PyAny>, x0: Vec<f64>, tol_x: f64, tol_fun: f64, max_iter: usize)
+                 -> PyResult<(Vec<f64>, f64, bool)> {
+    let mut err = None;
+    let out = fminsearch(
+        |v: &[f64]| match fcn.call1(py, (v.to_vec(),)).and_then(|r| r.extract::<f64>(py)) {
+            Ok(value) => value,
+            Err(e) => {
+                err.get_or_insert(e);
+                f64::INFINITY
+            }
+        },
+        &x0, tol_x, tol_fun, max_iter, f64::INFINITY,
+    );
+    match err {
+        Some(e) => Err(e),
+        None => Ok(out),
+    }
+}
+
+/// nlmefit's LME step for the parametrizations computed here: "chol" (Delta
+/// set from theta at the pattern positions) or "logm" with a diagonal pattern
+/// (Delta = sqrt(exp(theta))). fminsearch on LMEnegloglikelihood.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn matlab_lme_step(
+    z: PyReadonlyArray3<'_, f64>,
+    xw: PyReadonlyArray3<'_, f64>,
+    theta0: Vec<f64>,
+    rows: Vec<usize>,
+    cols: Vec<usize>,
+    chol: bool,
+    n_obs: f64,
+    reml: bool,
+    tol_x: f64,
+    tol_fun: f64,
+    max_iter: usize,
+) -> (Vec<f64>, f64, bool) {
+    let (z, xw) = (z.as_array(), xw.as_array());
+    let (m, _, r) = z.dim();
+    let q = xw.len_of(Axis(2)) - 1;
+    let objective = |theta: &[f64]| -> f64 {
+        let mut delta = Array2::<f64>::zeros((r, r));
+        for (k, (&i, &j)) in rows.iter().zip(&cols).enumerate() {
+            delta[[i, j]] = if chol {
+                theta[k]
+            } else {
+                let e = theta[k].exp();
+                if !(e > 0.0 && e.is_finite()) {
+                    return 1.0 / f64::EPSILON; // expm/chol failure in nlmefit
+                }
+                e.sqrt()
+            };
+        }
+        let d = delta_qr_core(z, xw, delta.view());
+        let c1 = d.r00[[q, q]].abs();
+        let mut log_ratio = 0.0;
+        let mut log_det_delta = 0.0;
+        for i in 0..r {
+            log_det_delta += delta[[i, i]].abs().ln();
+        }
+        log_ratio += m as f64 * log_det_delta;
+        for g in 0..m {
+            for i in 0..r {
+                log_ratio -= d.r11[[g, i, i]].abs().ln();
+            }
+        }
+        let value = if reml {
+            let log_r00: f64 = (0..q).map(|i| d.r00[[i, i]].abs().ln()).sum();
+            (n_obs - q as f64) * c1.ln() + log_r00 - log_ratio
+        } else {
+            n_obs * c1.ln() - log_ratio
+        };
+        value
+    };
+    fminsearch(objective, &theta0, tol_x, tol_fun, max_iter, f64::INFINITY)
+}
+
 /// LME core for all groups: returns (logdet, beta, rss, R_xx, u, R_zz), as
 /// LinearizedLME.solve computes them (R up to row signs).
 #[pyfunction]
@@ -738,5 +1010,9 @@ fn pynlme_kernels(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(nlm_factor, m)?)?;
     m.add_function(wrap_pyfunction!(lme_gradient, m)?)?;
     m.add_function(wrap_pyfunction!(optif9_py, m)?)?;
+    m.add_function(wrap_pyfunction!(delta_qr, m)?)?;
+    m.add_function(wrap_pyfunction!(matlab_negloglik, m)?)?;
+    m.add_function(wrap_pyfunction!(matlab_lme_step, m)?)?;
+    m.add_function(wrap_pyfunction!(fminsearch_py, m)?)?;
     Ok(())
 }

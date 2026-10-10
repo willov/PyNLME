@@ -4,6 +4,8 @@ code they replace, on random problems of random sizes: they must do the same
 arithmetic for any data, not just the validation cases.
 """
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -144,3 +146,43 @@ def test_nlm_kernel(seed):
     # optif9 returns its second-to-last iterate, so paths that differ by rounding
     # end ~1e-6 apart in the objective.
     assert f_k == pytest.approx(f_p, rel=1e-5, abs=1e-6)
+
+
+@pytest.mark.parametrize("name", SMOOTH)
+def test_fminsearch_port(name):
+    """The Rust Nelder-Mead takes exactly the Python port's (MATLAB's) steps."""
+    from pynlme.matlab_lb import fminsearch
+
+    f, x0 = SMOOTH[name]
+    for tol in (1e-2, 1e-4, 1e-8):
+        x_k, f_k, ok_k = lb._kernels.fminsearch_py(f, list(x0), tol, tol, 200 * len(x0))
+        x_p, f_p, ok_p = fminsearch(f, x0, tol, tol, 200 * len(x0), np.inf)
+        np.testing.assert_array_equal(x_k, x_p)
+        assert f_k == f_p and ok_k == ok_p
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_matlab_objective_kernels(seed):
+    """MATLAB mode: the per-group QR with Delta and LMEnegloglikelihood."""
+    from pynlme import matlab_lb
+
+    rng = np.random.default_rng(seed)
+    lme, L, _ = random_problem(rng, scale=rng.uniform(0.3, 3))
+    lin = matlab_lb._Linearised.__new__(matlab_lb._Linearised)
+    lin.model, lin.Z, lin.Xw = SimpleNamespace(n_obs=lme.n), lme.Z, lme.Xw
+    Delta = np.linalg.cholesky(np.linalg.inv(L @ L.T)).T  # upper triangular, as nlmefit's
+    reml = bool(rng.integers(0, 2))
+    kernels = lb._kernels
+    try:
+        R11_k, R10_k, R00_k = lin.decompose(Delta)
+        v_k, c_k, _ = lin.negloglik(Delta, reml)
+        lb._kernels = None
+        R11_p, R10_p, R00_p = lin.decompose(Delta)
+        v_p, c_p, _ = lin.negloglik(Delta, reml)
+    finally:
+        lb._kernels = kernels
+    # QR factors are unique up to the signs of their rows.
+    np.testing.assert_allclose(np.abs(R00_k), np.abs(R00_p), rtol=1e-9, atol=1e-12 * np.abs(R00_p).max())
+    np.testing.assert_allclose(np.abs(R11_k), np.abs(R11_p), rtol=1e-9, atol=1e-12 * np.abs(R11_p).max())
+    assert v_k == pytest.approx(v_p, rel=1e-10, abs=1e-8)
+    assert c_k == pytest.approx(c_p, rel=1e-10)

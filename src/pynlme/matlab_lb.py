@@ -160,12 +160,21 @@ class _Linearised:
         w = model.y_pad - f + np.einsum("mnf,f->mn", X, beta) + np.einsum("mnr,mr->mn", Z, b)
         W = weights[..., None]
         self.f = f
-        self.Z = W * Z
-        self.Xw = W * np.concatenate([X, w[..., None]], axis=2)
+        ZXw = np.concatenate([W * Z, W * np.concatenate([X, w[..., None]], axis=2)], axis=2)
+        # The QR factors below depend on [Z_i X_i w_i] only through inner
+        # products: replace each group's rows by its square QR factor once.
+        if ZXw.shape[1] > ZXw.shape[2]:
+            ZXw = np.linalg.qr(ZXw, mode="r")
+        r = Z.shape[2]
+        self.Z = np.ascontiguousarray(ZXw[..., :r])
+        self.Xw = np.ascontiguousarray(ZXw[..., r:])
 
     def decompose(self, Delta):
         """Per-group QR of [Z_i X_i w_i; Delta 0]: R11 (m,r,r), R10c1 (m,r,q+1),
         and the combined fixed-effects factor R00 (q+1, q+1)."""
+        kernels = _kernels()
+        if kernels is not None:
+            return kernels.delta_qr(self.Z, self.Xw, np.ascontiguousarray(Delta))
         m, n, r = self.Z.shape
         q1 = self.Xw.shape[2]
         top = np.concatenate([self.Z, self.Xw], axis=2)
@@ -183,6 +192,10 @@ class _Linearised:
             return 1 / _EPS, None, None
         q = self.Xw.shape[2] - 1
         N = self.model.n_obs
+        kernels = _kernels()
+        if kernels is not None:
+            value, c1, R00 = kernels.matlab_negloglik(self.Z, self.Xw, np.ascontiguousarray(Delta), float(N), reml)
+            return value, c1, np.triu(R00[:q, :q])
         R11, _, R00 = self.decompose(Delta)
         c1 = abs(R00[q, q])
         det_r11 = np.prod(np.diagonal(R11, axis1=1, axis2=2), axis=1)
@@ -192,6 +205,13 @@ class _Linearised:
         else:
             value = N * np.log(c1) - log_ratio
         return value, c1, np.triu(R00[:q, :q])
+
+
+def _kernels():
+    """The Rust kernels if installed and enabled (shared switch with lindstrom_bates)."""
+    from . import lindstrom_bates
+
+    return lindstrom_bates._kernels
 
 
 def _residual_sse(model, beta, b, weights, Delta):
@@ -355,7 +375,15 @@ def fit_lindstrom_bates_matlab(
         def objective(theta, lin=lin):
             return lin.negloglik(cov.to_delta(theta), reml)[0]
 
-        theta_hat, nl_lme, ok = fminsearch(objective, theta, max_iter=lme_max_iter, max_fun_evals=np.inf, **lme_tol)
+        kernels = _kernels()
+        if kernels is not None and (cov.kind == "chol" or not full_cov):
+            theta_hat, nl_lme, ok = kernels.matlab_lme_step(
+                lin.Z, lin.Xw, [float(v) for v in theta], [int(i) for i in cov.rows], [int(j) for j in cov.cols],
+                cov.kind == "chol", float(N), reml, lme_tol["tol_x"], lme_tol["tol_fun"], int(lme_max_iter))
+            theta_hat = np.asarray(theta_hat)
+        else:
+            theta_hat, nl_lme, ok = fminsearch(objective, theta, max_iter=lme_max_iter, max_fun_evals=np.inf,
+                                               **lme_tol)
         if not ok:
             warnings.warn("Iteration limit exceeded in the LME step", RuntimeWarning, stacklevel=3)
 
