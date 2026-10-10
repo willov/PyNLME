@@ -1,0 +1,18 @@
+[package]
+name = "pynlme_kernels"
+version = "0.1.0"
+edition = "2021"
+description = "Optional compiled kernels for pynlme"
+license = "MIT"
+
+[lib]
+name = "pynlme_kernels"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py311"] }
+numpy = "0.27"
+
+[profile.release]
+lto = true
+codegen-units = 1

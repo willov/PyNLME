@@ -69,3 +69,6 @@ node_modules/
 # Documentation builds
 docs/_build/
 site/
+# Rust build output of the optional kernels
+kernels/target/
+kernels/Cargo.lock

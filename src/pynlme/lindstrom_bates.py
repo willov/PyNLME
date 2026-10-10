@@ -18,10 +18,21 @@ Reference: Lindstrom & Bates (1990), Biometrics 46:673-687; Pinheiro & Bates
 (2000), Mixed-Effects Models in S and S-PLUS, ch. 7.
 """
 
+import os
 from dataclasses import dataclass
 
 import numpy as np
 from scipy import optimize
+
+# Optional compiled kernels (kernels/, package pynlme-kernels); the same
+# arithmetic as the NumPy code below, without its per-call overhead.
+# PYNLME_KERNELS=0 disables them.
+try:
+    if os.environ.get("PYNLME_KERNELS", "1") == "0":
+        raise ImportError
+    import pynlme_kernels as _kernels
+except ImportError:
+    _kernels = None
 
 from .model import GroupedModel
 
@@ -240,6 +251,15 @@ class LinearizedLME:
     def solve(self, L: np.ndarray):
         """Profiled log-likelihood and the GLS quantities at factor L."""
         f, r = self.f, self.r
+        if _kernels is not None:
+            logdet, beta, rss, R_xx, u, R_zz = _kernels.lme_solve(self.Z, self.Xw, np.ascontiguousarray(L))
+            dof = self.n - f if self.reml else self.n
+            sigma2 = rss / dof
+            logl = -0.5 * dof * (1.0 + np.log(2.0 * np.pi * sigma2)) - 0.5 * logdet
+            if self.reml:
+                logl -= np.sum(np.log(np.abs(np.diag(R_xx))))
+            self._last = (L, beta, u, rss, R_zz)
+            return logl, beta, sigma2, R_xx.T @ R_xx, u
         top = np.concatenate([self.Z @ L, self.Xw], axis=2)
         R = np.linalg.qr(np.concatenate([top, self.penalty], axis=1), mode="r")
         R_zz, R_zx, r_zw = R[:, :r, :r], R[:, :r, r : r + f], R[:, :r, -1]
@@ -550,6 +570,9 @@ def _em_factor(lme: "LinearizedLME", L: np.ndarray, full: bool, n_iter: int = 20
     ZZ = lme.ZtZ
     ZXw = np.einsum("mnj,mnk->mjk", lme.Z, lme.Xw)
     XX = np.einsum("mnj,mnk->jk", lme.Xw, lme.Xw)
+    if _kernels is not None:
+        return _kernels.em_factor(np.ascontiguousarray(ZZ), np.ascontiguousarray(ZXw), np.ascontiguousarray(XX),
+                                  np.ascontiguousarray(L), float(lme.n), full, n_iter)
     m = ZZ.shape[0]
     for _ in range(n_iter):
         M_inv = _inv_small(ZZ + _inv_small(L @ L.T))
