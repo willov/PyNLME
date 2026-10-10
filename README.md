@@ -162,36 +162,37 @@ R and saemix do this anyway).
 
 | LME | pynlme MATLAB mode (NumPy) | pynlme MATLAB mode (Rust) | MATLAB `nlmefit` | pynlme R mode (NumPy) | pynlme R mode (Rust) | R `nlme` |
 |---|---|---|---|---|---|---|
-| indometh | 140 | 18.6 | 71.8 | 102 | 24.4 | 46.0 |
-| theoph | 28.0 | 16.3 | 16.4 | 108 | 24.3 | 39.0 |
-| orange | 9.6 | 4.9 | 3.8 | 13.1 | 3.0 | 7.0 |
-| linear | 24.2 | 14.1 | 20.9 | 11.2 | 4.6 | 7.0 |
+| indometh | 142 | 18.9 | 72.2 | 81.3 | 18.7 | 46.0 |
+| theoph | 28.3 | 16.2 | 16.1 | 108 | 24.2 | 39.0 |
+| orange | 9.6 | 5.0 | 3.8 | 13.2 | 3.1 | 7.0 |
+| linear | 24.5 | 7.6 | 20.9 | 11.1 | 4.5 | 7.0 |
 
-| FOCE | pynlme | MATLAB `nlmefit` |
-|---|---|---|
-| indometh | 4443 | 1471 |
-| theoph | 3343 | 1736 |
-| orange | 453 | 95.9 |
-| linear | 685 | 139 |
+| FOCE | pynlme (NumPy) | pynlme (Rust) | MATLAB `nlmefit` |
+|---|---|---|---|
+| indometh | 2695 | 693 | 1447 |
+| theoph | 1966 | 617 | 1722 |
+| orange | 411 | 96.5 | 97.9 |
+| linear | 336 | 63.2 | 137 |
 
-| SAEM | pynlme `nlmefitsa` | MATLAB `nlmefitsa` | pynlme `pynlme.r.saemix` | R `saemix` |
-|---|---|---|---|---|
-| theoph | 248 | 876 | 333 | 1371 |
-| orange | 176 | 1540 | 251 | 1218 |
-| linear | 155 | 1657 | 212 | 456 |
+| SAEM | pynlme `nlmefitsa` (NumPy) | pynlme `nlmefitsa` (Rust) | MATLAB `nlmefitsa` | pynlme `pynlme.r.saemix` | R `saemix` |
+|---|---|---|---|---|---|
+| theoph | 246 | 163 | 875 | 238 | 1305 |
+| orange | 175 | 110 | 1538 | 174 | 1253 |
+| linear | 157 | 85.1 | 1665 | 131 | 466 |
 
 In short: on these small problems all programs take milliseconds to a second, and
-the differences rarely matter in practice.
+the differences rarely matter in practice. With the Rust kernels (the default):
 
-- **LME**: with the Rust kernels, pynlme is about as fast as MATLAB (faster on
-  indometh and linear, equal on theoph, slower on orange) and 1.5-2.5 times faster
-  than R `nlme`. Without the kernels (NumPy only), pynlme is 1.2-3 times slower than
-  both.
-- **FOCE**: pynlme is 2-5 times slower than MATLAB. Its FOCE is its own iteration
-  (it reaches MATLAB's optimum or a better one, not MATLAB's path) and is not yet
-  compiled.
-- **SAEM**: pynlme is 2-11 times faster than MATLAB and saemix, with the same
-  iterations and chains as each.
+- **LME**: pynlme is faster than MATLAB on indometh and linear (2.8-3.8 times), equal
+  on theoph and slower on orange (5.0 vs 3.8 ms), and 1.6-2.5 times faster than R
+  `nlme`.
+- **FOCE**: pynlme is 2-3 times faster than MATLAB, and equal on orange. Its FOCE is
+  its own iteration (it reaches MATLAB's optimum or a better one, not MATLAB's path).
+- **SAEM**: pynlme is 5-20 times faster than MATLAB and 3.5-7 times faster than
+  saemix, with the same iterations and chains as each.
+
+Without the kernels (NumPy only) pynlme is 1.1-4 times slower than MATLAB and R for
+LME and FOCE, and still faster for SAEM.
 
 Machine: AMD Ryzen 7 7800X3D (8 cores, 16 threads), 32 GB RAM, Linux (Arch, kernel
 7.2). pynlme 0.5.0 on Python 3.13, NumPy 2.5, SciPy 1.18; MATLAB R2023b Update 1

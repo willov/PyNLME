@@ -1,34 +1,34 @@
 {
   "timings": {
     "indometh": {
-      "lme_single": 0.075495,
-      "foce_single": 3.060989,
-      "lme_full": 0.071776,
-      "foce_full": 1.470706
+      "lme_single": 0.075911,
+      "foce_single": 3.020721,
+      "lme_full": 0.072191,
+      "foce_full": 1.44741
     },
     "theoph": {
-      "lme_single": 0.020626,
-      "foce_single": 3.616701,
-      "saem_single": 0.643156,
-      "lme_full": 0.0164,
-      "foce_full": 1.73616,
-      "saem_full": 0.87621
+      "lme_single": 0.020685,
+      "foce_single": 3.618904,
+      "saem_single": 0.644986,
+      "lme_full": 0.016118,
+      "foce_full": 1.721749,
+      "saem_full": 0.875221
     },
     "orange": {
-      "lme_single": 0.004627,
-      "foce_single": 0.169112,
-      "saem_single": 1.243969,
-      "lme_full": 0.00384,
-      "foce_full": 0.095946,
-      "saem_full": 1.539703
+      "lme_single": 0.004589,
+      "foce_single": 0.168018,
+      "saem_single": 1.246398,
+      "lme_full": 0.003838,
+      "foce_full": 0.097857,
+      "saem_full": 1.537981
     },
     "linear": {
-      "lme_single": 0.022792,
-      "foce_single": 0.248141,
-      "saem_single": 1.472182,
-      "lme_full": 0.020919,
-      "foce_full": 0.139126,
-      "saem_full": 1.657454
+      "lme_single": 0.022799,
+      "foce_single": 0.246772,
+      "saem_single": 1.453591,
+      "lme_full": 0.020948,
+      "foce_full": 0.137274,
+      "saem_full": 1.665441
     }
   },
   "runs": {

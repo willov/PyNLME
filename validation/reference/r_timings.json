@@ -6,9 +6,9 @@
     "linear": 0.007
   },
   "saemix": {
-    "theoph": 1.371,
-    "orange": 1.218,
-    "linear": 0.456
+    "theoph": 1.305,
+    "orange": 1.253,
+    "linear": 0.466
   },
   "r_version": "R version 4.6.1 (2026-06-24)",
   "nlme_version": "3.1.169",
