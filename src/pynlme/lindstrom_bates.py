@@ -573,131 +573,131 @@ _EPS = np.finfo(float).eps
 
 def _optif9(fcn, x, itnlim: int = 20) -> np.ndarray:
     """R's optif9 as called by nlme_increment (method 1, iexp 1, no analytic
-    derivatives, typsiz 1, fscale 1, ndigit 15, gradtl eps^(1/3), steptl
-    sqrt(eps), default stepmx). Returns the vector optif9 leaves in its input
+    derivatives, typsiz 1, fscale 1, ndigit 15, grad_tol eps^(1/3), step_tol
+    sqrt(eps), default max_step). Returns the vector optif9 leaves in its input
     argument: the last accepted iterate before the terminating one."""
     x = np.asarray(x, dtype=float).copy()
     n = x.size
-    rnf = max(1e-15, _EPS)
-    gradtl, steptl = _EPS ** (1 / 3), np.sqrt(_EPS)
-    stepmx = 1000.0 * max(np.linalg.norm(x), 1.0)
+    noise = max(1e-15, _EPS)
+    grad_tol, step_tol = _EPS ** (1 / 3), np.sqrt(_EPS)
+    max_step = 1000.0 * max(np.linalg.norm(x), 1.0)
 
-    def f_safe(v):
+    def evaluate(v):
         value = fcn(v)
         return value if np.isfinite(value) else _DBL_MAX
 
     def forward_gradient(v, fv):
         g = np.empty(n)
         for j in range(n):
-            h = np.sqrt(rnf) * max(abs(v[j]), 1.0)
+            h = np.sqrt(noise) * max(abs(v[j]), 1.0)
             w = v.copy()
             w[j] += h
-            g[j] = (f_safe(w) - fv) / h
+            g[j] = (evaluate(w) - fv) / h
         return g
 
     def central_gradient(v):
         g = np.empty(n)
         for j in range(n):
-            h = rnf ** (1 / 3) * max(abs(v[j]), 1.0)
+            h = noise ** (1 / 3) * max(abs(v[j]), 1.0)
             up, down = v.copy(), v.copy()
             up[j] += h
             down[j] -= h
-            g[j] = (f_safe(up) - f_safe(down)) / (2 * h)
+            g[j] = (evaluate(up) - evaluate(down)) / (2 * h)
         return g
 
     def converged_gradient(v, fv, g):
-        return np.max(np.abs(g) * np.maximum(np.abs(v), 1.0)) / max(abs(fv), 1.0) <= gradtl
+        return np.max(np.abs(g) * np.maximum(np.abs(v), 1.0)) / max(abs(fv), 1.0) <= grad_tol
 
     def line_search(x, f, g, p):
         """A6.3.1: backtracking (quadratic, then cubic) with the Armijo test."""
-        sln = np.linalg.norm(p)
-        if sln > stepmx:
-            p = p * (stepmx / sln)
-            sln = stepmx
-        slp = g @ p
-        rln = np.max(np.abs(p) / np.maximum(np.abs(x), 1.0))
-        rmnlmb = steptl / rln
-        lam, first = 1.0, True
-        plam = pf = 0.0
+        newton_len = np.linalg.norm(p)
+        if newton_len > max_step:
+            p = p * (max_step / newton_len)
+            newton_len = max_step
+        slope = g @ p
+        rel_len = np.max(np.abs(p) / np.maximum(np.abs(x), 1.0))
+        min_step = step_tol / rel_len
+        step, first_backtrack = 1.0, True
+        prev_step = prev_value = 0.0
         while True:
-            xp = x + lam * p
-            fp = f_safe(xp)
-            if fp <= f + slp * 1e-4 * lam:
-                return xp, fp, 0, lam == 1.0 and sln > stepmx * 0.99
-            if lam < rmnlmb:
-                return xp, fp, 1, False
-            if fp >= _DBL_MAX:
-                lam *= 0.1
-                first = True
+            x_new = x + step * p
+            f_new = evaluate(x_new)
+            if f_new <= f + slope * 1e-4 * step:
+                return x_new, f_new, 0, step == 1.0 and newton_len > max_step * 0.99
+            if step < min_step:
+                return x_new, f_new, 1, False
+            if f_new >= _DBL_MAX:
+                step *= 0.1
+                first_backtrack = True
                 continue
-            if first:
-                tlam = -lam * slp / ((fp - f - slp) * 2.0)
-                first = False
+            if first_backtrack:
+                trial = -step * slope / ((f_new - f - slope) * 2.0)
+                first_backtrack = False
             else:
-                t1 = fp - f - lam * slp
-                t2 = pf - f - plam * slp
-                t3 = 1.0 / (lam - plam)
-                a3 = 3.0 * t3 * (t1 / lam**2 - t2 / plam**2)
-                b = t3 * (t2 * lam / plam**2 - t1 * plam / lam**2)
-                disc = b * b - a3 * slp
-                if disc > b * b:
-                    tlam = (-b + (-np.sqrt(disc) if a3 < 0 else np.sqrt(disc))) / a3
+                c1 = f_new - f - step * slope
+                c2 = prev_value - f - prev_step * slope
+                c3 = 1.0 / (step - prev_step)
+                cubic_a = 3.0 * c3 * (c1 / step**2 - c2 / prev_step**2)
+                b = c3 * (c2 * step / prev_step**2 - c1 * prev_step / step**2)
+                discriminant = b * b - cubic_a * slope
+                if discriminant > b * b:
+                    trial = (-b + (-np.sqrt(discriminant) if cubic_a < 0 else np.sqrt(discriminant))) / cubic_a
                 else:
-                    tlam = (-b + (np.sqrt(disc) if a3 < 0 else -np.sqrt(disc))) / a3
-                tlam = min(tlam, lam * 0.5)
-            plam, pf = lam, fp
-            lam = lam * 0.1 if tlam < lam * 0.1 else tlam
+                    trial = (-b + (np.sqrt(discriminant) if cubic_a < 0 else -np.sqrt(discriminant))) / cubic_a
+                trial = min(trial, step * 0.5)
+            prev_step, prev_value = step, f_new
+            step = step * 0.1 if trial < step * 0.1 else trial
 
-    f = f_safe(x)
+    f = evaluate(x)
     g = forward_gradient(x, f)
     if converged_gradient(x, f, g):
         return x
     L = np.eye(n)  # Cholesky factor of the secant Hessian (hsnint)
     central = False
-    consecutive_max = 0
+    n_max_steps = 0
     for iteration in range(1, itnlim + 1):
         while True:
             p = -np.linalg.solve(L.T, np.linalg.solve(L, g))
-            xp, fp, iretcd, mxtake = line_search(x, f, g, p)
-            if iretcd == 1 and not central:
+            x_new, f_new, status, took_max = line_search(x, f, g, p)
+            if status == 1 and not central:
                 central = True  # retry with central differences
                 g = central_gradient(x)
                 continue
             break
-        if iretcd == 1:
+        if status == 1:
             return x
-        gp = central_gradient(xp) if central else forward_gradient(xp, fp)
+        g_new = central_gradient(x_new) if central else forward_gradient(x_new, f_new)
         # Stopping rules (opt_stop): relative gradient, relative step,
         # iteration limit, five consecutive maximal steps.
-        if converged_gradient(xp, fp, gp):
+        if converged_gradient(x_new, f_new, g_new):
             return x
-        if np.max(np.abs(xp - x) / np.maximum(np.abs(xp), 1.0)) <= steptl or iteration >= itnlim:
+        if np.max(np.abs(x_new - x) / np.maximum(np.abs(x_new), 1.0)) <= step_tol or iteration >= itnlim:
             return x
-        if mxtake:
-            consecutive_max += 1
-            if consecutive_max >= 5:
+        if took_max:
+            n_max_steps += 1
+            if n_max_steps >= 5:
                 return x
         else:
-            consecutive_max = 0
-        # BFGS update of the factor (secfac), with the first-update scaling.
-        s, y = xp - x, gp - g
-        den1 = s @ y
-        if den1 >= np.sqrt(_EPS) * np.linalg.norm(s) * np.linalg.norm(y):
+            n_max_steps = 0
+        # BFGS update of the factor (secfac), with the first_backtrack-update scaling.
+        s, y = x_new - x, g_new - g
+        sy = s @ y
+        if sy >= np.sqrt(_EPS) * np.linalg.norm(s) * np.linalg.norm(y):
             u = L.T @ s
-            den2 = u @ u
-            alp = np.sqrt(den1 / den2)
+            s_hs = u @ u
+            scale = np.sqrt(sy / s_hs)
             if iteration == 1:
-                L = alp * L
-                u = alp * u
-                den2, alp = den1, 1.0
+                L = scale * L
+                u = scale * u
+                s_hs, scale = sy, 1.0
             w = L @ u
-            reltol = rnf if central else np.sqrt(rnf)
-            if not np.all(np.abs(y - w) < reltol * np.maximum(np.abs(g), np.abs(gp))):
-                w = y - alp * w
-                u = u * (alp / den1)
+            reltol = noise if central else np.sqrt(noise)
+            if not np.all(np.abs(y - w) < reltol * np.maximum(np.abs(g), np.abs(g_new))):
+                w = y - scale * w
+                u = u * (scale / sy)
                 R = np.linalg.qr(L.T + np.outer(u, w), mode="r")
                 L = (R * np.sign(np.diag(R))[:, None]).T
-        x, f, g = xp, fp, gp
+        x, f, g = x_new, f_new, g_new
     return x
 
 
@@ -749,8 +749,8 @@ def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, mi
     step halving failed.
     """
     m, r, f = model.n_groups, model.n_random, model.n_fixed
-    n_par = m * r + f
-    nrdof = model.n_obs - n_par
+    n_coef = m * r + f
+    resid_dof = model.n_obs - n_coef
 
     def evaluate(beta, B):
         eta = model.A @ beta + np.einsum("mpr,mr->mp", model.B, B)
@@ -766,7 +766,7 @@ def pnls_nlme(model: GroupedModel, L, beta, B, full: bool, max_iter: int = 7, mi
         _, beta_gls, _, _, u = lme.solve(L)
         predicted = lme._last[3]
         d_beta, d_B = beta_gls - beta, u @ L.T - B
-        criterion = np.sqrt(nrdof * max(objective - predicted, 0.0) / (n_par * predicted))
+        criterion = np.sqrt(resid_dof * max(objective - predicted, 0.0) / (n_coef * predicted))
         if criterion < tol:
             return beta, B, L, res, J, objective, iteration, False
         while True:

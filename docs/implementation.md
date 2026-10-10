@@ -102,3 +102,27 @@ As MATLAB's `nlmefitsa` and saemix (Kuhn & Lavielle):
   with R on fresh simulated data each run, simulation studies (`--runslow`), ODE models.
 - `tests/test_nlmefit_api.py`: options, conventions, invariances.
 - `validation/`: datasets, reference scripts (R, MATLAB) and results, benchmark.
+
+## Sources
+
+pynlme implements published algorithms. Where a publication leaves details open (the
+order of steps, tolerances, which iterate is kept), the replicate modes match the
+reference programs; those details were established from their outputs and traces and by
+reading their source code. pynlme's code is its own implementation of the same
+computations, with its own structure and names; it is not a translation of MATLAB's or
+R's code, and contains none of it.
+
+| Component | Published sources |
+|---|---|
+| Lindstrom-Bates (PNLS and LME steps) | Lindstrom & Bates (1990), *Biometrics* 46:673-687; Pinheiro & Bates (2000), *Mixed-Effects Models in S and S-PLUS*, ch. 2 and 7 |
+| Profiled (restricted) likelihood via QR, precision factor Delta | Pinheiro & Bates (2000), sec. 2.2 (eqs. 2.17-2.23) |
+| Starting value of Delta | Bates & Pinheiro (1998), *Computational methods for multilevel models* |
+| EM for the variance components | Pinheiro & Bates (2000), sec. 2.3; Laird & Ware (1982) |
+| Log-Cholesky and matrix-logarithm parametrisations | Pinheiro & Bates (1996), *Statistics and Computing* 6:289-296 |
+| Quasi-Newton refinement (nlm/optif9 behaviour) | Dennis & Schnabel (1983), *Numerical Methods for Unconstrained Optimization and Nonlinear Equations*, Appendix A (A5.6.3, A6.3.1, A9.4.2) |
+| Nelder-Mead (MATLAB's fminsearch behaviour) | Nelder & Mead (1965), *Computer Journal* 7:308-313; Lagarias, Reeds, Wright & Wright (1998), *SIAM J. Optim.* 9:112-147 |
+| Levenberg-Marquardt pre-fit | Levenberg (1944); Marquardt (1963) |
+| FO and FOCE | Beal & Sheiner (1982); Lindstrom & Bates (1990) |
+| SAEM, MCMC kernels, chains | Delyon, Lavielle & Moulines (1999); Kuhn & Lavielle (2005); Comets, Lavenu & Lavielle (2017), *J. Stat. Softw.* 80 |
+| Importance-sampling log-likelihood | Kuhn & Lavielle (2005) |
+

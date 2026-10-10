@@ -50,67 +50,67 @@ def _spacing(x: float) -> float:
 def fminsearch(fun, x0, tol_x: float = 1e-4, tol_fun: float = 1e-4, max_iter=None, max_fun_evals=None):
     """Nelder-Mead as MATLAB's fminsearch (Lagarias et al. 1998): initial
     simplex 5% (0.00025 for zero entries), reflection 1, expansion 2,
-    contraction 0.5, shrink 0.5; stops when the function values and the
+    contraction 0.5, do_shrink 0.5; stops when the function values and the
     simplex both lie within the tolerances."""
     x0 = np.asarray(x0, dtype=float).ravel()
     n = x0.size
     max_iter = 200 * n if max_iter is None else max_iter
     max_fun_evals = 200 * n if max_fun_evals is None else max_fun_evals
-    rho, chi, psi, sigma = 1.0, 2.0, 0.5, 0.5
-    v = np.empty((n + 1, n))
-    fv = np.empty(n + 1)
-    v[0] = x0
-    fv[0] = fun(x0)
+    REFLECT, EXPAND, CONTRACT, SHRINK = 1.0, 2.0, 0.5, 0.5  # Nelder-Mead coefficients
+    simplex = np.empty((n + 1, n))
+    values = np.empty(n + 1)
+    simplex[0] = x0
+    values[0] = fun(x0)
     for j in range(n):
-        y = x0.copy()
-        y[j] = (1 + 0.05) * y[j] if y[j] != 0 else 0.00025
-        v[j + 1] = y
-        fv[j + 1] = fun(y)
-    order = np.argsort(fv, kind="stable")
-    v, fv = v[order], fv[order]
-    evals, iterations = n + 1, 1
-    while evals < max_fun_evals and iterations < max_iter:
-        if (np.max(np.abs(fv[0] - fv[1:])) <= max(tol_fun, 10 * _spacing(fv[0]))
-                and np.max(np.abs(v[1:] - v[0])) <= max(tol_x, 10 * _spacing(np.max(v[0])))):
+        vertex = x0.copy()
+        vertex[j] = (1 + 0.05) * vertex[j] if vertex[j] != 0 else 0.00025
+        simplex[j + 1] = vertex
+        values[j + 1] = fun(vertex)
+    order = np.argsort(values, kind="stable")
+    simplex, values = simplex[order], values[order]
+    n_evals, iterations = n + 1, 1
+    while n_evals < max_fun_evals and iterations < max_iter:
+        if (np.max(np.abs(values[0] - values[1:])) <= max(tol_fun, 10 * _spacing(values[0]))
+                and np.max(np.abs(simplex[1:] - simplex[0])) <= max(tol_x, 10 * _spacing(np.max(simplex[0])))):
             break
-        xbar = v[:n].mean(axis=0)
-        xr = (1 + rho) * xbar - rho * v[n]
-        fxr = fun(xr)
-        evals += 1
-        shrink = False
-        if fxr < fv[0]:
-            xe = (1 + rho * chi) * xbar - rho * chi * v[n]
-            fxe = fun(xe)
-            evals += 1
-            v[n], fv[n] = (xe, fxe) if fxe < fxr else (xr, fxr)
-        elif fxr < fv[n - 1]:
-            v[n], fv[n] = xr, fxr
-        elif fxr < fv[n]:
-            xc = (1 + psi * rho) * xbar - psi * rho * v[n]
-            fxc = fun(xc)
-            evals += 1
-            if fxc <= fxr:
-                v[n], fv[n] = xc, fxc
+        centroid = simplex[:n].mean(axis=0)
+        reflected = (1 + REFLECT) * centroid - REFLECT * simplex[n]
+        f_reflected = fun(reflected)
+        n_evals += 1
+        do_shrink = False
+        if f_reflected < values[0]:
+            expanded = (1 + REFLECT * EXPAND) * centroid - REFLECT * EXPAND * simplex[n]
+            f_expanded = fun(expanded)
+            n_evals += 1
+            simplex[n], values[n] = (expanded, f_expanded) if f_expanded < f_reflected else (reflected, f_reflected)
+        elif f_reflected < values[n - 1]:
+            simplex[n], values[n] = reflected, f_reflected
+        elif f_reflected < values[n]:
+            outside = (1 + CONTRACT * REFLECT) * centroid - CONTRACT * REFLECT * simplex[n]
+            f_outside = fun(outside)
+            n_evals += 1
+            if f_outside <= f_reflected:
+                simplex[n], values[n] = outside, f_outside
             else:
-                shrink = True
+                do_shrink = True
         else:
-            xcc = (1 - psi) * xbar + psi * v[n]
-            fxcc = fun(xcc)
-            evals += 1
-            if fxcc < fv[n]:
-                v[n], fv[n] = xcc, fxcc
+            inside = (1 - CONTRACT) * centroid + CONTRACT * simplex[n]
+            f_inside = fun(inside)
+            n_evals += 1
+            if f_inside < values[n]:
+                simplex[n], values[n] = inside, f_inside
             else:
-                shrink = True
-        if shrink:
+                do_shrink = True
+        if do_shrink:
             for j in range(1, n + 1):
-                v[j] = v[0] + sigma * (v[j] - v[0])
-                fv[j] = fun(v[j])
-            evals += n
-        order = np.argsort(fv, kind="stable")
-        v, fv = v[order], fv[order]
+                simplex[j] = simplex[0] + SHRINK * (simplex[j] - simplex[0])
+                values[j] = fun(simplex[j])
+            n_evals += n
+        order = np.argsort(values, kind="stable")
+        simplex, values = simplex[order], values[order]
         iterations += 1
-    converged = evals < max_fun_evals and iterations < max_iter
-    return v[0], fv[0], converged
+    converged = n_evals < max_fun_evals and iterations < max_iter
+    return simplex[0], values[0], converged
 
 
 class _Covariance:
@@ -170,8 +170,8 @@ class _Linearised:
         self.Xw = np.ascontiguousarray(ZXw[..., r:])
 
     def decompose(self, Delta):
-        """Per-group QR of [Z_i X_i w_i; Delta 0]: R11 (m,r,r), R10c1 (m,r,q+1),
-        and the combined fixed-effects factor R00 (q+1, q+1)."""
+        """Per-group QR of [Z_i X_i w_i; Delta 0]: R_b (m,r,r), R_bx (m,r,q+1),
+        and the combined fixed-effects factor R_x (q+1, q+1)."""
         kernels = _kernels()
         if kernels is not None:
             return kernels.delta_qr(self.Z, self.Xw, np.ascontiguousarray(Delta))
@@ -183,8 +183,8 @@ class _Linearised:
         if A.shape[1] < r + q1:
             A = np.pad(A, ((0, 0), (0, r + q1 - A.shape[1]), (0, 0)))
         R = np.linalg.qr(A, mode="r")
-        R00 = np.linalg.qr(R[:, r : r + q1, r:].reshape(-1, q1), mode="r")
-        return R[:, :r, :r], R[:, :r, r:], R00
+        R_x = np.linalg.qr(R[:, r : r + q1, r:].reshape(-1, q1), mode="r")
+        return R[:, :r, :r], R[:, :r, r:], R_x
 
     def negloglik(self, Delta, reml: bool):
         """nlmefit's LMEnegloglikelihood (varying part of P&B eq. 2.21/2.23)."""
@@ -194,17 +194,17 @@ class _Linearised:
         N = self.model.n_obs
         kernels = _kernels()
         if kernels is not None:
-            value, c1, R00 = kernels.matlab_negloglik(self.Z, self.Xw, np.ascontiguousarray(Delta), float(N), reml)
-            return value, c1, np.triu(R00[:q, :q])
-        R11, _, R00 = self.decompose(Delta)
-        c1 = abs(R00[q, q])
-        det_r11 = np.prod(np.diagonal(R11, axis1=1, axis2=2), axis=1)
-        log_ratio = np.sum(np.log(np.abs(np.linalg.det(Delta) / det_r11)))
+            value, resid_norm, R_x = kernels.matlab_negloglik(self.Z, self.Xw, np.ascontiguousarray(Delta), float(N), reml)
+            return value, resid_norm, np.triu(R_x[:q, :q])
+        R_b, _, R_x = self.decompose(Delta)
+        resid_norm = abs(R_x[q, q])
+        det_rb = np.prod(np.diagonal(R_b, axis1=1, axis2=2), axis=1)
+        log_ratio = np.sum(np.log(np.abs(np.linalg.det(Delta) / det_rb)))
         if reml:
-            value = (N - q) * np.log(c1) + np.log(abs(np.prod(np.diag(R00[:q, :q])))) - log_ratio
+            value = (N - q) * np.log(resid_norm) + np.log(abs(np.prod(np.diag(R_x[:q, :q])))) - log_ratio
         else:
-            value = N * np.log(c1) - log_ratio
-        return value, c1, np.triu(R00[:q, :q])
+            value = N * np.log(resid_norm) - log_ratio
+        return value, resid_norm, np.triu(R_x[:q, :q])
 
 
 def _kernels():
@@ -224,18 +224,18 @@ def _pnls(model, Delta, beta, b, weights, tol_fun, tol_x, max_iter):
     """nlmefit's GNfitPNLS. b is (m, r)."""
     m, r = b.shape
     q = beta.size
-    hD = np.diag(Delta) > np.min(np.diag(Delta)) * 1e8
+    frozen = np.diag(Delta) > np.min(np.diag(Delta)) * 1e8
     sse = _residual_sse(model, beta, b, weights, Delta)
     b_new = np.zeros((m, r))
     iteration = 0
     while iteration < max_iter:
         lin = _Linearised(model, beta, b, weights)
-        R11, R10c1, R00 = lin.decompose(Delta)
-        beta_new = linalg.solve_triangular(R00[:q, :q], R00[:q, q])
-        c = R10c1[:, :, q] - R10c1[:, :, :q] @ beta_new
-        keep = ~hD
+        R_b, R_bx, R_x = lin.decompose(Delta)
+        beta_new = linalg.solve_triangular(R_x[:q, :q], R_x[:q, q])
+        c = R_bx[:, :, q] - R_bx[:, :, :q] @ beta_new
+        keep = ~frozen
         for i in range(m):
-            b_new[i, keep] = linalg.solve_triangular(R11[i][np.ix_(keep, keep)], c[i, keep])
+            b_new[i, keep] = linalg.solve_triangular(R_b[i][np.ix_(keep, keep)], c[i, keep])
         sse_new = _residual_sse(model, beta_new, b_new, weights, Delta)
         step = np.concatenate([beta_new - beta, (b_new - b).ravel()])
         while sse_new > sse:
@@ -354,20 +354,20 @@ def fit_lindstrom_bates_matlab(
     theta = cov.to_theta(Delta)
     Delta = cov.to_delta(theta)
 
-    tol_fac = 2
+    tol_exp = 2
     lme_tol = {"tol_fun": tol_f * 100.0, "tol_x": tol_x * 100.0}  # never tightened (see module docstring)
     lme_max_iter = (cov.n + q) * max_iter
     pnls_max_iter = (r * m + q) * max_iter
-    nl_alt = np.inf
+    prev_objective = np.inf
     converged = False
     collapsed = False
     iteration = 0
     lin = None
     while iteration < max_iter:
         iteration += 1
-        beta_new, b_new = _pnls(model, Delta, beta, b, weights, tol_f * 10.0**tol_fac, tol_x * 10.0**tol_fac,
+        beta_new, b_new = _pnls(model, Delta, beta, b, weights, tol_f * 10.0**tol_exp, tol_x * 10.0**tol_exp,
                                 pnls_max_iter)
-        max_diff = max(np.max(np.abs(beta_new - beta)), np.max(np.abs(b_new - b), initial=0.0))
+        largest_change = max(np.max(np.abs(beta_new - beta)), np.max(np.abs(b_new - b), initial=0.0))
         beta, b = beta_new, b_new
 
         lin = _Linearised(model, beta, b, weights)
@@ -377,12 +377,12 @@ def fit_lindstrom_bates_matlab(
 
         kernels = _kernels()
         if kernels is not None and (cov.kind == "chol" or not full_cov):
-            theta_hat, nl_lme, ok = kernels.matlab_lme_step(
+            theta_hat, objective_value, ok = kernels.matlab_lme_step(
                 lin.Z, lin.Xw, [float(v) for v in theta], [int(i) for i in cov.rows], [int(j) for j in cov.cols],
                 cov.kind == "chol", float(N), reml, lme_tol["tol_x"], lme_tol["tol_fun"], int(lme_max_iter))
             theta_hat = np.asarray(theta_hat)
         else:
-            theta_hat, nl_lme, ok = fminsearch(objective, theta, max_iter=lme_max_iter, max_fun_evals=np.inf,
+            theta_hat, objective_value, ok = fminsearch(objective, theta, max_iter=lme_max_iter, max_fun_evals=np.inf,
                                                **lme_tol)
         if not ok:
             warnings.warn("Iteration limit exceeded in the LME step", RuntimeWarning, stacklevel=3)
@@ -405,16 +405,16 @@ def fit_lindstrom_bates_matlab(
         # and where fminsearch stops there is decided by rounding (in MATLAB
         # too: its result changes with the number of BLAS threads).
         collapsed = collapsed or _collapsed(Delta)
-        nl_diff = abs(nl_alt - nl_lme)
-        nl_alt = nl_lme
+        objective_change = abs(prev_objective - objective_value)
+        prev_objective = objective_value
         if verbose:
             print(f"ALT {iteration - 1}: beta={np.array2string(beta, precision=10)} theta={np.array2string(theta, precision=10)} "
-                  f"-logl(varying part)={nl_lme:.10g} tolFac={tol_fac}")
-        if nl_diff <= tol_f * 10.0**tol_fac and max_diff <= tol_x * 10.0**tol_fac:
-            if tol_fac <= 0:
+                  f"-logl(varying part)={objective_value:.10g} tolFac={tol_exp}")
+        if objective_change <= tol_f * 10.0**tol_exp and largest_change <= tol_x * 10.0**tol_exp:
+            if tol_exp <= 0:
                 converged = True
                 break
-            tol_fac -= 1
+            tol_exp -= 1
 
     if _collapsed(Delta):
         warnings.warn(
@@ -425,16 +425,16 @@ def fit_lindstrom_bates_matlab(
     elif collapsed:
         _log.info("nlmefit: a random-effects variance was zero during the iterations (flat likelihood); "
                   "the path there depends on rounding, in MATLAB too")
-    nl_lme, c1, R00 = lin.negloglik(Delta, reml)
+    objective_value, resid_norm, R_x = lin.negloglik(Delta, reml)
     dof = N - q if reml else N
-    klike = (np.log(dof) - np.log(2 * np.pi) - 1) * dof / 2
-    logl = klike - nl_lme + float(np.sum(np.log(weights[model.mask])))
+    const = (np.log(dof) - np.log(2 * np.pi) - 1) * dof / 2
+    logl = const - objective_value + float(np.sum(np.log(weights[model.mask])))
     # MATLAB reports sigma^2 = c_1^2 / N for both LME and RELME. nlmefit()
     # rescales RELME results to that convention itself, so return the RSS/(N-q)
     # form it expects.
-    sigma2 = c1**2 / dof
+    sigma2 = resid_norm**2 / dof
     Delta_inv = np.linalg.inv(Delta)
-    R00_inv = np.linalg.inv(R00)
+    R00_inv = np.linalg.inv(R_x)
     error_param = None
     if error_model == "combined":
         error_param = ab

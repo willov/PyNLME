@@ -308,34 +308,34 @@ fn norm(v: &[f64]) -> f64 {
 fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec<f64> {
     let n = x0.len();
     let eps = f64::EPSILON;
-    let rnf = 1e-15_f64.max(eps);
-    let gradtl = eps.powf(1.0 / 3.0);
-    let steptl = eps.sqrt();
+    let noise = 1e-15_f64.max(eps);
+    let grad_tol = eps.powf(1.0 / 3.0);
+    let step_tol = eps.sqrt();
     let mut x = x0.to_vec();
-    let stepmx = 1000.0 * norm(&x).max(1.0);
-    let mut f_safe = |v: &[f64]| {
+    let max_step = 1000.0 * norm(&x).max(1.0);
+    let mut evaluate = |v: &[f64]| {
         let value = fcn(v);
         if value.is_finite() { value } else { DBL_MAX }
     };
-    let forward_gradient = |f_safe: &mut dyn FnMut(&[f64]) -> f64, v: &[f64], fv: f64| {
+    let forward_gradient = |evaluate: &mut dyn FnMut(&[f64]) -> f64, v: &[f64], fv: f64| {
         let mut g = vec![0.0; n];
         for j in 0..n {
-            let h = rnf.sqrt() * v[j].abs().max(1.0);
+            let h = noise.sqrt() * v[j].abs().max(1.0);
             let mut w = v.to_vec();
             w[j] += h;
-            g[j] = (f_safe(&w) - fv) / h;
+            g[j] = (evaluate(&w) - fv) / h;
         }
         g
     };
-    let central_gradient = |f_safe: &mut dyn FnMut(&[f64]) -> f64, v: &[f64]| {
+    let central_gradient = |evaluate: &mut dyn FnMut(&[f64]) -> f64, v: &[f64]| {
         let mut g = vec![0.0; n];
         for j in 0..n {
-            let h = rnf.powf(1.0 / 3.0) * v[j].abs().max(1.0);
+            let h = noise.powf(1.0 / 3.0) * v[j].abs().max(1.0);
             let mut up = v.to_vec();
             let mut down = v.to_vec();
             up[j] += h;
             down[j] -= h;
-            g[j] = (f_safe(&up) - f_safe(&down)) / (2.0 * h);
+            g[j] = (evaluate(&up) - evaluate(&down)) / (2.0 * h);
         }
         g
     };
@@ -344,11 +344,11 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
         for j in 0..n {
             worst = worst.max(g[j].abs() * v[j].abs().max(1.0));
         }
-        worst / fv.abs().max(1.0) <= gradtl
+        worst / fv.abs().max(1.0) <= grad_tol
     };
 
-    let mut f = f_safe(&x);
-    let mut g = forward_gradient(&mut f_safe, &x, f);
+    let mut f = evaluate(&x);
+    let mut g = forward_gradient(&mut evaluate, &x, f);
     if converged_gradient(&x, f, &g) {
         return x;
     }
@@ -357,9 +357,9 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
         l[i * n + i] = 1.0;
     }
     let mut central = false;
-    let mut consecutive_max = 0;
+    let mut n_max_steps = 0;
     for iteration in 1..=itnlim {
-        let (xp, fp, iretcd, mxtake) = loop {
+        let (x_new, f_new, status, took_max) = loop {
             // p = -(L L')^-1 g
             let mut p: Vec<f64> = g.iter().map(|v| -v).collect();
             solve_lower(&l, n, &mut p);
@@ -371,116 +371,116 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
                 p[i] = s / l[i * n + i];
             }
             // Line search (A6.3.1)
-            let mut sln = norm(&p);
-            if sln > stepmx {
-                let scale = stepmx / sln;
+            let mut newton_len = norm(&p);
+            if newton_len > max_step {
+                let scale = max_step / newton_len;
                 p.iter_mut().for_each(|v| *v *= scale);
-                sln = stepmx;
+                newton_len = max_step;
             }
-            let slp: f64 = g.iter().zip(&p).map(|(a, b)| a * b).sum();
-            let mut rln = 0.0_f64;
+            let slope: f64 = g.iter().zip(&p).map(|(a, b)| a * b).sum();
+            let mut rel_len = 0.0_f64;
             for j in 0..n {
-                rln = rln.max(p[j].abs() / x[j].abs().max(1.0));
+                rel_len = rel_len.max(p[j].abs() / x[j].abs().max(1.0));
             }
-            let rmnlmb = steptl / rln;
-            let (mut lam, mut first, mut plam, mut pf) = (1.0_f64, true, 0.0_f64, 0.0_f64);
+            let min_step = step_tol / rel_len;
+            let (mut step, mut first_backtrack, mut prev_step, mut prev_value) = (1.0_f64, true, 0.0_f64, 0.0_f64);
             let result = loop {
-                let xp: Vec<f64> = x.iter().zip(&p).map(|(a, b)| a + lam * b).collect();
-                let fp = f_safe(&xp);
-                if fp <= f + slp * 1e-4 * lam {
-                    break (xp, fp, 0, lam == 1.0 && sln > stepmx * 0.99);
+                let x_new: Vec<f64> = x.iter().zip(&p).map(|(a, b)| a + step * b).collect();
+                let f_new = evaluate(&x_new);
+                if f_new <= f + slope * 1e-4 * step {
+                    break (x_new, f_new, 0, step == 1.0 && newton_len > max_step * 0.99);
                 }
-                if lam < rmnlmb {
-                    break (xp, fp, 1, false);
+                if step < min_step {
+                    break (x_new, f_new, 1, false);
                 }
-                if fp >= DBL_MAX {
-                    lam *= 0.1;
-                    first = true;
+                if f_new >= DBL_MAX {
+                    step *= 0.1;
+                    first_backtrack = true;
                     continue;
                 }
-                let mut tlam;
-                if first {
-                    tlam = -lam * slp / ((fp - f - slp) * 2.0);
-                    first = false;
+                let mut trial;
+                if first_backtrack {
+                    trial = -step * slope / ((f_new - f - slope) * 2.0);
+                    first_backtrack = false;
                 } else {
-                    let t1 = fp - f - lam * slp;
-                    let t2 = pf - f - plam * slp;
-                    let t3 = 1.0 / (lam - plam);
-                    let a3 = 3.0 * t3 * (t1 / (lam * lam) - t2 / (plam * plam));
-                    let b = t3 * (t2 * lam / (plam * plam) - t1 * plam / (lam * lam));
-                    let disc = b * b - a3 * slp;
-                    tlam = if disc > b * b {
-                        (-b + if a3 < 0.0 { -disc.sqrt() } else { disc.sqrt() }) / a3
+                    let c1 = f_new - f - step * slope;
+                    let c2 = prev_value - f - prev_step * slope;
+                    let c3 = 1.0 / (step - prev_step);
+                    let cubic_a = 3.0 * c3 * (c1 / (step * step) - c2 / (prev_step * prev_step));
+                    let b = c3 * (c2 * step / (prev_step * prev_step) - c1 * prev_step / (step * step));
+                    let discriminant = b * b - cubic_a * slope;
+                    trial = if discriminant > b * b {
+                        (-b + if cubic_a < 0.0 { -discriminant.sqrt() } else { discriminant.sqrt() }) / cubic_a
                     } else {
-                        (-b + if a3 < 0.0 { disc.sqrt() } else { -disc.sqrt() }) / a3
+                        (-b + if cubic_a < 0.0 { discriminant.sqrt() } else { -discriminant.sqrt() }) / cubic_a
                     };
-                    tlam = tlam.min(lam * 0.5);
+                    trial = trial.min(step * 0.5);
                 }
-                plam = lam;
-                pf = fp;
-                lam = if tlam < lam * 0.1 { lam * 0.1 } else { tlam };
+                prev_step = step;
+                prev_value = f_new;
+                step = if trial < step * 0.1 { step * 0.1 } else { trial };
             };
             if result.2 == 1 && !central {
                 central = true; // retry with central differences
-                g = central_gradient(&mut f_safe, &x);
+                g = central_gradient(&mut evaluate, &x);
                 continue;
             }
             break result;
         };
-        if iretcd == 1 {
+        if status == 1 {
             return x;
         }
-        let gp = if central { central_gradient(&mut f_safe, &xp) } else { forward_gradient(&mut f_safe, &xp, fp) };
-        if converged_gradient(&xp, fp, &gp) {
+        let g_new = if central { central_gradient(&mut evaluate, &x_new) } else { forward_gradient(&mut evaluate, &x_new, f_new) };
+        if converged_gradient(&x_new, f_new, &g_new) {
             return x;
         }
-        let mut rsx = 0.0_f64;
+        let mut rel_change = 0.0_f64;
         for j in 0..n {
-            rsx = rsx.max((xp[j] - x[j]).abs() / xp[j].abs().max(1.0));
+            rel_change = rel_change.max((x_new[j] - x[j]).abs() / x_new[j].abs().max(1.0));
         }
-        if rsx <= steptl || iteration >= itnlim {
+        if rel_change <= step_tol || iteration >= itnlim {
             return x;
         }
-        if mxtake {
-            consecutive_max += 1;
-            if consecutive_max >= 5 {
+        if took_max {
+            n_max_steps += 1;
+            if n_max_steps >= 5 {
                 return x;
             }
         } else {
-            consecutive_max = 0;
+            n_max_steps = 0;
         }
-        // BFGS update of the factor (secfac), with the first-update scaling.
-        let s: Vec<f64> = xp.iter().zip(&x).map(|(a, b)| a - b).collect();
-        let y: Vec<f64> = gp.iter().zip(&g).map(|(a, b)| a - b).collect();
-        let den1: f64 = s.iter().zip(&y).map(|(a, b)| a * b).sum();
-        if den1 >= eps.sqrt() * norm(&s) * norm(&y) {
+        // BFGS update of the factor (secfac), with the first_backtrack-update scaling.
+        let s: Vec<f64> = x_new.iter().zip(&x).map(|(a, b)| a - b).collect();
+        let y: Vec<f64> = g_new.iter().zip(&g).map(|(a, b)| a - b).collect();
+        let sy: f64 = s.iter().zip(&y).map(|(a, b)| a * b).sum();
+        if sy >= eps.sqrt() * norm(&s) * norm(&y) {
             let mut u = vec![0.0; n]; // L' s
             for i in 0..n {
                 for k in 0..n {
                     u[i] += l[k * n + i] * s[k];
                 }
             }
-            let mut den2: f64 = u.iter().map(|v| v * v).sum();
-            let mut alp = (den1 / den2).sqrt();
+            let mut s_hs: f64 = u.iter().map(|v| v * v).sum();
+            let mut scale = (sy / s_hs).sqrt();
             if iteration == 1 {
-                l.iter_mut().for_each(|v| *v *= alp);
-                u.iter_mut().for_each(|v| *v *= alp);
-                den2 = den1;
-                alp = 1.0;
+                l.iter_mut().for_each(|v| *v *= scale);
+                u.iter_mut().for_each(|v| *v *= scale);
+                s_hs = sy;
+                scale = 1.0;
             }
-            let _ = den2;
+            let _ = s_hs;
             let mut w = vec![0.0; n]; // L u
             for i in 0..n {
                 for k in 0..n {
                     w[i] += l[i * n + k] * u[k];
                 }
             }
-            let reltol = if central { rnf } else { rnf.sqrt() };
-            let skip = (0..n).all(|i| (y[i] - w[i]).abs() < reltol * g[i].abs().max(gp[i].abs()));
-            if !skip {
+            let reltol = if central { noise } else { noise.sqrt() };
+            let skip_update = (0..n).all(|i| (y[i] - w[i]).abs() < reltol * g[i].abs().max(g_new[i].abs()));
+            if !skip_update {
                 for i in 0..n {
-                    w[i] = y[i] - alp * w[i];
-                    u[i] *= alp / den1;
+                    w[i] = y[i] - scale * w[i];
+                    u[i] *= scale / sy;
                 }
                 // R of L' + u w', then L = R' with a positive diagonal
                 let mut a = vec![0.0; n * n];
@@ -499,9 +499,9 @@ fn optif9<F: FnMut(&[f64]) -> f64>(mut fcn: F, x0: &[f64], itnlim: usize) -> Vec
                 }
             }
         }
-        x = xp;
-        f = fp;
-        g = gp;
+        x = x_new;
+        f = f_new;
+        g = g_new;
     }
     x
 }
@@ -714,9 +714,9 @@ fn lme_gradient<'py>(
 // ----- MATLAB nlmefit's LME objective --------------------------------------
 
 struct DeltaQr {
-    r11: Array3<f64>,
-    r10c1: Array3<f64>,
-    r00: Array2<f64>,
+    r_b: Array3<f64>,
+    r_bx: Array3<f64>,
+    r_x: Array2<f64>,
 }
 
 /// Per-group QR of [Z_i X_i w_i; Delta 0] (as nlmefit's LMEnegloglikelihood and
@@ -727,8 +727,8 @@ fn delta_qr_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, delta: ArrayView2<f64>
     let rows = (k + r).max(r + q1);
     let cols = r + q1;
     let mut a = vec![0.0; rows * cols];
-    let mut r11 = Array3::<f64>::zeros((m, r, r));
-    let mut r10c1 = Array3::<f64>::zeros((m, r, q1));
+    let mut r_b = Array3::<f64>::zeros((m, r, r));
+    let mut r_bx = Array3::<f64>::zeros((m, r, q1));
     let mut blocks = vec![0.0; m * q1 * q1];
     for g in 0..m {
         a.iter_mut().for_each(|x| *x = 0.0);
@@ -748,10 +748,10 @@ fn delta_qr_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, delta: ArrayView2<f64>
         householder_r(&mut a, rows, cols);
         for i in 0..r {
             for c in i..r {
-                r11[[g, i, c]] = a[i * cols + c];
+                r_b[[g, i, c]] = a[i * cols + c];
             }
             for c in 0..q1 {
-                r10c1[[g, i, c]] = a[i * cols + r + c];
+                r_bx[[g, i, c]] = a[i * cols + r + c];
             }
         }
         for i in 0..q1 {
@@ -761,13 +761,13 @@ fn delta_qr_core(z: ArrayView3<f64>, xw: ArrayView3<f64>, delta: ArrayView2<f64>
         }
     }
     householder_r(&mut blocks, m * q1, q1);
-    let mut r00 = Array2::<f64>::zeros((q1, q1));
+    let mut r_x = Array2::<f64>::zeros((q1, q1));
     for i in 0..q1 {
         for c in i..q1 {
-            r00[[i, c]] = blocks[i * q1 + c];
+            r_x[[i, c]] = blocks[i * q1 + c];
         }
     }
-    DeltaQr { r11, r10c1, r00 }
+    DeltaQr { r_b, r_bx, r_x }
 }
 
 #[pyfunction]
@@ -778,7 +778,7 @@ fn delta_qr<'py>(
     delta: PyReadonlyArray2<'py, f64>,
 ) -> (Bound<'py, PyArray3<f64>>, Bound<'py, PyArray3<f64>>, Bound<'py, PyArray2<f64>>) {
     let d = delta_qr_core(z.as_array(), xw.as_array(), delta.as_array());
-    (d.r11.into_pyarray(py), d.r10c1.into_pyarray(py), d.r00.into_pyarray(py))
+    (d.r_b.into_pyarray(py), d.r_bx.into_pyarray(py), d.r_x.into_pyarray(py))
 }
 
 /// nlmefit's LMEnegloglikelihood (varying part of Pinheiro & Bates eq. 2.21 or
@@ -794,9 +794,9 @@ fn matlab_negloglik<'py>(
 ) -> (f64, f64, Bound<'py, PyArray2<f64>>) {
     let delta = delta.as_array();
     let d = delta_qr_core(z.as_array(), xw.as_array(), delta);
-    let (m, r, _) = d.r11.dim();
-    let q = d.r00.len_of(Axis(0)) - 1;
-    let c1 = d.r00[[q, q]].abs();
+    let (m, r, _) = d.r_b.dim();
+    let q = d.r_x.len_of(Axis(0)) - 1;
+    let resid_norm = d.r_x[[q, q]].abs();
     let mut log_det_delta = 0.0;
     for i in 0..r {
         log_det_delta += delta[[i, i]].abs().ln(); // Delta is upper triangular
@@ -804,19 +804,19 @@ fn matlab_negloglik<'py>(
     let mut log_ratio = m as f64 * log_det_delta;
     for g in 0..m {
         for i in 0..r {
-            log_ratio -= d.r11[[g, i, i]].abs().ln();
+            log_ratio -= d.r_b[[g, i, i]].abs().ln();
         }
     }
     let value = if reml {
-        let mut log_r00 = 0.0;
+        let mut log_rx = 0.0;
         for i in 0..q {
-            log_r00 += d.r00[[i, i]].abs().ln();
+            log_rx += d.r_x[[i, i]].abs().ln();
         }
-        (n_obs - q as f64) * c1.ln() + log_r00 - log_ratio
+        (n_obs - q as f64) * resid_norm.ln() + log_rx - log_ratio
     } else {
-        n_obs * c1.ln() - log_ratio
+        n_obs * resid_norm.ln() - log_ratio
     };
-    (value, c1, d.r00.into_pyarray(py))
+    (value, resid_norm, d.r_x.into_pyarray(py))
 }
 
 /// MATLAB's eps(x).
@@ -825,82 +825,87 @@ fn spacing(x: f64) -> f64 {
     if a == 0.0 { f64::from_bits(1) } else if !a.is_finite() { f64::NAN } else { f64::from_bits(a.to_bits() + 1) - a }
 }
 
+// Nelder-Mead coefficients
+const REFLECT: f64 = 1.0;
+const EXPAND: f64 = 2.0;
+const CONTRACT: f64 = 0.5;
+const SHRINK: f64 = 0.5;
+
 /// Nelder-Mead as MATLAB's fminsearch (Lagarias et al. 1998), as pynlme's
 /// matlab_lb.fminsearch. Returns (x, f(x), converged).
 fn fminsearch<F: FnMut(&[f64]) -> f64>(mut fun: F, x0: &[f64], tol_x: f64, tol_fun: f64, max_iter: usize,
                                       max_fun_evals: f64) -> (Vec<f64>, f64, bool) {
     let n = x0.len();
-    let (rho, chi, psi, sigma) = (1.0, 2.0, 0.5, 0.5);
-    let mut v: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
-    let mut fv: Vec<f64> = Vec::with_capacity(n + 1);
-    v.push(x0.to_vec());
-    fv.push(fun(x0));
+    let mut simplex: Vec<Vec<f64>> = Vec::with_capacity(n + 1);
+    let mut values: Vec<f64> = Vec::with_capacity(n + 1);
+    simplex.push(x0.to_vec());
+    values.push(fun(x0));
     for j in 0..n {
-        let mut y = x0.to_vec();
-        y[j] = if y[j] != 0.0 { (1.0 + 0.05) * y[j] } else { 0.00025 };
-        fv.push(fun(&y));
-        v.push(y);
+        let mut vertex = x0.to_vec();
+        vertex[j] = if vertex[j] != 0.0 { (1.0 + 0.05) * vertex[j] } else { 0.00025 };
+        values.push(fun(&vertex));
+        simplex.push(vertex);
     }
-    let sort = |v: &mut Vec<Vec<f64>>, fv: &mut Vec<f64>| {
-        let mut idx: Vec<usize> = (0..fv.len()).collect();
-        idx.sort_by(|&a, &b| fv[a].partial_cmp(&fv[b]).unwrap_or(std::cmp::Ordering::Equal)); // stable
-        *v = idx.iter().map(|&i| v[i].clone()).collect();
-        *fv = idx.iter().map(|&i| fv[i]).collect();
+    let sort = |simplex: &mut Vec<Vec<f64>>, values: &mut Vec<f64>| {
+        let mut idx: Vec<usize> = (0..values.len()).collect();
+        idx.sort_by(|&a, &b| values[a].partial_cmp(&values[b]).unwrap_or(std::cmp::Ordering::Equal)); // stable
+        *simplex = idx.iter().map(|&i| simplex[i].clone()).collect();
+        *values = idx.iter().map(|&i| values[i]).collect();
     };
-    sort(&mut v, &mut fv);
-    let (mut evals, mut iterations) = ((n + 1) as f64, 1usize);
-    while evals < max_fun_evals && iterations < max_iter {
-        let fspread = (1..=n).map(|j| (fv[0] - fv[j]).abs()).fold(0.0, f64::max);
-        let xspread = (1..=n).flat_map(|j| (0..n).map({ let v = &v; move |i| (v[j][i] - v[0][i]).abs() }))
+    sort(&mut simplex, &mut values);
+    let (mut n_evals, mut iterations) = ((n + 1) as f64, 1usize);
+    while n_evals < max_fun_evals && iterations < max_iter {
+        let fspread = (1..=n).map(|j| (values[0] - values[j]).abs()).fold(0.0, f64::max);
+        let xspread = (1..=n).flat_map(|j| (0..n).map({ let simplex = &simplex; move |i| (simplex[j][i] - simplex[0][i]).abs() }))
             .fold(0.0, f64::max);
-        let vmax = v[0].iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-        if fspread <= tol_fun.max(10.0 * spacing(fv[0])) && xspread <= tol_x.max(10.0 * spacing(vmax)) {
+        let vmax = simplex[0].iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        if fspread <= tol_fun.max(10.0 * spacing(values[0])) && xspread <= tol_x.max(10.0 * spacing(vmax)) {
             break;
         }
-        let mut xbar = vec![0.0; n];
-        for row in v.iter().take(n) {
+        let mut centroid = vec![0.0; n];
+        for row in simplex.iter().take(n) {
             for i in 0..n {
-                xbar[i] += row[i];
+                centroid[i] += row[i];
             }
         }
-        xbar.iter_mut().for_each(|x| *x /= n as f64);
-        let point = |a: f64, b: f64, w: &Vec<f64>| -> Vec<f64> { (0..n).map(|i| a * xbar[i] + b * w[i]).collect() };
-        let xr = point(1.0 + rho, -rho, &v[n]);
-        let fxr = fun(&xr);
-        evals += 1.0;
-        let mut shrink = false;
-        if fxr < fv[0] {
-            let xe = point(1.0 + rho * chi, -rho * chi, &v[n]);
-            let fxe = fun(&xe);
-            evals += 1.0;
-            if fxe < fxr { v[n] = xe; fv[n] = fxe; } else { v[n] = xr; fv[n] = fxr; }
-        } else if fxr < fv[n - 1] {
-            v[n] = xr;
-            fv[n] = fxr;
-        } else if fxr < fv[n] {
-            let xc = point(1.0 + psi * rho, -psi * rho, &v[n]);
-            let fxc = fun(&xc);
-            evals += 1.0;
-            if fxc <= fxr { v[n] = xc; fv[n] = fxc; } else { shrink = true; }
+        centroid.iter_mut().for_each(|x| *x /= n as f64);
+        let affine = |a: f64, b: f64, vertex: &Vec<f64>| -> Vec<f64> { (0..n).map(|i| a * centroid[i] + b * vertex[i]).collect() };
+        let reflected = affine(1.0 + REFLECT, -REFLECT, &simplex[n]);
+        let f_reflected = fun(&reflected);
+        n_evals += 1.0;
+        let mut do_shrink = false;
+        if f_reflected < values[0] {
+            let expanded = affine(1.0 + REFLECT * EXPAND, -REFLECT * EXPAND, &simplex[n]);
+            let f_expanded = fun(&expanded);
+            n_evals += 1.0;
+            if f_expanded < f_reflected { simplex[n] = expanded; values[n] = f_expanded; } else { simplex[n] = reflected; values[n] = f_reflected; }
+        } else if f_reflected < values[n - 1] {
+            simplex[n] = reflected;
+            values[n] = f_reflected;
+        } else if f_reflected < values[n] {
+            let outside = affine(1.0 + CONTRACT * REFLECT, -CONTRACT * REFLECT, &simplex[n]);
+            let f_outside = fun(&outside);
+            n_evals += 1.0;
+            if f_outside <= f_reflected { simplex[n] = outside; values[n] = f_outside; } else { do_shrink = true; }
         } else {
-            let xcc = point(1.0 - psi, psi, &v[n]);
-            let fxcc = fun(&xcc);
-            evals += 1.0;
-            if fxcc < fv[n] { v[n] = xcc; fv[n] = fxcc; } else { shrink = true; }
+            let inside = affine(1.0 - CONTRACT, CONTRACT, &simplex[n]);
+            let f_inside = fun(&inside);
+            n_evals += 1.0;
+            if f_inside < values[n] { simplex[n] = inside; values[n] = f_inside; } else { do_shrink = true; }
         }
-        if shrink {
+        if do_shrink {
             for j in 1..=n {
-                let w: Vec<f64> = (0..n).map(|i| v[0][i] + sigma * (v[j][i] - v[0][i])).collect();
-                fv[j] = fun(&w);
-                v[j] = w;
+                let vertex: Vec<f64> = (0..n).map(|i| simplex[0][i] + SHRINK * (simplex[j][i] - simplex[0][i])).collect();
+                values[j] = fun(&vertex);
+                simplex[j] = vertex;
             }
-            evals += n as f64;
+            n_evals += n as f64;
         }
-        sort(&mut v, &mut fv);
+        sort(&mut simplex, &mut values);
         iterations += 1;
     }
-    let converged = evals < max_fun_evals && iterations < max_iter;
-    (v[0].clone(), fv[0], converged)
+    let converged = n_evals < max_fun_evals && iterations < max_iter;
+    (simplex[0].clone(), values[0], converged)
 }
 
 /// fminsearch on a Python function (for testing the port against pynlme's
@@ -960,7 +965,7 @@ fn matlab_lme_step(
             };
         }
         let d = delta_qr_core(z, xw, delta.view());
-        let c1 = d.r00[[q, q]].abs();
+        let resid_norm = d.r_x[[q, q]].abs();
         let mut log_ratio = 0.0;
         let mut log_det_delta = 0.0;
         for i in 0..r {
@@ -969,14 +974,14 @@ fn matlab_lme_step(
         log_ratio += m as f64 * log_det_delta;
         for g in 0..m {
             for i in 0..r {
-                log_ratio -= d.r11[[g, i, i]].abs().ln();
+                log_ratio -= d.r_b[[g, i, i]].abs().ln();
             }
         }
         let value = if reml {
-            let log_r00: f64 = (0..q).map(|i| d.r00[[i, i]].abs().ln()).sum();
-            (n_obs - q as f64) * c1.ln() + log_r00 - log_ratio
+            let log_rx: f64 = (0..q).map(|i| d.r_x[[i, i]].abs().ln()).sum();
+            (n_obs - q as f64) * resid_norm.ln() + log_rx - log_ratio
         } else {
-            n_obs * c1.ln() - log_ratio
+            n_obs * resid_norm.ln() - log_ratio
         };
         value
     };
