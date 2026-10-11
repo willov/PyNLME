@@ -19,6 +19,9 @@ set(0, 'DefaultFigureVisible', 'off');
 warning('off', 'all');
 dataDir = fullfile('validation', 'scaling', 'data');
 sizes = [10 100 1000];
+if ~isempty(getenv('SCALING_SIZES'))  % e.g. SCALING_SIZES=10,100
+    sizes = str2double(strsplit(getenv('SCALING_SIZES'), ','));
+end
 limit = 60;
 methods = {'LME', 'FOCE', 'SAEM'};
 results = struct();

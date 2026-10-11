@@ -215,7 +215,9 @@ times faster than MATLAB's, but nlmixr2's FOCEi is 6 times faster than pynlme on
 closed-form model and far faster on the ODE model, where nlmixr2 uses sensitivity
 equations and pynlme finite differences. All programs reach the same fits.
 
-Regenerate: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in
+Verify on your machine: `bash validation/run_benchmarks.sh` runs every benchmark with
+what is installed (pynlme always; R and MATLAB when available, otherwise their stored
+timings are used) and prints these tables. Or step by step: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in
 MATLAB, then `uv run python validation/benchmark.py --markdown`.
 
 The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile the

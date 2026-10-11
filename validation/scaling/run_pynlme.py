@@ -13,6 +13,7 @@ Writes validation/scaling/results/pynlme.json.
 
 import csv
 import json
+import os
 import sys
 import time
 import warnings
@@ -27,6 +28,11 @@ from tests.validation.cases import one_compartment_oral_v  # noqa: E402
 from validation.scaling.make_data import DATA, SIZES  # noqa: E402
 
 LIMIT_S = 60.0
+# SCALING_SIZES=10,100 runs only these sizes (as the R and MATLAB runners).
+SIZES_TO_RUN = tuple(
+    int(n)
+    for n in os.environ.get("SCALING_SIZES", ",".join(map(str, SIZES))).split(",")
+)
 RTOL, ATOL = 1e-8, 1e-10
 RESULTS = Path(__file__).resolve().parent / "results"
 MODELS = Path(__file__).resolve().parents[1] / "models"
@@ -159,7 +165,7 @@ def main() -> None:
     for name in sys.argv[1:] or ("oral", "mm"):
         results[name] = {}
         too_slow = set()
-        for n in SIZES:
+        for n in SIZES_TO_RUN:
             for method, run in runs(name, n):
                 entry = results.setdefault(name, {}).setdefault(method, {})
                 if method in too_slow:
