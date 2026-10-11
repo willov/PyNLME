@@ -13,6 +13,10 @@ models correctly.
 
 ### Changed
 
+- `sund_model`: an integrator failure (e.g. a stiff system at extreme parameters)
+  gives non-finite predictions, which the fitting methods reject like any other
+  non-finite step, instead of stopping the fit with an exception.
+
 - **nlmefit rewritten** as a Lindstrom-Bates implementation (LME step via QR decompositions with a log-Cholesky covariance parameterisation and an analytic gradient; restarts for collapsed variance components; damping for cycling iterations) for `ApproximationType` "LME" and "RELME", the algorithm used by MATLAB nlmefit and R nlme. The previous Rust and Python MLE code did not estimate random effects (psi was fixed at 0.1*I and b at zero) and has been removed.
 - MATLAB name-value arguments are accepted directly (`ParamTransform=...`, `REParamsSelect=[2, 3]`, `FEGroupDesign=...`, `CovPattern=...`, `Options={...}`), with MATLAB's 1-based indices. `modelfun` is called with two arguments when `V` is empty, as in MATLAB. `b` is returned r-by-m.
 - Options that are not implemented raise `NotImplementedError` instead of being silently ignored. Failed fits raise instead of returning `beta0`, and there is no silent switch between backends.
@@ -86,6 +90,13 @@ models correctly.
   Metropolis-Hastings sampler (same chain for a given `random_state`). The model
   function stays Python and is called once per step for all subjects. Same arithmetic
   as the NumPy code, which runs without them or with `PYNLME_KERNELS=0`.
+- Benchmarks against MATLAB, R (nlme, saemix) and nlmixr2, all scripted
+  (`validation/run_benchmarks.sh` runs them with what is installed): speed on the
+  validation cases (README), scaling to 1000 subjects with a closed-form, an ODE and a
+  multiple-dose ODE model (`validation/scaling/`), and accuracy (bias, RMSE and
+  confidence-interval coverage over simulated datasets, `validation/accuracy/`).
+- Faster with many subjects: the rows of many groups are gathered in one indexing
+  operation, and the residuals in `stats` evaluate the model for all groups at once.
 - FOCE solves all subjects' conditional modes in lock-step (one model call per step
   with `Vectorization="Full"` instead of one per subject).
 
