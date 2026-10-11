@@ -151,7 +151,9 @@ class GroupedModel:
         else:
             values = self.modelfun(phi, x)
         self.n_calls += 1
-        values = np.asarray(values, dtype=float).reshape(-1)
+        # Contiguous: the compiled kernels read it as a flat buffer (a model may
+        # return a strided view, e.g. one column of an ODE solution).
+        values = np.ascontiguousarray(values, dtype=float).reshape(-1)
         if values.shape[0] != lengths.sum():
             raise ValueError(
                 f"modelfun returned {values.shape[0]} values for {lengths.sum()} "

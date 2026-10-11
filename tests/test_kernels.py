@@ -391,3 +391,31 @@ def test_full_logm_lme_step(seed):
             assert value_k == pytest.approx(value_p, rel=1e-10, abs=1e-9)
     finally:
         lb._kernels = kernels
+
+
+@pytest.mark.parametrize("method", ["FOCE", "SAEM"])
+def test_kernels_accept_strided_model_output(method):
+    """A model may return a strided view (e.g. one column of an ODE solution, as
+    ode_model does): FOCE and SAEM with the kernels give the NumPy results."""
+    from pynlme import nlmefit, nlmefitsa
+    from tests.validation.cases import orange, vectorized
+
+    case = vectorized(orange())
+
+    def strided(phi, t):
+        f = case.modelfun(phi, t)
+        return np.column_stack([f, f])[:, 0]  # not contiguous
+
+    def run():
+        args = (case.X, case.y, case.group, case.V, strided, case.beta0)
+        if method == "FOCE":
+            return nlmefit(*args, **case.kwargs, ApproximationType="FOCE")
+        return nlmefitsa(*args, **case.kwargs, NIterations=[30, 20, 20], random_state=2)
+
+    kernels = lb._kernels
+    try:
+        lb._kernels = None
+        beta_np = run()[0]
+    finally:
+        lb._kernels = kernels
+    np.testing.assert_allclose(run()[0], beta_np, rtol=1e-6)

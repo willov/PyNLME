@@ -1661,7 +1661,11 @@ fn linearized_marginal<'py>(
         l.as_array(),
         u.as_array(),
     );
-    let (f, y, w) = (f.as_slice()?, y.as_slice()?, w.as_slice()?);
+    let (f, y, w) = (
+        f.as_array().to_vec(),
+        y.as_array().to_vec(),
+        w.as_array().to_vec(),
+    );
     let (p, r) = (b.shape()[1], b.shape()[2]);
     let (mut logdet, mut quad) = (0.0, 0.0);
     let mut o = 0;
@@ -1795,7 +1799,8 @@ impl Sampler<'_> {
         let array = Array2::from_shape_vec((rows, d), proposal.concat()).unwrap();
         let out = predict.call1(py, (array.into_pyarray(py),))?;
         let (values, valid): (PyReadonlyArray1<f64>, PyReadonlyArray1<bool>) = out.extract(py)?;
-        let (values, valid) = (values.as_slice()?, valid.as_slice()?);
+        // Any memory layout (the model may return a strided view).
+        let (values, valid) = (values.as_array().to_vec(), valid.as_array().to_vec());
         let mut accepted = vec![false; rows];
         for k in 0..rows {
             let (o, n) = (self.starts[k], self.lengths[k]);

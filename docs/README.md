@@ -24,6 +24,9 @@ Where to start:
 | [troubleshooting.md](troubleshooting.md) | Warnings, differences from MATLAB, speed |
 | [implementation.md](implementation.md) | Algorithms and code structure, for developers |
 | [../validation/README.md](../validation/README.md) | How the package is validated, and what was found |
+| [Speed](../README.md#speed) | Benchmarks against MATLAB, R and nlmixr2 on the validation cases (same machine, same data, start values and defaults) |
+| [../validation/scaling/README.md](../validation/scaling/README.md) | Scaling benchmark: 10, 100 and 1000 subjects, closed-form and ODE models, with each program's log-likelihood as a fit check |
+| [nlmixr2 comparison](../validation/README.md#comparison-with-nlmixr2) | FOCE and SAEM against nlmixr2, scored by the same exact log-likelihood |
 | [release-workflow.md](release-workflow.md) | Making a release |
 
 ## What is implemented
