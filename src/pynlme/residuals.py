@@ -32,17 +32,21 @@ def compute_residuals(
     n = model.n_obs
     out = {k: np.empty(n) for k in ("pres", "ires", "pwres", "iwres", "cwres")}
     weighted_ok = True
+    # The model for all groups at once (one call each with Vectorization="Full").
+    groups = np.arange(model.n_groups)
+    etas0 = np.array([model.eta(i, beta, None) for i in groups])
+    etasb = np.array([model.eta(i, beta, b[:, i]) for i in groups])
+    fs0, fsb = model.predict_many(groups, etas0), model.predict_many(groups, etasb)
+    Js0, Jsb = model.jacobian_many(groups, etas0), model.jacobian_many(groups, etasb)
     for i, rows in enumerate(model.rows):
-        eta0 = model.eta(i, beta, None)
-        etab = model.eta(i, beta, b[:, i])
-        f0, fb = model.predict(i, eta0), model.predict(i, etab)
+        f0, fb = fs0[i], fsb[i]
         yi = y[rows]
         out["pres"][rows] = yi - f0
         out["ires"][rows] = yi - fb
         if not weighted_ok:
             continue
-        Z0 = model.jacobian(i, eta0) @ model.B[i]
-        Zb = model.jacobian(i, etab) @ model.B[i]
+        Z0 = Js0[i] @ model.B[i]
+        Zb = Jsb[i] @ model.B[i]
         g = error_sd(error_model, errorparam, f0)
         try:
             R0 = np.linalg.cholesky(Z0 @ psi @ Z0.T + np.diag(g**2))

@@ -98,6 +98,19 @@ class GroupedModel:
         self._exp_idx = np.flatnonzero(codes == 1)
         self._probit_idx = np.flatnonzero(codes == 2)
         self._logit_idx = np.flatnonzero(codes == 3)
+        # All groups' predictors stacked, and where each group starts: gathering
+        # the rows of many groups is then one indexing operation.
+        self._X_flat = np.concatenate(self.X) if self.X else np.zeros((0, 1))
+        self._starts = np.concatenate([[0], np.cumsum(self._lengths)[:-1]]).astype(int)
+
+    def _x_rows(self, groups: np.ndarray) -> np.ndarray:
+        """The predictors of several groups, stacked (as concatenating X[g])."""
+        lengths = self._lengths[groups]
+        offsets = np.cumsum(lengths) - lengths  # where each group lands
+        index = np.repeat(self._starts[groups] - offsets, lengths) + np.arange(
+            lengths.sum()
+        )
+        return self._X_flat[index]
 
     def _phi(self, eta: np.ndarray) -> np.ndarray:
         """g^{-1}(eta) for a vector or for an array of vectors (last axis)."""
@@ -130,7 +143,7 @@ class GroupedModel:
                     valid[k] = False
             return (np.concatenate(parts) if parts else np.zeros(0)), valid
         phi = np.repeat(self._phi(etas), lengths, axis=0)
-        x = np.concatenate([self.X[g] for g in groups])
+        x = self._x_rows(groups)
         if self.V is not None:
             values = self.modelfun(phi, x, np.repeat(self.V[groups], lengths, axis=0))
         elif self._pass_none:
@@ -222,7 +235,7 @@ class GroupedModel:
         scale = self._dphi_deta(etas)
         phis = self._phi(etas)
         if self.vectorization == "full":
-            x = np.concatenate([self.X[g] for g in groups])
+            x = self._x_rows(groups)
             v = None if self.V is None else np.repeat(self.V[groups], lengths, axis=0)
             J = np.asarray(
                 self._call_jacobian(np.repeat(phis, lengths, axis=0), x, v), dtype=float
