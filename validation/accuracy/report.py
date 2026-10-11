@@ -10,12 +10,33 @@ random-effect variances and the error SD.
 """
 
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from validation.accuracy.simulate import REPLICATES, SCENARIOS  # noqa: E402
+
 HERE = Path(__file__).resolve().parent
-NAMES = ["log ke", "log ka", "log CL"]
+TITLES = {
+    "basic": "Basic: random effects on log ka and log CL, additive error",
+    "hard": "Hard: random effects on all three parameters with a full covariance, "
+    "log(wt/70) on log CL, proportional error",
+}
+
+
+def truth_of(name: str) -> dict:
+    spec = SCENARIOS[name]
+    return {
+        "beta": list(spec["beta"]) + ([spec["wt_effect"]] if spec["wt_effect"] else []),
+        "omega2": list(np.diag(spec["omega"])),
+        "sigma": spec["error"][1],
+        "random": spec["random"],
+        "subjects": spec["subjects"],
+    }
+
 
 # (row label, program, method key in its results file)
 ROWS = [
@@ -59,18 +80,30 @@ def summarise(fits: list, truth: dict):
 
 
 def main() -> None:
-    truth = json.loads((HERE / "data" / "truth.json").read_text())
+    for scenario in sys.argv[1:] or list(SCENARIOS):
+        table(scenario)
+
+
+def table(scenario: str) -> None:
+    truth = truth_of(scenario)
     results = {
-        program: json.loads((HERE / "results" / f"{program}.json").read_text())
+        program: json.loads(path.read_text())
         for program in ("pynlme", "matlab", "r")
-        if (HERE / "results" / f"{program}.json").exists()
+        if (path := HERE / "results" / scenario / f"{program}.json").exists()
     }
-    print(
-        f"{truth['replicates']} replicates of {truth['subjects']} subjects. Fixed "
-        "effects: bias / RMSE / coverage of the 95% CI; variances and error SD: "
-        "relative bias.\n"
+    if not results:
+        return
+    names = ["log ke", "log ka", "log CL", "wt on CL"][: len(truth["beta"])]
+    variances = [f"omega2 {['ke', 'ka', 'CL'][j]}" for j in truth["random"]]
+    error = (
+        "prop. error" if SCENARIOS[scenario]["error"][0] != "constant" else "error SD"
     )
-    header = ["Method", "Program", "Fits"] + NAMES + ["omega2 ka", "omega2 CL", "sigma"]
+    print(
+        f"**{TITLES[scenario]}** ({REPLICATES} replicates of {truth['subjects']} "
+        "subjects). Fixed effects: bias / RMSE / coverage of the 95% CI; variances "
+        "and error parameter: relative bias.\n"
+    )
+    header = ["Method", "Program", "Fits", *names, *variances, error]
     print("| " + " | ".join(header) + " |")
     print("|" + "---|" * len(header))
     for method, label, program, key in ROWS:
@@ -83,12 +116,13 @@ def main() -> None:
             label,
             f"{s['fits']}" + (f" ({s['failed']} failed)" if s["failed"] else ""),
         ]
-        for j in range(3):
+        for j in range(len(names)):
             cov = "–" if s["coverage"] is None else f"{100 * s['coverage'][j]:.0f}%"
             cells.append(f"{s['bias'][j]:+.3f} / {s['rmse'][j]:.3f} / {cov}")
         cells += [f"{100 * v:+.0f}%" for v in s["omega2_bias"]]
         cells.append(f"{100 * s['sigma_bias']:+.1f}%")
         print("| " + " | ".join(cells) + " |")
+    print()
 
 
 if __name__ == "__main__":

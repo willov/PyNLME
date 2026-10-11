@@ -82,6 +82,38 @@ def mm_sund():
     return sund_model("mm_pk", "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
 
 
+def mmd_sund():
+    """The mm model with doses at 0, 12 and 24 h from SUND activities: one
+    experiment per dose level (V holds the subject's dose, used as the experiment
+    ID), subjects batched in containers."""
+    import sund
+
+    from pynlme import sund_model
+    from validation.scaling.make_data import MMD
+
+    def experiment(amount):
+        def build(container):
+            activity = sund.Activity(time_unit="h", container=container)
+            activity.add_state_manipulation(
+                name="gut",
+                t=MMD["dose_times"],
+                f=[amount] * len(MMD["dose_times"]),
+                mode="add",
+            )
+            return activity
+
+        return build
+
+    sund.install_model(os.path.relpath(MODELS / "mm_pk_sund.txt"))
+    return sund_model(
+        "mm_pk",
+        "conc",
+        ["ka", "V", "vmax", "km"],
+        activities={dose: experiment(dose) for dose in (50.0, 75.0, 100.0)},
+        activity_column=0,
+    )
+
+
 def saemix_oral(t, y, group, dose):
     from pynlme.r import saemix, saemixData, saemixModel
 
@@ -125,6 +157,14 @@ def runs(name: str, n: int):
             "Vectorization": "Full",
         }
         models = {"": None}
+    elif name == "mmd":
+        beta0 = np.log([0.8, 12.0, 2.5, 1.0])
+        kw = {
+            "ParamTransform": [1, 1, 1, 1],
+            "REParamsSelect": [2, 3],
+            "Vectorization": "Full",
+        }
+        models = {"SUND": mmd_sund()}
     else:
         beta0 = np.log([0.8, 12.0, 2.5, 1.0])
         kw = {
@@ -165,7 +205,7 @@ def main() -> None:
     RESULTS.mkdir(exist_ok=True)
     path = RESULTS / "pynlme.json"
     results = json.loads(path.read_text()) if path.exists() else {}
-    for name in sys.argv[1:] or ("oral", "mm"):
+    for name in sys.argv[1:] or ("oral", "mm", "mmd"):
         results[name] = {}
         too_slow = set()
         for n in SIZES_TO_RUN:

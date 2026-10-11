@@ -43,10 +43,25 @@ ROWS = {
         ("SAEM", "nlmixr2 (rxode2)", "r", "SAEM, nlmixr2"),
     ],
 }
+ROWS["mmd"] = [
+    ("LME", "pynlme, MATLAB mode (SUND)", "pynlme", "LME, MATLAB mode (SUND)"),
+    ("LME", "MATLAB `nlmefit` (ode45)", "matlab", "LME"),
+    ("LME", "pynlme, R mode (SUND)", "pynlme", "LME, R mode (SUND)"),
+    ("LME", "R `nlme` (deSolve)", "r", "LME, nlme"),
+    ("FOCE", "pynlme (SUND)", "pynlme", "FOCE (SUND)"),
+    ("FOCE", "MATLAB `nlmefit` (ode45)", "matlab", "FOCE"),
+    ("FOCE", "nlmixr2 (FOCEi, rxode2)", "r", "FOCEi, nlmixr2"),
+    ("SAEM", "pynlme `nlmefitsa` (SUND)", "pynlme", "SAEM (SUND)"),
+    ("SAEM", "MATLAB `nlmefitsa` (ode45)", "matlab", "SAEM"),
+    ("SAEM", "nlmixr2 (rxode2)", "r", "SAEM, nlmixr2"),
+]
 TITLES = {
     "oral": "Closed-form oral PK model (3 parameters, 2 random effects, 10 "
     "observations per subject)",
     "mm": "Michaelis-Menten ODE model (4 parameters, 2 random effects, 8 "
+    "observations per subject)",
+    "mmd": "Michaelis-Menten ODE model with three doses (0, 12 and 24 h; SUND "
+    "activities, nlmixr2 event table, ode45/deSolve from dose to dose; 15 "
     "observations per subject)",
 }
 

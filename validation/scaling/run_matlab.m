@@ -1,10 +1,11 @@
-function run_matlab()
+function run_matlab(models)
 %RUN_MATLAB Time MATLAB nlmefit/nlmefitsa on the scaling datasets.
 %
 %   Run from the repository root (after validation/scaling/make_data.py):
 %
 %       addpath validation/scaling
-%       run_matlab
+%       run_matlab                 % all models
+%       run_matlab({'mmd'})        % only these (others in matlab.json stay)
 %
 %   Default options, as validation/scaling/run_pynlme.py. The closed-form model
 %   is called for all observations at once ('Full', with each observation's
@@ -13,6 +14,7 @@ function run_matlab()
 %   1e-8, absolute 1e-10). Sizes run in increasing order; once a run takes longer
 %   than 60 s the larger sizes are skipped. Runs shorter than 5 s are repeated and
 %   the best of 3 is kept; the first run of each method is an untimed warm-up.
+%   The multi-dose model (mmd) is solved from dose to dose with ode45.
 %   Writes validation/scaling/results/matlab.json.
 
 set(0, 'DefaultFigureVisible', 'off');
@@ -24,8 +26,19 @@ if ~isempty(getenv('SCALING_SIZES'))  % e.g. SCALING_SIZES=10,100
 end
 limit = 60;
 methods = {'LME', 'FOCE', 'SAEM'};
-results = struct();
-for name = {'oral', 'mm'}
+if nargin < 1
+    models = {'oral', 'mm', 'mmd'};
+end
+% Results of other models already in matlab.json stay.
+outDir = fullfile('validation', 'scaling', 'results');
+path = fullfile(outDir, 'matlab.json');
+if isfile(path)
+    results = jsondecode(fileread(path));
+else
+    results = struct();
+end
+for name = models
+    results.(name{1}) = struct();
     tooSlow = {};
     for n = sizes
         c = loadCase(dataDir, name{1}, n);
@@ -66,9 +79,8 @@ toolbox = ver('stats');
 results.matlab_version = version;
 results.toolbox_version = toolbox.Version;
 results.threads = maxNumCompThreads;
-outDir = fullfile('validation', 'scaling', 'results');
 if ~isfolder(outDir), mkdir(outDir); end
-fid = fopen(fullfile(outDir, 'matlab.json'), 'w');
+fid = fopen(path, 'w');
 fprintf(fid, '%s', jsonencode(results, 'PrettyPrint', true));
 fclose(fid);
 end
@@ -97,6 +109,11 @@ if strcmp(name, 'oral')
     c.beta0 = [-2.5 0.5 -3.2];
     c.args = {'ParamTransform', [1 1 1], 'REParamsSelect', [2 3], ...
         'Vectorization', 'Full'};
+elseif strcmp(name, 'mmd')
+    c.X = d.time;
+    c.model = @mmdModel;
+    c.beta0 = log([0.8 12 2.5 1]);
+    c.args = {'ParamTransform', [1 1 1 1], 'REParamsSelect', [2 3]};
 else
     c.X = d.time;
     c.model = @mmModel;
@@ -125,6 +142,34 @@ rhs = @(~, s) [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
 opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
 [~, sol] = ode45(rhs, [0; ts], [dose(1); 0], opts);
 sol = sol(2:end, 2);
+c = zeros(size(t(:)));
+c(order) = sol;
+end
+
+function c = mmdModel(phi, t, dose)
+% The mm model with the dose added to the gut at 0, 12 and 24 h: ode45 from dose
+% to dose (as validation/scaling/make_data.py).
+ka = phi(1); V = phi(2); vmax = phi(3); km = phi(4);
+rhs = @(~, s) [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
+opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
+[ts, order] = sort(t(:));
+edges = [0 12 24 inf];
+state = [0; 0];
+sol = zeros(size(ts));
+for k = 1:3
+    state(1) = state(1) + dose(1);
+    inside = ts >= edges(k) & ts < edges(k + 1);
+    stop = min(edges(k + 1), max(ts));
+    grid = unique([edges(k); ts(inside); stop]);
+    [tt, y] = ode45(rhs, grid, state, opts);
+    if numel(grid) == 2  % ode45 returns all steps for a two-point span
+        y = y([1 end], :); tt = tt([1 end]);
+    end
+    [~, where] = ismember(ts(inside), tt);
+    sol(inside) = y(where, 2);
+    state = y(end, :)';
+    if stop >= max(ts), break; end
+end
 c = zeros(size(t(:)));
 c(order) = sol;
 end

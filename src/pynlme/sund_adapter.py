@@ -232,9 +232,15 @@ def sund_model(
         k = len(P)
         grid = times if times[0] == t0 else np.concatenate([[t0], times])
         sim = simulation(k) if sim is None else sim
-        sim.simulate(
-            time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel()
-        )
+        try:
+            sim.simulate(
+                time_vector=grid, parameter_values=P.ravel(), state_values=X0.ravel()
+            )
+        except RuntimeError:
+            # The integrator failed (e.g. a stiff system at extreme parameters):
+            # non-finite predictions, which the fitting methods reject like any
+            # other step where the model is not finite.
+            return np.full((len(times), k, len(feature_index)), np.nan)
         # Columns: model copy j, feature i at j * n_f + i.
         values = np.asarray(sim.feature_values)[:, : k * n_f].reshape(
             len(grid), k, n_f

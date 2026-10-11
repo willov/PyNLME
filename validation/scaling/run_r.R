@@ -7,7 +7,8 @@
 # Default options, as validation/scaling/run_pynlme.py: nlmeControl(), saemix's
 # defaults, nlmixr2's defaults. The ODE model is solved with the common tolerance
 # (relative 1e-8, absolute 1e-10): by deSolve's lsoda for nlme (per subject) and by
-# rxode2 for nlmixr2. saemix runs the closed-form model only. Sizes run in
+# rxode2 for nlmixr2; the multi-dose model (mmd) with deSolve events and nlmixr2's
+# event table. saemix runs the closed-form model only. Sizes run in
 # increasing order; once a run takes longer than 60 s the larger sizes are skipped.
 # Runs shorter than 5 s are repeated and the best of 3 is kept; the first run of
 # each method is an untimed warm-up (nlmixr2 compiles the model then).
@@ -53,12 +54,37 @@ mm_conc <- function(lka, lV, lvmax, lkm, dose, time, id) {
   out
 }
 
+# The mm model with the dose added to the gut at 0, 12 and 24 h (deSolve events).
+mmd_conc <- function(lka, lV, lvmax, lkm, dose, time, id) {
+  out <- numeric(length(time))
+  rhs <- function(t, s, p) {
+    list(c(-p[1] * s[1], p[1] * s[1] / p[2] - p[3] * s[2] / (p[4] + s[2])))
+  }
+  for (subject in unique(id)) {
+    rows <- which(id == subject)
+    k <- rows[1]
+    p <- exp(c(lka[k], lV[k], lvmax[k], lkm[k]))
+    times <- sort(unique(c(0, time[rows])))
+    events <- data.frame(var = "gut", time = c(12, 24), value = dose[k],
+                         method = "add")
+    sol <- lsoda(c(gut = dose[k], cent = 0), times, rhs, p, rtol = rtol, atol = atol,
+                 events = list(data = events))
+    out[rows] <- sol[match(time[rows], sol[, 1]), 3]
+  }
+  out
+}
+
 nlme_fit <- function(name, d) {
   if (name == "oral") {
     g <- groupedData(conc ~ time | id, data = d)
     nlme(conc ~ oral_conc(lKe, lKa, lCl, dose, time), data = g,
          fixed = lKe + lKa + lCl ~ 1, random = pdDiag(lKa + lCl ~ 1),
          start = c(lKe = -2.5, lKa = 0.5, lCl = -3.2))
+  } else if (name == "mmd") {
+    g <- groupedData(conc ~ time | id, data = d)
+    nlme(conc ~ mmd_conc(lka, lV, lvmax, lkm, dose, time, id), data = g,
+         fixed = lka + lV + lvmax + lkm ~ 1, random = pdDiag(lV + lvmax ~ 1),
+         start = log(c(lka = 0.8, lV = 12, lvmax = 2.5, lkm = 1)))
   } else {
     g <- groupedData(conc ~ time | id, data = d)
     nlme(conc ~ mm_conc(lka, lV, lvmax, lkm, dose, time, id), data = g,
@@ -127,8 +153,11 @@ nlmixr2_data <- function(name, d) {
     return(obs[, c("ID", "TIME", "DV", "dosemg")])
   }
   first <- !duplicated(d$id)
-  doses <- data.frame(ID = d$id[first], TIME = 0, DV = NA, dosemg = d$dose[first],
-                      AMT = d$dose[first], EVID = 1, CMT = 1)
+  dose_times <- if (name == "mmd") c(0, 12, 24) else 0
+  doses <- do.call(rbind, lapply(dose_times, function(t0) {
+    data.frame(ID = d$id[first], TIME = t0, DV = NA, dosemg = d$dose[first],
+               AMT = d$dose[first], EVID = 1, CMT = 1)
+  }))
   out <- rbind(doses, obs)
   out[order(out$ID, out$TIME, -out$EVID), ]
 }
@@ -167,11 +196,21 @@ methods <- list(
     "LME, nlme" = function(d) nlme_fit("mm", d),
     "FOCEi, nlmixr2" = function(d) nlmixr2_fit("mm", d, "focei"),
     "SAEM, nlmixr2" = function(d) nlmixr2_fit("mm", d, "saem")
+  ),
+  mmd = list(
+    "LME, nlme" = function(d) nlme_fit("mmd", d),
+    "FOCEi, nlmixr2" = function(d) nlmixr2_fit("mmd", d, "focei"),
+    "SAEM, nlmixr2" = function(d) nlmixr2_fit("mmd", d, "saem")
   )
 )
 
-results <- list()
-for (name in names(methods)) {
+# SCALING_MODELS=mmd runs only these models; other results already in r.json stay.
+models <- strsplit(Sys.getenv("SCALING_MODELS", paste(names(methods), collapse = ",")),
+                   ",")[[1]]
+path <- "validation/scaling/results/r.json"
+results <- if (file.exists(path)) fromJSON(path, simplifyVector = FALSE) else list()
+for (name in models) {
+  results[[name]] <- list()
   too_slow <- character(0)
   for (n in sizes) {
     d <- read_case(name, n)
