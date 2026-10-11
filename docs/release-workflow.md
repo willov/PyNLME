@@ -10,22 +10,27 @@ Releases are created automatically when the version in `pyproject.toml` changes 
    - runs the tests on Linux, Windows and macOS with Python 3.11-3.14 (the fast tests;
      the slow validation against R, the `validation` job, runs only when the workflow
      is started by hand: Actions -> CI/CD Pipeline -> Run workflow);
-   - if the version changed and the tag does not exist yet, tags `vx.y.z`, builds the
-     wheel and sdist (`uv build`; pynlme is pure Python, so one `py3-none-any` wheel
-     works everywhere) and creates a GitHub release (marked pre-release) with them and
-     the changelog section.
+   - if the version changed and the tag does not exist yet, tags `vx.y.z`, builds one
+     wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64 and
+     x86_64; each an abi3 wheel for Python 3.11+, with the compiled Rust kernels) and
+     the sdist with maturin, and creates a GitHub release (marked pre-release) with
+     them and the changelog section.
+
+To check the wheel builds before a release: Actions -> Build wheels -> Run workflow
+(`.github/workflows/wheels.yml`; builds without releasing).
 
 No release is made if the version is unchanged, the tag exists, or tests fail.
 
 Users install from the release:
 
 ```bash
-pip install https://github.com/willov/PyNLME/releases/download/vx.y.z/pynlme-x.y.z-py3-none-any.whl
+# the wheel for your platform from the release page, e.g. Linux x86_64:
+pip install pynlme-x.y.z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 # with SUND models:
-pip install "pynlme[sund] @ https://github.com/willov/PyNLME/releases/download/vx.y.z/pynlme-x.y.z-py3-none-any.whl"
+pip install "pynlme[sund] @ file:///path/to/pynlme-x.y.z-cp311-abi3-<platform>.whl"
 ```
 
-or from source: `pip install git+https://github.com/willov/PyNLME`.
+or from source (needs a Rust toolchain): `pip install git+https://github.com/willov/PyNLME`.
 
 Reference results in `validation/reference/` are regenerated separately (see
 [validation/README.md](../validation/README.md)); they need R and MATLAB, not CI.

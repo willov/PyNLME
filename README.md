@@ -208,8 +208,8 @@ Machine: AMD Ryzen 7 7800X3D (8 cores, 16 threads), 32 GB RAM, Linux (Arch, kern
 We are not experts in tuning MATLAB or R for speed: the original programs run as a
 typical user would run them (their default settings, an interpreted model function,
 the system BLAS), and they could likely be made faster. The times also vary by
-10-20% between runs, and R's timer resolves 1 ms. The cases are small; larger
-problems (more subjects, ODE models) may rank differently.
+10-20% between runs, and R's timer resolves 1 ms. These cases are small; larger
+problems rank differently in places (below).
 
 **Larger problems** ([validation/scaling/](validation/scaling/README.md): 10, 100 and
 1000 simulated subjects, a closed-form and an ODE model, also against nlmixr2). At 1000
@@ -223,15 +223,17 @@ equations and pynlme finite differences. All programs reach the same fits.
 
 Verify on your machine: `bash validation/run_benchmarks.sh` runs every benchmark with
 what is installed (pynlme always; R and MATLAB when available, otherwise their stored
-timings are used) and prints these tables. Or step by step: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in
-MATLAB, then `uv run python validation/benchmark.py --markdown`.
+timings are used) and prints these tables. Or step by step:
+`Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in MATLAB, then
+`uv run python validation/benchmark.py --markdown`.
 
 The Rust kernels (`rust/`, built into the package as `pynlme._kernels`) compile the
 inner loops of every algorithm: both LME modes, FO/FOCE and SAEM's sampler; the future
 custom mode will use them too. The model function stays Python and is called back
 once per step for all subjects. The kernels do the same arithmetic as the NumPy code,
-which runs instead when they are missing or `PYNLME_KERNELS=0` is set. Without `Vectorization="Full"` the model is called once per
-subject: same results, several times slower.
+which runs instead when they are missing or `PYNLME_KERNELS=0` is set. Without
+`Vectorization="Full"` the model is called once per subject: same results, several
+times slower.
 
 ## ODE models
 
@@ -247,16 +249,20 @@ subject: same results, several times slower.
   response vector with a feature column in `X`, and pass `feature=["conc", "effect"]`
   (SUND) or a multi-column `output` (SciPy); each subject is simulated once.
 
-On the Michaelis-Menten validation model `nlmefit` took 1.0 s with SUND (batched with
-containers), 3.6 s with batched SciPy, and 3-5 s in MATLAB with `ode45` (single runs,
-not part of the benchmark above). Analytic
-derivatives (`pynlme.with_jacobian`) replace finite differences when available.
+Speed with ODE models (the [scaling benchmark](validation/scaling/README.md)): at 1000
+subjects LME fits are 1.4-10 times faster than MATLAB with `ode45` and 27 times faster
+than R `nlme` with deSolve; SAEM is 4.5 times faster than MATLAB's (10 subjects) and
+1.2-1.3 times faster than nlmixr2's from 100 subjects on. SUND is the faster solver
+with few subjects and for FOCE and SAEM; SciPy's `ode_model`, which solves all
+subjects as one system, for LME with hundreds of subjects. FOCE is slow with ODE models (finite differences re-solve every
+subject's random effects); prefer LME or SAEM there. Analytic derivatives
+(`pynlme.with_jacobian`) replace finite differences when available.
 
 ## Installation
 
-Python 3.11-3.14, on NumPy and SciPy, with compiled kernels in Rust. The wheels from
-[Releases](https://github.com/willov/PyNLME/releases) (Linux, Windows, macOS) need no
-compiler:
+Python 3.11-3.14, on NumPy and SciPy, with compiled kernels in Rust. The wheels
+attached to each [release](https://github.com/willov/PyNLME/releases) (Linux, Windows,
+macOS) need no compiler; pynlme is not on PyPI yet:
 
 ```bash
 pip install pynlme-<version>-cp311-abi3-<platform>.whl            # a wheel from Releases
@@ -279,9 +285,9 @@ uv run pytest                  # --runslow adds the simulation studies
 ```
 
 `uv sync` rebuilds the kernels when files in `rust/` change, and installs exactly what
-is requested: running it without `--extra sund`
-uninstalls SUND (its folder of compiled models stays behind as an empty `sund`
-package; rerun with `--extra sund` to restore it). The validation tests compare with R
+is requested: running it without `--extra sund` uninstalls SUND (its folder of
+compiled models stays behind as an empty `sund` package; rerun with `--extra sund` to
+restore it). The validation tests compare with R
 when `Rscript` with `nlme` and `jsonlite` is available, and with MATLAB when
 `PYNLME_MATLAB` names the MATLAB command (see
 [validation/README.md](validation/README.md)).
@@ -290,7 +296,8 @@ when `Rscript` with `nlme` and `jsonlite` is available, and with MATLAB when
 
 [Tutorial](docs/tutorial.md) · [API reference](docs/api_reference.md) ·
 [Troubleshooting](docs/troubleshooting.md) · [Implementation](docs/implementation.md) ·
-[Validation](validation/README.md) · [Changelog](CHANGELOG.md)
+[Validation](validation/README.md) · [Accuracy](validation/accuracy/README.md) ·
+[Scaling](validation/scaling/README.md) · [Changelog](CHANGELOG.md)
 
 ## License
 
