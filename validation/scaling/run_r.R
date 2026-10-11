@@ -1,0 +1,213 @@
+# Time R nlme, saemix and nlmixr2 on the scaling datasets
+# (validation/scaling/make_data.py).
+#
+# Run from the repository root:  Rscript validation/scaling/run_r.R
+# Writes validation/scaling/results/r.json.
+#
+# Default options, as validation/scaling/run_pynlme.py: nlmeControl(), saemix's
+# defaults, nlmixr2's defaults. The ODE model is solved with the common tolerance
+# (relative 1e-8, absolute 1e-10): by deSolve's lsoda for nlme (per subject) and by
+# rxode2 for nlmixr2. saemix runs the closed-form model only. Sizes run in
+# increasing order; once a run takes longer than 60 s the larger sizes are skipped.
+# Runs shorter than 5 s are repeated and the best of 3 is kept; the first run of
+# each method is an untimed warm-up (nlmixr2 compiles the model then).
+
+if (dir.exists("~/R/library")) .libPaths(c("~/R/library", .libPaths()))
+suppressMessages({
+  library(nlme)
+  library(saemix)
+  library(nlmixr2)
+  library(deSolve)
+  library(jsonlite)
+})
+
+sizes <- as.numeric(strsplit(Sys.getenv("SCALING_SIZES", "10,100,1000"), ",")[[1]])
+limit <- 60
+rtol <- 1e-8
+atol <- 1e-10
+
+read_case <- function(name, n) {
+  read.csv(file.path("validation/scaling/data", sprintf("%s_%d.csv", name, n)))
+}
+
+# --- nlme ---------------------------------------------------------------------
+oral_conc <- function(lKe, lKa, lCl, dose, time) {
+  ke <- exp(lKe); ka <- exp(lKa); cl <- exp(lCl)
+  dose * ke * ka / (cl * (ka - ke)) * (exp(-ke * time) - exp(-ka * time))
+}
+
+# Michaelis-Menten model, solved per subject (parameters constant within id).
+mm_conc <- function(lka, lV, lvmax, lkm, dose, time, id) {
+  out <- numeric(length(time))
+  rhs <- function(t, s, p) {
+    list(c(-p[1] * s[1], p[1] * s[1] / p[2] - p[3] * s[2] / (p[4] + s[2])))
+  }
+  for (subject in unique(id)) {
+    rows <- which(id == subject)
+    k <- rows[1]
+    p <- exp(c(lka[k], lV[k], lvmax[k], lkm[k]))
+    times <- sort(unique(time[rows]))
+    sol <- lsoda(c(dose[k], 0), c(0, times), rhs, p, rtol = rtol, atol = atol)
+    out[rows] <- sol[match(time[rows], sol[, 1]), 3]
+  }
+  out
+}
+
+nlme_fit <- function(name, d) {
+  if (name == "oral") {
+    g <- groupedData(conc ~ time | id, data = d)
+    nlme(conc ~ oral_conc(lKe, lKa, lCl, dose, time), data = g,
+         fixed = lKe + lKa + lCl ~ 1, random = pdDiag(lKa + lCl ~ 1),
+         start = c(lKe = -2.5, lKa = 0.5, lCl = -3.2))
+  } else {
+    g <- groupedData(conc ~ time | id, data = d)
+    nlme(conc ~ mm_conc(lka, lV, lvmax, lkm, dose, time, id), data = g,
+         fixed = lka + lV + lvmax + lkm ~ 1, random = pdDiag(lV + lvmax ~ 1),
+         start = log(c(lka = 0.8, lV = 12, lvmax = 2.5, lkm = 1)))
+  }
+}
+
+# --- saemix (closed form) -------------------------------------------------------
+saemix_fit <- function(d) {
+  sdata <- saemixData(name.data = data.frame(id = d$id, dose = d$dose, time = d$time,
+                                             y = d$conc),
+                      name.group = "id", name.predictors = c("dose", "time"),
+                      name.response = "y", verbose = FALSE)
+  model <- function(psi, id, x) {
+    ke <- psi[id, 1]; ka <- psi[id, 2]; cl <- psi[id, 3]
+    x[, 1] * ke * ka / (cl * (ka - ke)) * (exp(-ke * x[, 2]) - exp(-ka * x[, 2]))
+  }
+  smodel <- saemixModel(model = model,
+                        psi0 = matrix(exp(c(-2.5, 0.5, -3.2)), ncol = 3,
+                                      dimnames = list(NULL, c("ke", "ka", "cl"))),
+                        transform.par = c(1, 1, 1), covariance.model = diag(c(0, 1, 1)),
+                        verbose = FALSE)
+  saemix(smodel, sdata, control = list(seed = 1, displayProgress = FALSE, save = FALSE,
+                                       save.graphs = FALSE, print = FALSE,
+                                       warnings = FALSE))
+}
+
+# --- nlmixr2 -------------------------------------------------------------------
+oral_model <- function() {
+  ini({
+    tke <- -2.5; tka <- 0.5; tcl <- -3.2
+    eta.ka ~ 0.1; eta.cl ~ 0.1
+    add.sd <- 0.7
+  })
+  model({
+    ke <- exp(tke)
+    ka <- exp(tka + eta.ka)
+    cl <- exp(tcl + eta.cl)
+    y <- dosemg * ke * ka / (cl * (ka - ke)) * (exp(-ke * t) - exp(-ka * t))
+    y ~ add(add.sd)
+  })
+}
+
+mm_model <- function() {
+  ini({
+    tka <- log(0.8); tv <- log(12); tvmax <- log(2.5); tkm <- log(1)
+    eta.v ~ 0.1; eta.vmax ~ 0.1
+    add.sd <- 0.3
+  })
+  model({
+    ka <- exp(tka)
+    v <- exp(tv + eta.v)
+    vmax <- exp(tvmax + eta.vmax)
+    km <- exp(tkm)
+    d/dt(gut) <- -ka * gut
+    d/dt(cent) <- ka * gut / v - vmax * cent / (km + cent)
+    cent ~ add(add.sd)
+  })
+}
+
+nlmixr2_data <- function(name, d) {
+  obs <- data.frame(ID = d$id, TIME = d$time, DV = d$conc, dosemg = d$dose,
+                    AMT = 0, EVID = 0, CMT = 2)
+  if (name == "oral") {
+    return(obs[, c("ID", "TIME", "DV", "dosemg")])
+  }
+  first <- !duplicated(d$id)
+  doses <- data.frame(ID = d$id[first], TIME = 0, DV = NA, dosemg = d$dose[first],
+                      AMT = d$dose[first], EVID = 1, CMT = 1)
+  out <- rbind(doses, obs)
+  out[order(out$ID, out$TIME, -out$EVID), ]
+}
+
+nlmixr2_fit <- function(name, d, est) {
+  control <- if (est == "focei") {
+    foceiControl(print = 0, rxControl = rxControl(rtol = rtol, atol = atol))
+  } else {
+    saemControl(print = 0, seed = 1, rxControl = rxControl(rtol = rtol, atol = atol))
+  }
+  model <- if (name == "oral") oral_model else mm_model
+  suppressMessages(suppressWarnings(
+    nlmixr2(model, nlmixr2_data(name, d), est = est, control = control)
+  ))
+}
+
+# The log-likelihood each program reports (its own approximation), as a check
+# that the fits are good ones.
+loglik <- function(fit) {
+  value <- tryCatch(
+    if (inherits(fit, "SaemixObject")) fit@results@ll.is else as.numeric(logLik(fit)),
+    error = function(e) NA
+  )
+  if (is.null(value) || length(value) == 0) NA else value
+}
+
+# --- timing --------------------------------------------------------------------
+methods <- list(
+  oral = list(
+    "LME, nlme" = function(d) nlme_fit("oral", d),
+    "SAEM, saemix" = function(d) saemix_fit(d),
+    "FOCEi, nlmixr2" = function(d) nlmixr2_fit("oral", d, "focei"),
+    "SAEM, nlmixr2" = function(d) nlmixr2_fit("oral", d, "saem")
+  ),
+  mm = list(
+    "LME, nlme" = function(d) nlme_fit("mm", d),
+    "FOCEi, nlmixr2" = function(d) nlmixr2_fit("mm", d, "focei"),
+    "SAEM, nlmixr2" = function(d) nlmixr2_fit("mm", d, "saem")
+  )
+)
+
+results <- list()
+for (name in names(methods)) {
+  too_slow <- character(0)
+  for (n in sizes) {
+    d <- read_case(name, n)
+    for (method in names(methods[[name]])) {
+      key <- as.character(n)
+      if (method %in% too_slow) {
+        results[[name]][[method]][[key]] <- list(skipped = TRUE)
+        next
+      }
+      fit <- methods[[name]][[method]]
+      outcome <- tryCatch({
+        if (n == sizes[1]) fit(d)  # warm-up
+        times <- c()
+        for (rep in 1:3) {
+          times <- c(times, system.time(result <- fit(d))[["elapsed"]])
+          if (tail(times, 1) > 5) break
+        }
+        list(time_s = min(times), logl = loglik(result))
+      }, error = function(e) list(error = conditionMessage(e)))
+      results[[name]][[method]][[key]] <- outcome
+      if (!is.null(outcome$time_s)) {
+        cat(sprintf("%s %5d %-16s %9.3f s\n", name, n, method, outcome$time_s))
+        if (outcome$time_s > limit) too_slow <- c(too_slow, method)
+      } else {
+        cat(sprintf("%s %5d %-16s error: %s\n", name, n, method, outcome$error))
+      }
+    }
+  }
+}
+results$versions <- list(
+  r = R.version.string,
+  nlme = as.character(packageVersion("nlme")),
+  saemix = as.character(packageVersion("saemix")),
+  nlmixr2 = as.character(packageVersion("nlmixr2")),
+  deSolve = as.character(packageVersion("deSolve"))
+)
+dir.create("validation/scaling/results", showWarnings = FALSE)
+write(toJSON(results, auto_unbox = TRUE, pretty = TRUE, digits = 6),
+      "validation/scaling/results/r.json")
