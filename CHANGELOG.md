@@ -16,7 +16,6 @@ models correctly.
 - `sund_model`: an integrator failure (e.g. a stiff system at extreme parameters)
   gives non-finite predictions, which the fitting methods reject like any other
   non-finite step, instead of stopping the fit with an exception.
-
 - **nlmefit rewritten** as a Lindstrom-Bates implementation (LME step via QR decompositions with a log-Cholesky covariance parameterisation and an analytic gradient; restarts for collapsed variance components; damping for cycling iterations) for `ApproximationType` "LME" and "RELME", the algorithm used by MATLAB nlmefit and R nlme. The previous Rust and Python MLE code did not estimate random effects (psi was fixed at 0.1*I and b at zero) and has been removed.
 - MATLAB name-value arguments are accepted directly (`ParamTransform=...`, `REParamsSelect=[2, 3]`, `FEGroupDesign=...`, `CovPattern=...`, `Options={...}`), with MATLAB's 1-based indices. `modelfun` is called with two arguments when `V` is empty, as in MATLAB. `b` is returned r-by-m.
 - Options that are not implemented raise `NotImplementedError` instead of being silently ignored. Failed fits raise instead of returning `beta0`, and there is no silent switch between backends.
