@@ -270,7 +270,9 @@ A compiled [SUND](https://isbgroup.eu/sund-toolbox) model as a model function
 columns of `V` set the initial states `v_states`, then the parameters `v_parameters`.
 With `Vectorization="Full"` it simulates `batch_size` (16) parameter sets per SUND call
 using containers. Integrator tolerances default to rel 1e-10, abs 1e-12, because the
-model is differentiated numerically. See `examples/sund_ode_model.py`.
+model is differentiated numerically. If the integrator fails (e.g. a stiff system at
+extreme parameters during a step), the predictions are non-finite and the step is
+rejected like any other. See `examples/sund_ode_model.py`.
 
 Inputs (doses, infusions) come from SUND activities, one set per experiment. You give
 the model and the data; `sund_model` creates the simulations. Give each experiment as a
@@ -334,3 +336,7 @@ Runnable example: `examples/multiple_features.py`.
 - `stack_grouped_data(X_grouped, y_grouped, group_ids=None)`: grouped to stacked arrays.
 - `transform_parameters(phi, codes)`: apply `ParamTransform` codes.
 - `detect_data_format(X, y, group)`: a heuristic guess, not used by the fitting functions.
+- `generate_design_matrix(n_params, pattern=None)`: a design matrix from a 0/1 selection
+  pattern (identity without one), as for `FEParamsSelect`/`REParamsSelect`.
+- `NLMEOptions`: the options as a dataclass under their Python names; the keyword
+  options of `nlmefit`/`nlmefitsa` (MATLAB or Python names) fill it.

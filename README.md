@@ -90,7 +90,11 @@ saemix users write the same three calls as in R, with the model in R's
 `psi[id, k]` form:
 
 ```python
+import numpy as np
+import polars as pl
 from pynlme.r import saemixData, saemixModel, saemix, summary, coef, psi, predict
+
+theo = pl.read_csv("theoph.csv")
 
 def model(psi, id, xidep):
     dose, t = xidep[:, 0], xidep[:, 1]

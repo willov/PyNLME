@@ -448,14 +448,17 @@ def vcov(fit: dict) -> np.ndarray:
 
 
 def logLik(fit: dict) -> float:  # noqa: N802
+    """The maximised log-likelihood, as R's ``logLik`` (ML, or nlme's REML)."""
     return fit["logLik"]
 
 
 def AIC(fit: dict) -> float:  # noqa: N802
+    """Akaike's information criterion, as R's ``AIC``."""
     return fit["AIC"]
 
 
 def BIC(fit: dict) -> float:  # noqa: N802
+    """The Bayesian information criterion, as R's ``BIC``."""
     return fit["BIC"]
 
 
