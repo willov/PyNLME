@@ -66,8 +66,6 @@ def mm_scipy():
 
 
 def mm_sund():
-    import os
-
     import sund
 
     from pynlme import sund_model
