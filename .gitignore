@@ -75,3 +75,4 @@ rust/Cargo.lock
 src/pynlme/_kernels*.so
 src/pynlme/_kernels*.pyd
 validation/scaling/data/
+validation/accuracy/data/

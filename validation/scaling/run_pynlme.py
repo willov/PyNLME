@@ -39,7 +39,12 @@ MODELS = Path(__file__).resolve().parents[1] / "models"
 
 
 def load(name: str, n: int):
-    with open(DATA / f"{name}_{n}.csv", newline="") as fh:
+    return load_csv(DATA / f"{name}_{n}.csv")
+
+
+def load_csv(path: Path):
+    """(x, y, group, dose per group) from a CSV with id, time, dose, conc."""
+    with open(path, newline="") as fh:
         rows = list(csv.DictReader(fh))
     group = np.array([int(r["id"]) for r in rows])
     t = np.array([float(r["time"]) for r in rows])

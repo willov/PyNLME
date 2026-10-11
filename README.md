@@ -144,6 +144,11 @@ findings are in [validation/README.md](validation/README.md).
   reaches the exact maximum likelihood on a linear model; removes the linearisation
   bias of `nlmefit` in simulation studies.
 - **ODE models** (SciPy, or compiled with SUND): reproduce MATLAB's `ode45`-based fits.
+- **Accuracy** ([validation/accuracy/](validation/accuracy/README.md)): on 100 simulated
+  datasets pynlme's estimates are unbiased and its 95% confidence intervals cover the
+  true values 91-99% of the time, for LME, FOCE and SAEM, the same as MATLAB, R and
+  nlmixr2 (except MATLAB's FOCE and nlmixr2's SAEM, which are biased for one
+  parameter).
 
 Supported: `ApproximationType` LME/RELME/FO/FOCE; error models constant, proportional,
 combined, exponential; `ParamTransform`; fixed- and random-effects designs including

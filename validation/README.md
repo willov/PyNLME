@@ -50,6 +50,7 @@ with full covariance, Emax) are defined in
 | `matlab/benchmark.m` | MATLAB `nlmefit`/`nlmefitsa` timings (best of repeated runs after a warm-up, `SinglePhi` and `Full`), written to `reference/matlab_timings.json` |
 | `benchmark.py` | Times pynlme on the benchmark cases against those timings; `--markdown` prints the README's tables and the machine's specifications |
 | `run_benchmarks.sh` | Runs all benchmarks with what is installed (pynlme; R and MATLAB when available) and prints the tables |
+| `accuracy/` | Accuracy benchmark: 100 simulated datasets fitted by pynlme, MATLAB, R and nlmixr2; bias, RMSE and confidence-interval coverage (see `accuracy/README.md`) |
 | `scaling/` | Scaling benchmark: 10, 100 and 1000 simulated subjects, closed-form and ODE models, pynlme against MATLAB, R and nlmixr2 (see `scaling/README.md`) |
 | `r/nlmixr2_benchmark.R`, `nlmixr2_compare.py` | nlmixr2 (FOCEi, SAEM) on the benchmark cases, and pynlme's and MATLAB's FOCE and SAEM scored with the same exact log-likelihood (see below) |
 

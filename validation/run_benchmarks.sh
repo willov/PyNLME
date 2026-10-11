@@ -41,6 +41,17 @@ fi
 uv run python validation/benchmark.py --markdown
 uv run python validation/nlmixr2_compare.py
 
+echo "== Accuracy (bias, RMSE, coverage; not timing) =="
+uv run python validation/accuracy/simulate.py
+uv run python validation/accuracy/run_pynlme.py
+if have_r; then
+    Rscript validation/accuracy/run_r.R
+fi
+if [ -n "${PYNLME_MATLAB:-}" ]; then
+    run_matlab "addpath validation/accuracy; run_matlab"
+fi
+uv run python validation/accuracy/report.py
+
 echo "== Scaling =="
 uv run python validation/scaling/make_data.py
 uv run python validation/scaling/run_pynlme.py
