@@ -1,180 +1,39 @@
-# pynlme Examples
+# pynlme examples
 
-This directory contains practical examples demonstrating pynlme functionality.
+Runnable scripts, from the repository root: `uv run python examples/<name>.py` (or
+`python examples/<name>.py` with pynlme installed). The plots need `matplotlib`; the
+SUND example needs `pip install "pynlme[sund]"`.
 
-## 📋 Dependencies
+## Coming from MATLAB
 
-All examples require the basic pynlme installation. Some examples have additional requirements:
+| Example | Shows |
+|---|---|
+| [`matlab_documentation_examples.py`](matlab_documentation_examples.py) | MATLAB's `nlmefit` documentation example "Transform and Plot Fitted Model" (indomethacin), with the same calls and results |
+| [`matlab_comparison.py`](matlab_comparison.py) | `nlmefit` (LME) and `nlmefitsa` (SAEM) on the same simulated PK data, compared with each other |
 
-**Basic Requirements:**
-- `numpy` (included with pynlme)
-- `scipy` (included with pynlme)
+## Python interface
 
-**Optional Requirements for Enhanced Examples:**
-- `matplotlib` - For plotting and visualization (all examples)
+| Example | Shows |
+|---|---|
+| [`basic_usage.py`](basic_usage.py) | A first fit: an exponential decay with `fit_nlme` and `nlmefit` (LME) and SAEM, the outputs and a plot |
+| [`api_comparison.py`](api_comparison.py) | The MATLAB-style functions next to the Python ones (`fit_nlme`, `fit_mle`, `fit_saem`) on the same data |
+| [`function_aliases_demo.py`](function_aliases_demo.py) | `fit_nlme` as the one Python entry point for `nlmefit` and `nlmefitsa` (`method="ML"` or `"SAEM"`) |
+| [`advanced_usage.py`](advanced_usage.py) | One- and two-compartment PK models compared, with diagnostics and plots |
 
-Install optional dependencies:
-```bash
-# For plotting
-uv add matplotlib
+## Data layouts
 
-# For performance benchmarks  
-uv add pandas psutil
+| Example | Shows |
+|---|---|
+| [`grouped_vs_stacked_comparison.py`](grouped_vs_stacked_comparison.py) | Stacked data (one row per observation) and grouped data (one row per subject) give the same fit |
+| [`multidimensional_input_demo.py`](multidimensional_input_demo.py) | Several predictors per observation, in both layouts |
 
-# Or install all optional dependencies
-uv add matplotlib pandas psutil
-```
+## ODE models and case studies
 
-## 📋 Example Files
+| Example | Shows |
+|---|---|
+| [`sund_ode_model.py`](sund_ode_model.py) | A Michaelis-Menten PK model compiled with SUND, fitted with `nlmefit` and `nlmefitsa` |
+| [`multiple_features.py`](multiple_features.py) | A concentration and an effect (PK/PD) in the same subjects, stacked with a feature column, one ODE simulation per subject |
+| [`warfarin_case_study.py`](warfarin_case_study.py) | A larger simulated PK study with covariates (age, weight, sex), SAEM and diagnostic plots |
 
-### [`basic_usage.py`](basic_usage.py)
-Simple examples to get started with pynlme:
-- Exponential decay model
-- Basic MLE and SAEM fitting
-- Essential statistics and diagnostics
-
-### [`multidimensional_input_demo.py`](multidimensional_input_demo.py)
-**New!** Demonstrates the multi-dimensional input format feature:
-- Traditional vs. new grouped data formats
-- Pharmacokinetic modeling example
-- Multiple predictor variables
-- Automatic format detection and conversion
-
-### [`grouped_vs_stacked_comparison.py`](grouped_vs_stacked_comparison.py)
-**New!** Compares grouped vs stacked data formats using a concrete example
-(3 subjects with 4 measurements each):
-- Traditional stacked vs. new grouped format comparison
-- Data format equivalence verification  
-- Cleaner code examples
-
-### [`advanced_usage.py`](advanced_usage.py)  
-Complex modeling scenarios:
-- Multiple error models
-- Parameter transformations
-- Multi-group analysis
-- Custom convergence criteria
-
-### [`matlab_comparison.py`](matlab_comparison.py)
-MATLAB compatibility demonstrations:
-- Side-by-side MATLAB vs pynlme code
-- Result validation and comparison
-- Migration guides for MATLAB users
-
-### [`sund_ode_model.py`](sund_ode_model.py)
-An ODE model (Michaelis-Menten PK) compiled with the SUND toolbox, fitted with
-`nlmefit` and `nlmefitsa` (needs `pip install "pynlme[sund]"`).
-
-### [`multiple_features.py`](multiple_features.py)
-A concentration and an effect measured in the same subjects (PK/PD), stacked in one
-response vector with a feature column, one ODE simulation per subject (SciPy).
-
-### [`warfarin_case_study.py`](warfarin_case_study.py)
-A larger PK study (simulated warfarin data, covariates, SAEM) with diagnostic plots.
-
-## 🚀 Running Examples
-
-```bash
-# Run all examples
-cd examples/
-python basic_usage.py
-python advanced_usage.py
-python matlab_comparison.py
-
-# Or run from project root
-uv run python examples/basic_usage.py
-```
-
-## 📊 Example Models
-
-The examples demonstrate various nonlinear models commonly used in practice:
-
-- **Exponential Decay**: `y = A * exp(-k * t)`
-- **Michaelis-Menten**: `y = Vmax * x / (Km + x)`
-- **Logistic Growth**: `y = A / (1 + exp(-(t - t0)/tau))`
-- **Sigmoid Dose-Response**: `y = Emax * dose^n / (ED50^n + dose^n)`
-- **Pharmacokinetic Models**: Various PK/PD models
-
-## 🎯 Use Cases Covered
-
-- **Pharmacokinetics**: Drug concentration over time
-- **Pharmacodynamics**: Dose-response relationships  
-- **Growth Models**: Population and individual growth
-- **Bioassays**: Dose-response curves
-- **Time Series**: Nonlinear time-dependent processes
-
-## 📝 Example Template
-
-Use this template for your own models:
-
-```python
-import numpy as np
-from pynlme import nlmefit
-
-def your_model(phi, X, V=None):
-    """
-    Your nonlinear model function.
-    
-    Parameters:
-    -----------
-    phi : ndarray
-        Parameter vector [param1, param2, ...]
-    X : ndarray
-        Predictor variables
-    V : ndarray, optional
-        Group-level covariates
-        
-    Returns:
-    --------
-    ndarray
-        Predicted values
-    """
-    # Your model equation here
-    return predictions
-
-# Your data preparation
-X = your_predictors
-y = your_responses  
-group = your_grouping
-beta0 = your_initial_estimates
-
-# Fit the model
-beta, psi, stats, b = nlmefit(X, y, group, None, your_model, beta0)
-
-# Analyze results
-print(f"Fixed effects: {beta}")
-print(f"AIC: {stats.aic}")
-# Add your analysis here
-```
-
-## 🔧 Customization Examples
-
-Each example file includes variations showing:
-- Different optimization options
-- Error model specifications
-- Convergence criteria
-- Diagnostic plotting
-- Result interpretation
-
-## 📚 Additional Resources
-
-- [API Reference](../docs/api_reference.md) - Complete function documentation
-- [Implementation Details](../docs/implementation.md) - Technical details
-- [Main Documentation](../docs/README.md) - Full feature overview
-
-## 📂 Advanced Examples
-
-In addition to the basic and advanced usage examples, this repository includes:
-
-- **[`matlab_comparison.py`](matlab_comparison.py)** - MATLAB compatibility demonstration
-  - Side-by-side comparison with MATLAB nlmefit
-  - Parameter estimation accuracy verification
-  - API compatibility examples
-
-### Real-world Case Studies
-
-- **[`warfarin_case_study.py`](warfarin_case_study.py)** - Realistic pharmacokinetic analysis
-  - Multi-dose warfarin concentration modeling
-  - Covariate effects (age, weight, gender)
-  - Comprehensive model diagnostics and validation
-
-For timings against R nlme, see [`validation/benchmark.py`](../validation/benchmark.py).
+More: the [tutorial](../docs/tutorial.md) walks through these features step by step,
+and the [API reference](../docs/api_reference.md) documents every function and option.
