@@ -233,7 +233,10 @@ for (name in models) {
       results[[name]][[method]][[key]] <- outcome
       if (!is.null(outcome$time_s)) {
         cat(sprintf("%s %5d %-16s %9.3f s\n", name, n, method, outcome$time_s))
-        if (outcome$time_s > limit) too_slow <- c(too_slow, method)
+        # As in run_pynlme.py: SAEM is not skipped on its time at the smallest size.
+        if (outcome$time_s > limit && !(grepl("^SAEM", method) && n == sizes[1])) {
+          too_slow <- c(too_slow, method)
+        }
       } else {
         cat(sprintf("%s %5d %-16s error: %s\n", name, n, method, outcome$error))
       }

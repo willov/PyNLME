@@ -228,7 +228,10 @@ def main() -> None:
                     continue
                 entry[str(n)] = {"time_s": min(times), "logl": logl}
                 print(f"{name} {n:>5} {method:<28} {min(times):9.3f} s", flush=True)
-                if min(times) > LIMIT_S:
+                # SAEM runs several chains on few subjects (nlmefitsa's default),
+                # so its time at the smallest size does not predict the larger ones.
+                first = n == SIZES_TO_RUN[0]
+                if min(times) > LIMIT_S and not (method.startswith("SAEM") and first):
                     too_slow.add(method)
     path.write_text(json.dumps(results, indent=1))
 

@@ -23,7 +23,9 @@ and nlmixr2.
   0.5.0 with its Rust kernels, Python 3.13; MATLAB R2023b Update 1; R 4.6.1, nlme
   3.1-169, saemix 3.5, nlmixr2 7.0.1, deSolve). Runs under 5 s are the best of 3, the
   first run of each method is an untimed warm-up. Once a run takes over 60 s, the
-  larger sizes are skipped ("skipped": they would take ten times longer).
+  larger sizes are skipped ("skipped": they would take ten times longer); for SAEM
+  only from 100 subjects on, as on 10 subjects nlmefitsa runs several chains by
+  default.
 
 Closed-form oral PK model (3 parameters, 2 random effects, 10 observations per subject); seconds per fit:
 

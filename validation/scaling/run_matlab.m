@@ -65,7 +65,9 @@ for name = models
                 end
                 results.(name{1}).(method).(key) = struct('time_s', min(times), 'logl', logl);
                 fprintf('%s %5d %-5s %9.3f s\n', name{1}, n, method, min(times));
-                if min(times) > limit
+                % SAEM runs several chains on few subjects (nlmefitsa's default),
+                % so its time at the smallest size does not predict the larger ones.
+                if min(times) > limit && ~(strcmp(method, 'SAEM') && n == sizes(1))
                     tooSlow{end+1} = method; %#ok<AGROW>
                 end
             catch err
