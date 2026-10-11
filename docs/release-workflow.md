@@ -3,8 +3,10 @@
 Releases are created automatically when the version in `pyproject.toml` changes on
 `main`.
 
-1. Update `version` in `pyproject.toml` and move the `[Unreleased]` notes in
-   `CHANGELOG.md` under a heading `## [x.y.z] - YYYY-MM-DD`.
+1. Update `version` in `pyproject.toml` and put the notes in `CHANGELOG.md` under a
+   heading `## [x.y.z] - unreleased`. The release job fills in the date (in the
+   heading and in `CITATION.cff`), commits that to `main` as "Release vx.y.z" and
+   tags that commit. If `main` is protected, allow GitHub Actions to push to it.
 2. Commit and push (or merge) to `main`.
 3. GitHub Actions (`.github/workflows/main.yml`):
    - runs the tests on Linux, Windows and macOS with Python 3.11-3.14 (the fast tests;

@@ -173,6 +173,25 @@ jobs:
           fi
           echo "✅ Valid version format: $VERSION"
 
+      # The release date is the day the release is made: CHANGELOG.md's heading for
+      # this version and CITATION.cff's date-released are set here and committed to
+      # main; the tag (and with it the wheels, the GitHub release and PyPI) is on
+      # that commit. Commits by GITHUB_TOKEN do not start another workflow run.
+      - name: Date the release in CHANGELOG.md and CITATION.cff
+        run: |
+          VERSION="${{ needs.check-version.outputs.new-version }}"
+          TODAY=$(date -u +%Y-%m-%d)
+          PATTERN="${VERSION//./\\.}"
+          sed -i -E "s/^## \[$PATTERN\].*$/## [$VERSION] - $TODAY/" CHANGELOG.md
+          sed -i -E "s/^date-released: .*/date-released: $TODAY/" CITATION.cff
+          git diff --stat
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "Release v$VERSION"
+            git push origin HEAD:main
+          fi
+
       - name: Extract changelog for this version
         id: changelog
         run: |
