@@ -1,29 +1,30 @@
 # Release workflow
 
-Merges to `main` only run the tests. A release is made when you push a tag:
+Merges to `main` only run the tests. To release, on an up-to-date `main`:
 
-1. On `main`: set `version` in `pyproject.toml` and put the notes in `CHANGELOG.md`
-   under a heading `## [x.y.z] - unreleased`; merge.
-2. Tag the merged commit and push the tag:
+```bash
+git checkout main && git pull
+uv run python scripts/release.py x.y.z            # --dry-run shows the changes only
+```
 
-   ```bash
-   git checkout main && git pull
-   git tag vx.y.z
-   git push origin vx.y.z
-   ```
+The script checks that `main` is clean and matches `origin/main` and that the tag is
+new; sets the version in `pyproject.toml` and `rust/Cargo.toml`; dates the heading
+`## [x.y.z] - unreleased` in `CHANGELOG.md` and `CITATION.cff`; shows the changes,
+asks, then commits "Release vx.y.z", tags `vx.y.z` and pushes both.
 
-3. GitHub Actions (`.github/workflows/main.yml`) then
-   - checks that the tag is `v` plus `pyproject.toml`'s version and on `main`;
-   - runs the tests (Linux, Windows, macOS; Python 3.11-3.14);
-   - builds one wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64
-     and x86_64; abi3 wheels for Python 3.11+ with the compiled Rust kernels) and the
-     sdist with maturin;
-   - creates a GitHub release (pre-release) with them and the changelog section;
-   - publishes them to PyPI once you approve the deployment ("Review deployments" in
-     the run; environment `pypi`);
-   - commits the release date to `main` (the version's heading in `CHANGELOG.md` and
-     `date-released` in `CITATION.cff`). If `main` is protected, allow GitHub Actions
-     to push to it.
+The pushed tag starts the release in GitHub Actions (`.github/workflows/main.yml`):
+
+- check that the tag is `v` plus `pyproject.toml`'s version and on `main`;
+- run the tests (Linux, Windows, macOS; Python 3.11-3.14);
+- build one wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64
+  and x86_64; abi3 wheels for Python 3.11+ with the compiled Rust kernels) and the
+  sdist with maturin;
+- create a GitHub release (pre-release) with them and the changelog section;
+- publish them to PyPI once you approve the deployment ("Review deployments" in the
+  run; environment `pypi`).
+
+Between releases, add notes under a heading `## [next version] - unreleased` at the
+top of `CHANGELOG.md`.
 
 Nothing is published if the tag does not match the version or is not on `main`, or if
 the tests fail. The slow validation against R runs only when the workflow is started

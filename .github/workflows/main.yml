@@ -1,10 +1,9 @@
 name: CI/CD Pipeline
 
 # Tests on pushes and pull requests. A release runs only for a pushed tag vX.Y.Z on
-# main (git tag vX.Y.Z && git push origin vX.Y.Z): check the tag, test, build the
-# wheels and sdist, create the GitHub release, publish to PyPI (after approval in
-# the "pypi" environment), and date the release in CHANGELOG.md and CITATION.cff
-# on main.
+# main (made by scripts/release.py): check the tag, test, build the wheels and
+# sdist, create the GitHub release and publish to PyPI (after approval in the
+# "pypi" environment).
 on:
   push:
     branches: [ main, develop ]
@@ -228,31 +227,3 @@ jobs:
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
-
-  # The release date in CHANGELOG.md's heading for this version and in
-  # CITATION.cff, committed to main (commits by GITHUB_TOKEN start no new run).
-  date-release:
-    name: Date the release on main
-    needs: [release-check, github-release]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Set the date and push
-        run: |
-          VERSION="${{ needs.release-check.outputs.version }}"
-          TODAY=$(date -u +%Y-%m-%d)
-          PATTERN="${VERSION//./\\.}"
-          sed -i -E "s/^## \[$PATTERN\].*$/## [$VERSION] - $TODAY/" CHANGELOG.md
-          sed -i -E "s/^date-released: .*/date-released: $TODAY/" CITATION.cff
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "Date the v$VERSION release"
-            git push origin HEAD:main
-          fi
