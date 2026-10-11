@@ -1,5 +1,5 @@
 """
-Tests for parameter transformation functions in PyNLME.
+Tests for parameter transformation functions in pynlme.
 """
 
 import numpy as np

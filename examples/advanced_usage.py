@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Advanced PyNLME Example: Pharmacokinetic Analysis
+Advanced pynlme Example: Pharmacokinetic Analysis
 ================================================
 
-This example demonstrates advanced usage of PyNLME for pharmacokinetic modeling,
+This example demonstrates advanced usage of pynlme for pharmacokinetic modeling,
 including model comparison, diagnostics, and result interpretation.
 """
 
@@ -243,7 +243,7 @@ def plot_results(X, y, group, beta_1comp, beta_2comp, psi_1comp, psi_2comp):
 
 def main():
     """Run the advanced pharmacokinetic analysis."""
-    print("Advanced PyNLME Example: Pharmacokinetic Analysis")
+    print("Advanced pynlme Example: Pharmacokinetic Analysis")
     print("=" * 55)
 
     # Generate data

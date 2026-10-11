@@ -1,5 +1,5 @@
 """
-Main API functions for PyNLME - similar to MATLAB's nlmefit and nlmefitsa.
+Main API functions for pynlme - similar to MATLAB's nlmefit and nlmefitsa.
 """
 
 import warnings

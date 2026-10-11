@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PyNLME Real-world Case Study: Warfarin Pharmacokinetics
+pynlme Real-world Case Study: Warfarin Pharmacokinetics
 
 This example demonstrates fitting a realistic pharmacokinetic model to warfarin
 concentration data, including:
@@ -246,7 +246,7 @@ def main():
         f"({100 * df['female'].mean():.0f}%)"
     )
 
-    # Prepare data for PyNLME
+    # Prepare data for pynlme
     x = df[["time", "dose", "weight", "age", "female"]].values
     y = df["concentration"].values
     groups = df["subject"].values

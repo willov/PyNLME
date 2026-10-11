@@ -1,5 +1,5 @@
 """
-Type definitions for PyNLME package.
+Type definitions for pynlme package.
 """
 
 from collections.abc import Callable

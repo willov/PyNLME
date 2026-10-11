@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PyNLME API Comparison Demo
+pynlme API Comparison Demo
 ==========================
 
-This script demonstrates the different API styles available in PyNLME:
+This script demonstrates the different API styles available in pynlme:
 1. Python-style unified interface (recommended)
 2. Python-style direct algorithm interfaces
 3. MATLAB-compatible interfaces (for migration)
@@ -21,7 +21,7 @@ def exponential_model(phi, x, v=None):
 
 def main():
     """Demonstrate all API styles."""
-    print("PyNLME API Comparison Demo")
+    print("pynlme API Comparison Demo")
     print("=" * 50)
 
     # Generate simple test data

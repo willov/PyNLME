@@ -1,5 +1,5 @@
 """
-Utility functions for PyNLME package.
+Utility functions for pynlme package.
 """
 
 import numpy as np

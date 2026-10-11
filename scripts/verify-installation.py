@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Verification script for PyNLME installation from GitHub releases.
-Run this after installing PyNLME to verify everything works correctly.
+Verification script for pynlme installation from GitHub releases.
+Run this after installing pynlme to verify everything works correctly.
 """
 
 import sys
@@ -9,15 +9,15 @@ import traceback
 
 
 def test_import():
-    """Test that PyNLME can be imported successfully."""
-    print("🔍 Testing PyNLME import...")
+    """Test that pynlme can be imported successfully."""
+    print("🔍 Testing pynlme import...")
     try:
         import pynlme
 
-        print(f"✅ PyNLME imported successfully (version: {pynlme.__version__})")
+        print(f"✅ pynlme imported successfully (version: {pynlme.__version__})")
         return True
     except ImportError as e:
-        print(f"❌ Failed to import PyNLME: {e}")
+        print(f"❌ Failed to import pynlme: {e}")
         return False
 
 
@@ -53,7 +53,7 @@ def test_basic_functionality():
 
 def main():
     """Run all verification tests."""
-    print("🔧 PyNLME Installation Verification")
+    print("🔧 pynlme Installation Verification")
     print("=" * 40)
 
     tests = [
@@ -81,19 +81,19 @@ def main():
             all_passed = False
 
     if all_passed:
-        print("\n🎉 All tests passed! PyNLME is ready to use.")
+        print("\n🎉 All tests passed! pynlme is ready to use.")
         print("\n📚 Next steps:")
         print(
-            "  - Check out examples: https://github.com/willov/PyNLME/tree/main/examples"
+            "  - Check out examples: https://github.com/willov/pynlme/tree/main/examples"
         )
         print(
-            "  - Read documentation: https://github.com/willov/PyNLME/blob/main/docs/README.md"
+            "  - Read documentation: https://github.com/willov/pynlme/blob/main/docs/README.md"
         )
         return 0
     else:
-        print("\n⚠️  Some tests failed. PyNLME may not work correctly.")
+        print("\n⚠️  Some tests failed. pynlme may not work correctly.")
         print("   Please check the installation or report an issue at:")
-        print("   https://github.com/willov/PyNLME/issues")
+        print("   https://github.com/willov/pynlme/issues")
         return 1
 
 

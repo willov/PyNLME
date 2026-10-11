@@ -1,5 +1,5 @@
 """
-PyNLME - Nonlinear Mixed-Effects Models for Python
+pynlme - Nonlinear Mixed-Effects Models for Python
 
 Nonlinear mixed-effects (NLME) models in Python (NumPy, SciPy): MATLAB's
 nlmefit and nlmefitsa (Lindstrom-Bates, FO, FOCE, SAEM), validated against

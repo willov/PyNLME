@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PyNLME Demo - Nonlinear Mixed-Effects Models
+pynlme Demo - Nonlinear Mixed-Effects Models
 =============================================
 
-This demo shows the basic usage of PyNLME for fitting nonlinear mixed-effects models
+This demo shows the basic usage of pynlme for fitting nonlinear mixed-effects models
 with both the Python API (fit_nlme, fit_mle, fit_saem) and the MATLAB-compatible
 functions (nlmefit, nlmefitsa).
 """
@@ -60,7 +60,7 @@ def generate_pharmacokinetic_data():
 
 
 def main():
-    print("PyNLME Demo: Pharmacokinetic Modeling")
+    print("pynlme Demo: Pharmacokinetic Modeling")
     print("=" * 50)
 
     # Generate sample data
@@ -224,7 +224,7 @@ def main():
     print(f"Plot saved as '{plot_path}'")
 
     print("\nDemo completed successfully!")
-    print("PyNLME provides MATLAB-compatible interfaces for NLME modeling.")
+    print("pynlme provides MATLAB-compatible interfaces for NLME modeling.")
 
 
 if __name__ == "__main__":

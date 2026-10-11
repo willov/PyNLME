@@ -1,14 +1,14 @@
-# PyNLME Examples
+# pynlme Examples
 
-This directory contains practical examples demonstrating PyNLME functionality.
+This directory contains practical examples demonstrating pynlme functionality.
 
 ## 📋 Dependencies
 
-All examples require the basic PyNLME installation. Some examples have additional requirements:
+All examples require the basic pynlme installation. Some examples have additional requirements:
 
 **Basic Requirements:**
-- `numpy` (included with PyNLME)
-- `scipy` (included with PyNLME)
+- `numpy` (included with pynlme)
+- `scipy` (included with pynlme)
 
 **Optional Requirements for Enhanced Examples:**
 - `matplotlib` - For plotting and visualization (all examples)
@@ -28,7 +28,7 @@ uv add matplotlib pandas psutil
 ## 📋 Example Files
 
 ### [`basic_usage.py`](basic_usage.py)
-Simple examples to get started with PyNLME:
+Simple examples to get started with pynlme:
 - Exponential decay model
 - Basic MLE and SAEM fitting
 - Essential statistics and diagnostics
@@ -56,7 +56,7 @@ Complex modeling scenarios:
 
 ### [`matlab_comparison.py`](matlab_comparison.py)
 MATLAB compatibility demonstrations:
-- Side-by-side MATLAB vs PyNLME code
+- Side-by-side MATLAB vs pynlme code
 - Result validation and comparison
 - Migration guides for MATLAB users
 

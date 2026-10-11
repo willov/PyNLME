@@ -419,7 +419,7 @@ def plot_results(results):
 
 def main():
     """Run all examples."""
-    print("PyNLME - Nonlinear Mixed-Effects Models for Python")
+    print("pynlme - Nonlinear Mixed-Effects Models for Python")
     print("=" * 50)
 
     # Example 1: Compare algorithms

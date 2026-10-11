@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Demonstration of PyNLME simplified function interface.
+Demonstration of pynlme simplified function interface.
 
 This example shows how to use the essential NLME functionality through different
 function names:
@@ -50,7 +50,7 @@ def generate_sample_data():
 
 def main():
     """Demonstrate different function naming styles."""
-    print("PyNLME Simplified Function Interface Demo")
+    print("pynlme Simplified Function Interface Demo")
     print("=" * 50)
 
     # Generate sample data
@@ -163,7 +163,7 @@ def main():
     # ========================================================================
     print("3. Summary")
     print("-" * 30)
-    print("PyNLME provides a clean, simple interface with just 3 essential functions:")
+    print("pynlme provides a clean, simple interface with just 3 essential functions:")
     print()
     print("MATLAB users:")
     print("  • nlmefit()                    - Maximum Likelihood Estimation")
@@ -173,7 +173,7 @@ def main():
     print("  • fit_nlme(method='ML')        - Unified interface, ML method")
     print("  • fit_nlme(method='SAEM')      - Unified interface, SAEM method")
     print()
-    print("This simplified interface makes PyNLME easy to learn and use!")
+    print("This simplified interface makes pynlme easy to learn and use!")
     print("All functions produce identical results for the same algorithm.")
 
 

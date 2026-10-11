@@ -49,11 +49,11 @@ benchmark = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/willov/PyNLME"
-Repository = "https://github.com/willov/PyNLME"
-Documentation = "https://github.com/willov/PyNLME/blob/main/docs/README.md"
-Issues = "https://github.com/willov/PyNLME/issues"
-Changelog = "https://github.com/willov/PyNLME/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/willov/pynlme"
+Repository = "https://github.com/willov/pynlme"
+Documentation = "https://github.com/willov/pynlme/blob/main/docs/README.md"
+Issues = "https://github.com/willov/pynlme/issues"
+Changelog = "https://github.com/willov/pynlme/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "src"

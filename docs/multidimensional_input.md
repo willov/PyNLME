@@ -1,6 +1,6 @@
 # Multi-Dimensional Input Format
 
-PyNLME now supports both traditional "stacked" data format (compatible with MATLAB's nlmefit) and a new "grouped" multi-dimensional format that makes working with structured data more intuitive.
+pynlme now supports both traditional "stacked" data format (compatible with MATLAB's nlmefit) and a new "grouped" multi-dimensional format that makes working with structured data more intuitive.
 
 ## Overview
 
@@ -63,7 +63,7 @@ y_grouped = np.array([
 
 ### Automatic Detection
 
-PyNLME automatically detects the input format and converts it internally:
+pynlme automatically detects the input format and converts it internally:
 
 ```python
 from pynlme import nlmefit

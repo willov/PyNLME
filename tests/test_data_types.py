@@ -1,5 +1,5 @@
 """
-Tests for PyNLME data types and structures.
+Tests for pynlme data types and structures.
 """
 
 import numpy as np

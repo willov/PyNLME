@@ -1,4 +1,4 @@
-# Contributing to PyNLME
+# Contributing to pynlme
 
 ## Setup
 
@@ -8,7 +8,7 @@ kernels in `rust/` (module `pynlme._kernels`). SUND compiles model files with a 
 compiler.
 
 ```bash
-git clone https://github.com/willov/PyNLME && cd PyNLME
+git clone https://github.com/willov/pynlme && cd pynlme
 uv sync --dev --extra sund     # leave out --extra sund to skip SUND
 uv run pytest                  # the fast tests, as CI runs them
 ```

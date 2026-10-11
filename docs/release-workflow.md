@@ -26,7 +26,7 @@ trusted publishing: no token, PyPI trusts this repository's `main.yml` in the Gi
 environment `pypi`. Set up once:
 
 - PyPI: Account settings -> Publishing -> Add a new pending publisher: project
-  `pynlme`, owner `willov`, repository `PyNLME`, workflow `main.yml`, environment
+  `pynlme`, owner `willov`, repository `pynlme`, workflow `main.yml`, environment
   `pypi`.
 - GitHub: Settings -> Environments -> New environment `pypi`, with a required
   reviewer, so that each upload waits for approval (a version uploaded to PyPI can
@@ -41,7 +41,7 @@ pip install pynlme-x.y.z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.w
 pip install "pynlme[sund] @ file:///path/to/pynlme-x.y.z-cp311-abi3-<platform>.whl"
 ```
 
-or from source (needs a Rust toolchain): `pip install git+https://github.com/willov/PyNLME`.
+or from source (needs a Rust toolchain): `pip install git+https://github.com/willov/pynlme`.
 
 Reference results in `validation/reference/` are regenerated separately (see
 [validation/README.md](../validation/README.md)); they need R and MATLAB, not CI.

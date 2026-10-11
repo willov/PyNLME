@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the PyNLME project will be documented in this file.
+All notable changes to the pynlme project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -296,7 +296,7 @@ models correctly.
 - **Example Scripts** - Fixed critical API usage issues in  
   `warfarin_case_study.py` and `performance_benchmark.py`
   - Corrected model function signatures from `model(x, params)` to  
-    `model(params, x, v=None)` to match PyNLME API expectations
+    `model(params, x, v=None)` to match pynlme API expectations
   - Fixed result unpacking to properly handle nlmefit return tuple  
     `(beta, psi, stats, b)`
   - Updated convergence checking to use robust `stats.logl is not None`  
@@ -316,7 +316,7 @@ models correctly.
 
 ### Improved
 
-- **API Consistency** - All example scripts now use consistent PyNLME API  
+- **API Consistency** - All example scripts now use consistent pynlme API  
   patterns
 - **Documentation** - Example scripts provide better demonstrations of library  
   capabilities
@@ -524,7 +524,7 @@ Note: this release was written (code and changelog) by AI (Claude Sonnet 4 in Gi
 
 ### 🎉 Initial Release - Full Implementation
 
-This is the first complete release of PyNLME with both Python and Rust implementations.
+This is the first complete release of pynlme with both Python and Rust implementations.
 
 ### Added
 
@@ -646,10 +646,10 @@ For users coming from MATLAB:
 ```
 
 ```python
-# PyNLME (Python) - MATLAB-style interface
+# pynlme (Python) - MATLAB-style interface
 beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, **opts)
 
-# PyNLME (Python) - Python-style unified interface
+# pynlme (Python) - Python-style unified interface
 beta, psi, stats, b = fit_nlme(X, y, group, None, model, beta0, method="ML", **opts)
 ```
 

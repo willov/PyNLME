@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PyNLME Multi-Dimensional Input Demo
+pynlme Multi-Dimensional Input Demo
 ===================================
 
 This demo shows how to use the new multi-dimensional input format
@@ -20,7 +20,7 @@ def exponential_model(phi, x, v=None):
 
 
 def main():
-    print("PyNLME Multi-Dimensional Input Demo")
+    print("pynlme Multi-Dimensional Input Demo")
     print("=" * 40)
 
     # Example 1: Your exact use case - 3 persons, 4 measurements each

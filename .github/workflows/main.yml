@@ -99,7 +99,7 @@ jobs:
 
       - name: Check import and kernels
         run: |
-          uv run python -c "import pynlme, pynlme._kernels; print(f'PyNLME version: {pynlme.__version__}')"
+          uv run python -c "import pynlme, pynlme._kernels; print(f'pynlme version: {pynlme.__version__}')"
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
@@ -345,10 +345,10 @@ jobs:
               echo "$CHANGELOG_CONTENT" > /tmp/release_notes.md
             else
               echo "No specific changelog found for v$VERSION"
-              echo "See [CHANGELOG.md](https://github.com/willov/PyNLME/blob/main/CHANGELOG.md) for details about this release." > /tmp/release_notes.md
+              echo "See [CHANGELOG.md](https://github.com/willov/pynlme/blob/main/CHANGELOG.md) for details about this release." > /tmp/release_notes.md
             fi
           else
-            echo "Automatic release for PyNLME v$VERSION" > /tmp/release_notes.md
+            echo "Automatic release for pynlme v$VERSION" > /tmp/release_notes.md
             echo "" >> /tmp/release_notes.md
             echo "This is a proof-of-concept implementation. Please use with caution and report any issues." >> /tmp/release_notes.md
           fi
@@ -358,7 +358,7 @@ jobs:
         with:
           tag_name: v${{ needs.check-version.outputs.new-version }}
           files: dist/*
-          name: "PyNLME v${{ steps.release-info.outputs.version }}"
+          name: "pynlme v${{ steps.release-info.outputs.version }}"
           body_path: /tmp/release_notes.md
           draft: false
           prerelease: true  # Mark as pre-release since it's proof-of-concept

@@ -9,7 +9,7 @@ pynlme is an independent project, not affiliated with MathWorks or the R project
 code is its own and contains no MATLAB or R code: the replicate modes reproduce the
 reference programs' computations, worked out from the publications, their
 documentation, outputs and traces, and their source (see
-[Implementation: Sources](https://github.com/willov/PyNLME/blob/main/docs/implementation.md#sources)).
+[Implementation: Sources](https://github.com/willov/pynlme/blob/main/docs/implementation.md#sources)).
 
 ## Pick your starting point
 
@@ -33,7 +33,7 @@ Indices in MATLAB-named options are 1-based (`REParamsSelect=[2, 3]`); `b` is r-
 `stats` has MATLAB's fields and definitions. `nlmefit` reproduces MATLAB's iteration
 step by step with MATLAB's default options, so on most data the result is MATLAB
 R2023b's to ~1e-10 (checked on thousands of simulated datasets).
-Start with the [tutorial](https://github.com/willov/PyNLME/blob/main/docs/tutorial.md).
+Start with the [tutorial](https://github.com/willov/pynlme/blob/main/docs/tutorial.md).
 
 ### Python users
 
@@ -58,7 +58,7 @@ MATLAB's, and `vectorization="full"` evaluates all subjects in one model call. B
 default the estimators follow MATLAB's; `compat="r"` follows R's.
 
 `pynlme.fit` is a named-parameter interface (dict or Polars data, dict results); its
-design is not settled yet and may change. See the [API reference](https://github.com/willov/PyNLME/blob/main/docs/api_reference.md).
+design is not settled yet and may change. See the [API reference](https://github.com/willov/pynlme/blob/main/docs/api_reference.md).
 
 ### R users (nlme, saemix) who would rather not use R
 
@@ -84,7 +84,7 @@ are kept (`method="ML"`, `pdSymm` for a plain `random` formula), and the results
 R `nlme` to ~1e-4 or closer. Not yet
 supported: `weights=` (use `error_model=`), random effects with covariates, and
 transformed covariates in `fixed` (compute a column instead). See
-[the API reference](https://github.com/willov/PyNLME/blob/main/docs/api_reference.md#r-style-pynlmer).
+[the API reference](https://github.com/willov/pynlme/blob/main/docs/api_reference.md#r-style-pynlmer).
 
 saemix users write the same three calls as in R, with the model in R's
 `psi[id, k]` form:
@@ -124,12 +124,12 @@ Lower-level equivalents of R's arguments:
 `compat="r"` reproduces nlme's iteration step by step, so pynlme returns R's fit even
 where the model has several local solutions, and R's `method="REML"` (which for
 nonlinear models is not a restricted-likelihood fit). The default `compat="matlab"`
-RELME is a true REML fit. See [docs/troubleshooting.md](https://github.com/willov/PyNLME/blob/main/docs/troubleshooting.md).
+RELME is a true REML fit. See [docs/troubleshooting.md](https://github.com/willov/pynlme/blob/main/docs/troubleshooting.md).
 
 ## What is validated
 
-Every claim here is a test in [tests/validation/](https://github.com/willov/PyNLME/blob/main/tests/validation/); the details and
-findings are in [validation/README.md](https://github.com/willov/PyNLME/blob/main/validation/README.md).
+Every claim here is a test in [tests/validation/](https://github.com/willov/pynlme/blob/main/tests/validation/); the details and
+findings are in [validation/README.md](https://github.com/willov/pynlme/blob/main/validation/README.md).
 
 - **`nlmefit`**: matches MATLAB R2023b on every output (estimates, covariance,
   log-likelihood, AIC/BIC, standard errors, error parameters, all residual types,
@@ -144,7 +144,7 @@ findings are in [validation/README.md](https://github.com/willov/PyNLME/blob/mai
   reaches the exact maximum likelihood on a linear model; removes the linearisation
   bias of `nlmefit` in simulation studies.
 - **ODE models** (SciPy, or compiled with SUND): reproduce MATLAB's `ode45`-based fits.
-- **Accuracy** ([validation/accuracy/](https://github.com/willov/PyNLME/blob/main/validation/accuracy/README.md)): on 100 simulated
+- **Accuracy** ([validation/accuracy/](https://github.com/willov/pynlme/blob/main/validation/accuracy/README.md)): on 100 simulated
   datasets per scenario (a basic one, and one with three correlated random effects, a
   covariate and a proportional error) pynlme's estimates and standard errors match
   MATLAB's, R's and nlmixr2's: unbiased SAEM and FOCE with 90-99% coverage of the 95%
@@ -211,7 +211,7 @@ the system BLAS), and they could likely be made faster. The times also vary by
 10-20% between runs, and R's timer resolves 1 ms. These cases are small; larger
 problems rank differently in places (below).
 
-**Larger problems** ([validation/scaling/](https://github.com/willov/PyNLME/blob/main/validation/scaling/README.md): 10, 100 and
+**Larger problems** ([validation/scaling/](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md): 10, 100 and
 1000 simulated subjects, a closed-form and an ODE model, also against nlmixr2). At 1000
 subjects pynlme is the fastest for LME (19 times faster than MATLAB on the closed-form
 model; on the ODE model 10 times faster than MATLAB and 27 times faster than R
@@ -240,7 +240,7 @@ times slower.
 - **SUND** (recommended): compile the model with the
   [SUND toolbox](https://isbgroup.eu/sund-toolbox) and use
   `pynlme.sund_model("model_name", feature, parameters, v_states=[...])`
-  (`pip install "pynlme[sund]"`); see [examples/sund_ode_model.py](https://github.com/willov/PyNLME/blob/main/examples/sund_ode_model.py).
+  (`pip install "pynlme[sund]"`); see [examples/sund_ode_model.py](https://github.com/willov/pynlme/blob/main/examples/sund_ode_model.py).
 - **SciPy**: `pynlme.ode_model(rhs, y0, output)` with a vectorised right-hand side.
 - **Doses and other inputs**: SUND activities, one set per experiment
   (`sund_model(..., activities={1: oral, 2: infusion})`, the experiment in a column of
@@ -249,7 +249,7 @@ times slower.
   response vector with a feature column in `X`, and pass `feature=["conc", "effect"]`
   (SUND) or a multi-column `output` (SciPy); each subject is simulated once.
 
-Speed with ODE models (the [scaling benchmark](https://github.com/willov/PyNLME/blob/main/validation/scaling/README.md)): at 1000
+Speed with ODE models (the [scaling benchmark](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md)): at 1000
 subjects LME fits are 1.4-10 times faster than MATLAB with `ode45` and 27 times faster
 than R `nlme` with deSolve; SAEM is 4.5 times faster than MATLAB's (10 subjects) and
 1.2-1.3 times faster than nlmixr2's from 100 subjects on. SUND is the faster solver
@@ -261,13 +261,13 @@ subject's random effects); prefer LME or SAEM there. Analytic derivatives
 ## Installation
 
 Python 3.11-3.14, on NumPy and SciPy, with compiled kernels in Rust. From PyPI (from
-version 0.5.0) or a [release](https://github.com/willov/PyNLME/releases); the wheels
+version 0.5.0) or a [release](https://github.com/willov/pynlme/releases); the wheels
 (Linux, Windows, macOS) need no compiler:
 
 ```bash
 pip install pynlme                                                # from PyPI
 pip install "pynlme[sund]"                                        # with SUND models
-pip install git+https://github.com/willov/PyNLME                  # the latest source
+pip install git+https://github.com/willov/pynlme                  # the latest source
 ```
 
 Installing from git (or the source archive) compiles the kernels and needs a Rust
@@ -279,7 +279,7 @@ C compiler if there is one and otherwise the Zig compiler it installs with it.
 For development:
 
 ```bash
-git clone https://github.com/willov/PyNLME && cd PyNLME
+git clone https://github.com/willov/pynlme && cd pynlme
 uv sync --dev --extra sund     # builds the Rust kernels; leave out --extra sund to skip SUND
 uv run pytest                  # --runslow adds the simulation studies
 ```
@@ -290,18 +290,18 @@ compiled models stays behind as an empty `sund` package; rerun with `--extra sun
 restore it). The validation tests compare with R
 when `Rscript` with `nlme` and `jsonlite` is available, and with MATLAB when
 `PYNLME_MATLAB` names the MATLAB command (see
-[validation/README.md](https://github.com/willov/PyNLME/blob/main/validation/README.md)).
+[validation/README.md](https://github.com/willov/pynlme/blob/main/validation/README.md)).
 
 ## Documentation
 
-[Tutorial](https://github.com/willov/PyNLME/blob/main/docs/tutorial.md) · [API reference](https://github.com/willov/PyNLME/blob/main/docs/api_reference.md) ·
-[Troubleshooting](https://github.com/willov/PyNLME/blob/main/docs/troubleshooting.md) · [Implementation](https://github.com/willov/PyNLME/blob/main/docs/implementation.md) ·
-[Validation](https://github.com/willov/PyNLME/blob/main/validation/README.md) · [Accuracy](https://github.com/willov/PyNLME/blob/main/validation/accuracy/README.md) ·
-[Scaling](https://github.com/willov/PyNLME/blob/main/validation/scaling/README.md) · [Changelog](https://github.com/willov/PyNLME/blob/main/CHANGELOG.md)
+[Tutorial](https://github.com/willov/pynlme/blob/main/docs/tutorial.md) · [API reference](https://github.com/willov/pynlme/blob/main/docs/api_reference.md) ·
+[Troubleshooting](https://github.com/willov/pynlme/blob/main/docs/troubleshooting.md) · [Implementation](https://github.com/willov/pynlme/blob/main/docs/implementation.md) ·
+[Validation](https://github.com/willov/pynlme/blob/main/validation/README.md) · [Accuracy](https://github.com/willov/pynlme/blob/main/validation/accuracy/README.md) ·
+[Scaling](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md) · [Changelog](https://github.com/willov/pynlme/blob/main/CHANGELOG.md)
 
 ## License
 
-MIT License, see [LICENSE](https://github.com/willov/PyNLME/blob/main/LICENSE).
+MIT License, see [LICENSE](https://github.com/willov/pynlme/blob/main/LICENSE).
 
 ## References
 

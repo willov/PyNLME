@@ -1,27 +1,27 @@
 """
-Error types for PyNLME.
+Error types for pynlme.
 """
 
 
-class PyNLMEError(Exception):
-    """Base exception for PyNLME errors."""
+class pynlmeError(Exception):
+    """Base exception for pynlme errors."""
 
     pass
 
 
-class ConvergenceError(PyNLMEError):
+class ConvergenceError(pynlmeError):
     """Raised when algorithm fails to converge."""
 
     pass
 
 
-class ModelEvaluationError(PyNLMEError):
+class ModelEvaluationError(pynlmeError):
     """Raised when model function evaluation fails."""
 
     pass
 
 
-class ValidationError(PyNLMEError):
+class ValidationError(pynlmeError):
     """Raised when input validation fails."""
 
     pass
