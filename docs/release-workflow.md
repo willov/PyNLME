@@ -21,7 +21,18 @@ To check the wheel builds before a release: Actions -> Build wheels -> Run workf
 
 No release is made if the version is unchanged, the tag exists, or tests fail.
 
-Users install from the release:
+The same run publishes the wheels and the sdist to PyPI (job `publish-pypi`) by
+trusted publishing: no token, PyPI trusts this repository's `main.yml` in the GitHub
+environment `pypi`. Set up once:
+
+- PyPI: Account settings -> Publishing -> Add a new pending publisher: project
+  `pynlme`, owner `willov`, repository `PyNLME`, workflow `main.yml`, environment
+  `pypi`.
+- GitHub: Settings -> Environments -> New environment `pypi`, with a required
+  reviewer, so that each upload waits for approval (a version uploaded to PyPI can
+  never be replaced).
+
+Users install from PyPI (`pip install pynlme`) or from the release:
 
 ```bash
 # the wheel for your platform from the release page, e.g. Linux x86_64:
