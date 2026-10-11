@@ -31,11 +31,14 @@ ROWS = {
         ("LME", "pynlme, MATLAB mode (SciPy)", "pynlme", "LME, MATLAB mode (SciPy)"),
         ("LME", "MATLAB `nlmefit` (ode45)", "matlab", "LME"),
         ("LME", "pynlme, R mode (SUND)", "pynlme", "LME, R mode (SUND)"),
+        ("LME", "pynlme, R mode (SciPy)", "pynlme", "LME, R mode (SciPy)"),
         ("LME", "R `nlme` (deSolve)", "r", "LME, nlme"),
         ("FOCE", "pynlme (SUND)", "pynlme", "FOCE (SUND)"),
+        ("FOCE", "pynlme (SciPy)", "pynlme", "FOCE (SciPy)"),
         ("FOCE", "MATLAB `nlmefit` (ode45)", "matlab", "FOCE"),
         ("FOCE", "nlmixr2 (FOCEi, rxode2)", "r", "FOCEi, nlmixr2"),
         ("SAEM", "pynlme `nlmefitsa` (SUND)", "pynlme", "SAEM (SUND)"),
+        ("SAEM", "pynlme `nlmefitsa` (SciPy)", "pynlme", "SAEM (SciPy)"),
         ("SAEM", "MATLAB `nlmefitsa` (ode45)", "matlab", "SAEM"),
         ("SAEM", "nlmixr2 (rxode2)", "r", "SAEM, nlmixr2"),
     ],
@@ -80,7 +83,8 @@ def main() -> None:
             entries = results.get(program, {}).get(model, {}).get(key, {})
             # MATLAB's JSON has keys n10, n100, ...
             cells = [cell(entries.get(n, entries.get(f"n{n}"))) for n in SIZES]
-            print(f"| {method} | {label} | " + " | ".join(cells) + " |")
+            if any(c != "–" for c in cells):  # rows not measured are left out
+                print(f"| {method} | {label} | " + " | ".join(cells) + " |")
         print()
         print(
             "Log-likelihood each program reports, as a check that the fits are "

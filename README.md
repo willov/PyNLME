@@ -206,12 +206,14 @@ the system BLAS), and they could likely be made faster. The times also vary by
 problems (more subjects, ODE models) may rank differently.
 
 **Larger problems** ([validation/scaling/](validation/scaling/README.md): 10, 100 and
-1000 simulated subjects, a closed-form and an ODE model, also against nlmixr2): pynlme
-stays the fastest for LME and SAEM on the closed-form model and for LME on the ODE
-model (18 times faster than R `nlme` at 1000 subjects); its FOCE is 60 times faster
-than MATLAB's at 1000 subjects, but nlmixr2's FOCEi is 7 times faster than pynlme on
-the closed-form model and far faster on the ODE model, where nlmixr2 uses sensitivity
-equations and pynlme finite differences.
+1000 simulated subjects, a closed-form and an ODE model, also against nlmixr2). At 1000
+subjects pynlme is the fastest for LME (19 times faster than MATLAB on the closed-form
+model; on the ODE model 10 times faster than MATLAB and 27 times faster than R
+`nlme`) and for SAEM (2.5-85 times faster than MATLAB, saemix and nlmixr2 on the
+closed-form model, 1.3 times faster than nlmixr2 on the ODE model). Its FOCE is 70
+times faster than MATLAB's, but nlmixr2's FOCEi is 6 times faster than pynlme on the
+closed-form model and far faster on the ODE model, where nlmixr2 uses sensitivity
+equations and pynlme finite differences. All programs reach the same fits.
 
 Regenerate: `Rscript validation/r/benchmark.R`, `validation/matlab/benchmark.m` in
 MATLAB, then `uv run python validation/benchmark.py --markdown`.

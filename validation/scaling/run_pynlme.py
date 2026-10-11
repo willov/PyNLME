@@ -143,8 +143,6 @@ def runs(name: str, n: int):
             (f"FOCE{suffix}", fit(ApproximationType="FOCE")),
             (f"SAEM{suffix}", fit(nlmefitsa, random_state=1)),
         ]
-        if label == "SciPy":  # the solver comparison needs only one method
-            out = [r for r in out if not r[0].endswith("(SciPy)") or "MATLAB" in r[0]]
     if name == "oral":
         fit_saemix = saemix_oral(t, y, group, dose)
         out.append(("SAEM, pynlme.r.saemix", lambda: None if fit_saemix() else None))

@@ -29,16 +29,16 @@ Closed-form oral PK model (3 parameters, 2 random effects, 10 observations per s
 
 | Method | Program | 10 subjects | 100 subjects | 1000 subjects |
 |---|---|---|---|---|
-| LME | pynlme, MATLAB mode | 0.008 | 0.042 | 0.417 |
+| LME | pynlme, MATLAB mode | 0.007 | 0.030 | 0.288 |
 | LME | MATLAB `nlmefit` | 0.012 | 0.081 | 5.58 |
-| LME | pynlme, R mode | 0.006 | 0.031 | 0.277 |
+| LME | pynlme, R mode | 0.004 | 0.019 | 0.154 |
 | LME | R `nlme` | 0.009 | 0.026 | 0.200 |
-| FOCE | pynlme | 0.404 | 1.47 | 9.96 |
+| FOCE | pynlme | 0.415 | 1.16 | 8.50 |
 | FOCE | MATLAB `nlmefit` | 1.48 | 10 | 599 |
 | FOCE | nlmixr2 (FOCEi) | 0.388 | 0.415 | 1.41 |
-| SAEM | pynlme `nlmefitsa` | 0.298 | 0.319 | 1.79 |
+| SAEM | pynlme `nlmefitsa` | 0.274 | 0.281 | 1.22 |
 | SAEM | MATLAB `nlmefitsa` | 0.600 | 0.948 | 3.02 |
-| SAEM | pynlme `pynlme.r.saemix` | 0.248 | 0.636 | 4.58 |
+| SAEM | pynlme `pynlme.r.saemix` | 0.265 | 0.607 | 4.06 |
 | SAEM | R `saemix` | 1.26 | 2.81 | 24 |
 | SAEM | nlmixr2 | 1.16 | 8.19 | 104 |
 
@@ -58,15 +58,15 @@ Michaelis-Menten ODE model (4 parameters, 2 random effects, 8 observations per s
 
 | Method | Program | 10 subjects | 100 subjects | 1000 subjects |
 |---|---|---|---|---|
-| LME | pynlme, MATLAB mode (SUND) | 0.249 | 1.67 | 42 |
-| LME | pynlme, MATLAB mode (SciPy) | 1.06 | 6.78 | 66 |
+| LME | pynlme, MATLAB mode (SUND) | 0.218 | 1.20 | 35 |
+| LME | pynlme, MATLAB mode (SciPy) | 0.441 | 0.733 | 4.83 |
 | LME | MATLAB `nlmefit` (ode45) | 0.388 | 3.49 | 49 |
-| LME | pynlme, R mode (SUND) | 0.121 | 1.12 | 11 |
+| LME | pynlme, R mode (SUND) | 0.106 | 0.717 | 7.54 |
 | LME | R `nlme` (deSolve) | 1.34 | 12 | 206 |
-| FOCE | pynlme (SUND) | 33 | 437 | skipped |
+| FOCE | pynlme (SUND) | 33 | 385 | skipped |
 | FOCE | MATLAB `nlmefit` (ode45) | 431 | skipped | skipped |
 | FOCE | nlmixr2 (FOCEi, rxode2) | 0.847 | 1.86 | 14 |
-| SAEM | pynlme `nlmefitsa` (SUND) | 30 | 34 | 319 |
+| SAEM | pynlme `nlmefitsa` (SUND) | 30 | 30 | 285 |
 | SAEM | MATLAB `nlmefitsa` (ode45) | 137 | skipped | skipped |
 | SAEM | nlmixr2 (rxode2) | 5.04 | 36 | 379 |
 
@@ -85,25 +85,31 @@ Log-likelihood each program reports, as a check that the fits are equally good (
 
 ## Findings
 
-- **Closed-form model**: for LME pynlme's MATLAB mode is 13 times faster than MATLAB
-  at 1000 subjects, while R `nlme` is slightly faster than pynlme's R mode (0.20 vs
-  0.28 s). For SAEM pynlme is the fastest (1.7 times faster
-  than MATLAB, 5 times faster than saemix, 58 times faster than nlmixr2 at 1000).
-  For FOCE pynlme is 60 times faster than MATLAB at 1000 subjects, but nlmixr2's
-  FOCEi is 7 times faster than pynlme (same optimum).
-- **ODE model, LME**: pynlme with SUND is the fastest: its R mode is 18 times faster
-  than R `nlme` with deSolve at 1000 subjects, its MATLAB mode 1.2-2 times faster than
-  MATLAB with `ode45` (with SciPy's solver pynlme is slower than MATLAB).
-- **ODE model, FOCE**: nlmixr2 is far ahead (14 s at 1000 subjects; pynlme needs 437
+At 1000 subjects:
+
+- **Closed-form model**: pynlme is the fastest for LME (its MATLAB mode 19 times
+  faster than MATLAB, its R mode 1.3 times faster than R `nlme`) and for SAEM (2.5
+  times faster than MATLAB, `pynlme.r.saemix` 6 times faster than saemix, 85 times
+  faster than nlmixr2). For FOCE pynlme is 70 times faster than MATLAB, but nlmixr2's
+  FOCEi is 6 times faster than pynlme (same optimum).
+- **ODE model, LME**: pynlme is the fastest: its R mode (SUND) 27 times faster than R
+  `nlme` with deSolve; its MATLAB mode 10 times faster than MATLAB with `ode45` when
+  using SciPy's batched solver (`ode_model`, all subjects as one vectorised system),
+  1.4 times with SUND. For many subjects `ode_model` beats SUND's batches of 16; for
+  10 subjects SUND is faster.
+- **ODE model, FOCE**: nlmixr2 is far ahead (14 s at 1000 subjects; pynlme needs 385
   s at 100, MATLAB 431 s at 10). nlmixr2 computes the model's derivatives from
   sensitivity equations and its outer gradient analytically; pynlme and MATLAB use
   finite differences, which re-solve every subject's conditional modes for each
-  parameter. This is pynlme's main gap.
+  parameter. This is pynlme's main gap (SUND sensitivities will allow the same).
 - **ODE model, SAEM**: pynlme is 4.5 times faster than MATLAB at 10 subjects; against
   nlmixr2 it is 6 times slower at 10 subjects (with few subjects nlmefitsa's default
-  runs several chains), equal at 100 and 1.2 times faster at 1000.
+  runs several chains) and 1.2-1.3 times faster at 100 and 1000.
 - All programs reach the same fit within a method (log-likelihood tables), except
   MATLAB's FOCE, which ends lower.
+- Not yet measured: SciPy's solver for FOCE, SAEM and the R mode at 100 and 1000
+  subjects (a run was stopped because the machine was busy). FOCE with SciPy took 134
+  s at 10 subjects, so SUND remains the better choice there.
 
 We are not experts in tuning MATLAB, R or nlmixr2: they run as a typical user would
 run them, and could likely be made faster.

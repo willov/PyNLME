@@ -70,6 +70,11 @@ default RELME does not.
 1. Write the model for `Vectorization="Full"` (see the API reference): one model call
    for many groups instead of one per group.
 2. For ODE models use a compiled SUND model via `sund_model` (batched with containers),
-   or `ode_model` with a vectorised right-hand side.
+   or `ode_model` with a vectorised right-hand side. With many subjects (hundreds)
+   `ode_model` can be the faster of the two for LME, as it solves all subjects as one
+   system; with few subjects and for FOCE SUND is faster (see
+   [the scaling benchmark](../validation/scaling/README.md)).
 3. Supply analytic derivatives with `with_jacobian` when the model is expensive.
 4. `nlmefitsa`: fewer chains (`NChains=1`) or iterations trade precision for speed.
+5. FOCE is the slowest method with ODE models (finite differences re-solve every
+   subject's random effects); LME or SAEM are much faster there.
