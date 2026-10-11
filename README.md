@@ -145,10 +145,11 @@ findings are in [validation/README.md](validation/README.md).
   bias of `nlmefit` in simulation studies.
 - **ODE models** (SciPy, or compiled with SUND): reproduce MATLAB's `ode45`-based fits.
 - **Accuracy** ([validation/accuracy/](validation/accuracy/README.md)): on 100 simulated
-  datasets pynlme's estimates are unbiased and its 95% confidence intervals cover the
-  true values 91-99% of the time, for LME, FOCE and SAEM, the same as MATLAB, R and
-  nlmixr2 (except MATLAB's FOCE and nlmixr2's SAEM, which are biased for one
-  parameter).
+  datasets per scenario (a basic one, and one with three correlated random effects, a
+  covariate and a proportional error) pynlme's estimates and standard errors match
+  MATLAB's, R's and nlmixr2's: unbiased SAEM and FOCE with 90-99% coverage of the 95%
+  confidence intervals, and LME with the linearisation's small bias that every program
+  shares. MATLAB's FOCE is biased (coverage down to 0% for log CL).
 
 Supported: `ApproximationType` LME/RELME/FO/FOCE; error models constant, proportional,
 combined, exponential; `ParamTransform`; fixed- and random-effects designs including
