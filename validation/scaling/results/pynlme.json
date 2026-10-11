@@ -141,5 +141,58 @@
     "logl": -360.28385508540305
    }
   }
+ },
+ "mmd": {
+  "LME, MATLAB mode (SUND)": {
+   "10": {
+    "error": "FloatingPointError('modelfun returned non-finite values')"
+   },
+   "100": {
+    "time_s": 6.858332078001695,
+    "logl": 271.0761788659088
+   },
+   "1000": {
+    "time_s": 643.1723692310043,
+    "logl": 2572.1927184397136
+   }
+  },
+  "LME, R mode (SUND)": {
+   "10": {
+    "time_s": 0.20475147702381946,
+    "logl": 29.871078295898315
+   },
+   "100": {
+    "time_s": 2.0423153479932807,
+    "logl": 271.0854312746561
+   },
+   "1000": {
+    "time_s": 21.13016721099848,
+    "logl": 2571.6689376173854
+   }
+  },
+  "FOCE (SUND)": {
+   "10": {
+    "error": "FloatingPointError('modelfun returned non-finite values')"
+   },
+   "100": {
+    "time_s": 1188.5260155599972,
+    "logl": 271.680467392861
+   },
+   "1000": {
+    "skipped": true
+   }
+  },
+  "SAEM (SUND)": {
+   "10": {
+    "time_s": 98.59914421199937,
+    "logl": null
+   },
+   "100": {
+    "skipped": true
+   },
+   "1000": {
+    "skipped": true
+   }
+  }
  }
 }

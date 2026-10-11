@@ -148,28 +148,44 @@ end
 
 function c = mmdModel(phi, t, dose)
 % The mm model with the dose added to the gut at 0, 12 and 24 h: ode45 from dose
-% to dose (as validation/scaling/make_data.py).
+% to dose (as validation/scaling/make_data.py). Where the system is nearly
+% singular (Km near 0) ode45 does not fail but takes ever smaller steps, for hours:
+% after 200000 right-hand-side evaluations the model returns NaN instead, as a
+% failing integrator does in SUND.
 ka = phi(1); V = phi(2); vmax = phi(3); km = phi(4);
-rhs = @(~, s) [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
+evaluations = 0;
 opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
 [ts, order] = sort(t(:));
 edges = [0 12 24 inf];
 state = [0; 0];
 sol = zeros(size(ts));
-for k = 1:3
-    state(1) = state(1) + dose(1);
-    inside = ts >= edges(k) & ts < edges(k + 1);
-    stop = min(edges(k + 1), max(ts));
-    grid = unique([edges(k); ts(inside); stop]);
-    [tt, y] = ode45(rhs, grid, state, opts);
-    if numel(grid) == 2  % ode45 returns all steps for a two-point span
-        y = y([1 end], :); tt = tt([1 end]);
+try
+    for k = 1:3
+        state(1) = state(1) + dose(1);
+        inside = ts >= edges(k) & ts < edges(k + 1);
+        stop = min(edges(k + 1), max(ts));
+        grid = unique([edges(k); ts(inside); stop]);
+        [tt, y] = ode45(@rhs, grid, state, opts);
+        if numel(grid) == 2  % ode45 returns all steps for a two-point span
+            y = y([1 end], :); tt = tt([1 end]);
+        end
+        [~, where] = ismember(ts(inside), tt);
+        sol(inside) = y(where, 2);
+        state = y(end, :)';
+        if stop >= max(ts), break; end
     end
-    [~, where] = ismember(ts(inside), tt);
-    sol(inside) = y(where, 2);
-    state = y(end, :)';
-    if stop >= max(ts), break; end
+catch err
+    if ~strcmp(err.identifier, 'scaling:stiff'), rethrow(err); end
+    sol(:) = NaN;
 end
 c = zeros(size(t(:)));
 c(order) = sol;
+
+    function ds = rhs(~, s)
+        evaluations = evaluations + 1;
+        if evaluations > 200000
+            error('scaling:stiff', 'ode45 needs too many steps');
+        end
+        ds = [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
+    end
 end
