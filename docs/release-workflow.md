@@ -1,31 +1,37 @@
 # Release workflow
 
-Releases are created automatically when the version in `pyproject.toml` changes on
-`main`.
+Merges to `main` only run the tests. A release is made when you push a tag:
 
-1. Update `version` in `pyproject.toml` and put the notes in `CHANGELOG.md` under a
-   heading `## [x.y.z] - unreleased`. The release job fills in the date (in the
-   heading and in `CITATION.cff`), commits that to `main` as "Release vx.y.z" and
-   tags that commit. If `main` is protected, allow GitHub Actions to push to it.
-2. Commit and push (or merge) to `main`.
-3. GitHub Actions (`.github/workflows/main.yml`):
-   - runs the tests on Linux, Windows and macOS with Python 3.11-3.14 (the fast tests;
-     the slow validation against R, the `validation` job, runs only when the workflow
-     is started by hand: Actions -> CI/CD Pipeline -> Run workflow);
-   - if the version changed and the tag does not exist yet, tags `vx.y.z`, builds one
-     wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64 and
-     x86_64; each an abi3 wheel for Python 3.11+, with the compiled Rust kernels) and
-     the sdist with maturin, and creates a GitHub release (marked pre-release) with
-     them and the changelog section.
+1. On `main`: set `version` in `pyproject.toml` and put the notes in `CHANGELOG.md`
+   under a heading `## [x.y.z] - unreleased`; merge.
+2. Tag the merged commit and push the tag:
 
-To check the wheel builds before a release: Actions -> Build wheels -> Run workflow
-(`.github/workflows/wheels.yml`; builds without releasing).
+   ```bash
+   git checkout main && git pull
+   git tag vx.y.z
+   git push origin vx.y.z
+   ```
 
-No release is made if the version is unchanged, the tag exists, or tests fail.
+3. GitHub Actions (`.github/workflows/main.yml`) then
+   - checks that the tag is `v` plus `pyproject.toml`'s version and on `main`;
+   - runs the tests (Linux, Windows, macOS; Python 3.11-3.14);
+   - builds one wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64
+     and x86_64; abi3 wheels for Python 3.11+ with the compiled Rust kernels) and the
+     sdist with maturin;
+   - creates a GitHub release (pre-release) with them and the changelog section;
+   - publishes them to PyPI once you approve the deployment ("Review deployments" in
+     the run; environment `pypi`);
+   - commits the release date to `main` (the version's heading in `CHANGELOG.md` and
+     `date-released` in `CITATION.cff`). If `main` is protected, allow GitHub Actions
+     to push to it.
 
-The same run publishes the wheels and the sdist to PyPI (job `publish-pypi`) by
-trusted publishing: no token, PyPI trusts this repository's `main.yml` in the GitHub
-environment `pypi`. Set up once:
+Nothing is published if the tag does not match the version or is not on `main`, or if
+the tests fail. The slow validation against R runs only when the workflow is started
+by hand (Actions -> CI/CD Pipeline -> Run workflow). To check the wheel builds before
+tagging: Actions -> Build wheels -> Run workflow (`.github/workflows/wheels.yml`).
+
+PyPI publishing is trusted publishing: no token; PyPI trusts this repository's
+`main.yml` in the environment `pypi`. Set up once:
 
 - PyPI: Account settings -> Publishing -> Add a new pending publisher: project
   `pynlme`, owner `willov`, repository `pynlme`, workflow `main.yml`, environment

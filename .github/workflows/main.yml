@@ -1,76 +1,19 @@
 name: CI/CD Pipeline
 
+# Tests on pushes and pull requests. A release runs only for a pushed tag vX.Y.Z on
+# main (git tag vX.Y.Z && git push origin vX.Y.Z): check the tag, test, build the
+# wheels and sdist, create the GitHub release, publish to PyPI (after approval in
+# the "pypi" environment), and date the release in CHANGELOG.md and CITATION.cff
+# on main.
 on:
   push:
     branches: [ main, develop ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  # Stage 1: Check version changes (only on main)
-  check-version:
-    name: Check for version changes
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    outputs:
-      version-changed: ${{ steps.version-check.outputs.changed }}
-      new-version: ${{ steps.version-check.outputs.version }}
-      tag-exists: ${{ steps.tag-check.outputs.exists }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Get current version
-        id: current-version
-        run: |
-          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Get previous version
-        id: previous-version
-        run: |
-          git checkout HEAD~1 -- pyproject.toml || echo "No previous version"
-          if [ -f pyproject.toml ]; then
-            PREV_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/' || echo "none")
-          else
-            PREV_VERSION="none"
-          fi
-          echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
-          git checkout HEAD -- pyproject.toml
-
-      - name: Check if version changed
-        id: version-check
-        run: |
-          CURRENT="${{ steps.current-version.outputs.version }}"
-          PREVIOUS="${{ steps.previous-version.outputs.version }}"
-          echo "Current version: $CURRENT"
-          echo "Previous version: $PREVIOUS"
-          
-          if [ "$CURRENT" != "$PREVIOUS" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "version=$CURRENT" >> $GITHUB_OUTPUT
-            echo "✅ Version changed from $PREVIOUS to $CURRENT"
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "version=$CURRENT" >> $GITHUB_OUTPUT
-            echo "ℹ️  Version unchanged: $CURRENT"
-          fi
-
-      - name: Check if tag already exists
-        id: tag-check
-        run: |
-          VERSION="${{ steps.current-version.outputs.version }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "⚠️  Tag v$VERSION already exists"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "✅ Tag v$VERSION does not exist"
-          fi
-
-  # Stage 2: Testing - runs on all events
   test:
     name: Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -148,93 +91,39 @@ jobs:
         env:
           PYNLME_RANDOM_N: "10"
 
-  # Stage 3: Release - only runs on main if version changed and tests pass
-  release:
-    name: Create release
-    needs: [check-version, test]
+  # The tag must name pyproject.toml's version and point to a commit on main.
+  release-check:
+    name: Check the release tag
     runs-on: ubuntu-latest
-    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
-    permissions:
-      contents: write
-      actions: write
-    
+    if: startsWith(github.ref, 'refs/tags/v')
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Validate version format
+      - name: Tag matches the version, commit is on main
+        id: version
         run: |
-          VERSION="${{ needs.check-version.outputs.new-version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
-            echo "❌ Invalid version format: $VERSION"
+          TAG="${GITHUB_REF_NAME}"
+          VERSION=$(grep -m1 '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match pyproject.toml's version $VERSION"
             exit 1
           fi
-          echo "✅ Valid version format: $VERSION"
-
-      # The release date is the day the release is made: CHANGELOG.md's heading for
-      # this version and CITATION.cff's date-released are set here and committed to
-      # main; the tag (and with it the wheels, the GitHub release and PyPI) is on
-      # that commit. Commits by GITHUB_TOKEN do not start another workflow run.
-      - name: Date the release in CHANGELOG.md and CITATION.cff
-        run: |
-          VERSION="${{ needs.check-version.outputs.new-version }}"
-          TODAY=$(date -u +%Y-%m-%d)
-          PATTERN="${VERSION//./\\.}"
-          sed -i -E "s/^## \[$PATTERN\].*$/## [$VERSION] - $TODAY/" CHANGELOG.md
-          sed -i -E "s/^date-released: .*/date-released: $TODAY/" CITATION.cff
-          git diff --stat
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -am "Release v$VERSION"
-            git push origin HEAD:main
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $TAG is not on main"
+            exit 1
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Extract changelog for this version
-        id: changelog
-        run: |
-          VERSION="${{ needs.check-version.outputs.new-version }}"
-          echo "📋 Extracting changelog for version $VERSION"
-          
-          if [ -f CHANGELOG.md ]; then
-            CHANGELOG_CONTENT=$(awk "/^## \[?v?$VERSION\]?/ {flag=1; next} /^## \[?v?[0-9]/ {flag=0} flag" CHANGELOG.md || echo "")
-            
-            if [ -n "$CHANGELOG_CONTENT" ]; then
-              echo "✅ Found changelog content for v$VERSION"
-              echo "$CHANGELOG_CONTENT" > /tmp/changelog.txt
-            else
-              echo "⚠️  No specific changelog found for v$VERSION, using default"
-              echo "See CHANGELOG.md for details about this release." > /tmp/changelog.txt
-            fi
-          else
-            echo "⚠️  No CHANGELOG.md found, using default content"
-            echo "Automatic release for version $VERSION" > /tmp/changelog.txt
-          fi
-
-      - name: Create and push tag
-        run: |
-          VERSION="${{ needs.check-version.outputs.new-version }}"
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          git tag -a "v$VERSION" -m "Release v$VERSION
-
-          Automatically created from version change in pyproject.toml
-          
-          $(cat /tmp/changelog.txt)"
-          
-          git push origin "v$VERSION"
-          echo "✅ Created and pushed tag v$VERSION"
-
-  # Stage 5: Build the wheels (one abi3 wheel per platform) and the sdist
+  # One abi3 wheel per platform (Python 3.11+, with the compiled Rust kernels).
   build-wheels:
     name: Build wheel for ${{ matrix.target }} on ${{ matrix.os }}
-    needs: [check-version, test, release]
+    needs: [release-check, test]
     runs-on: ${{ matrix.os }}
-    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
     strategy:
       matrix:
         include:
@@ -246,8 +135,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.check-version.outputs.new-version }}
 
       - uses: actions/setup-python@v5
         with:
@@ -265,17 +152,13 @@ jobs:
           name: dist-${{ matrix.os }}-${{ matrix.target }}
           path: dist/*.whl
 
-  # Stage 6: Build the source distribution
   build-sdist:
     name: Build source distribution
-    needs: [check-version, test, release]
+    needs: [release-check, test]
     runs-on: ubuntu-latest
-    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.check-version.outputs.new-version }}
 
       - name: Build sdist
         uses: PyO3/maturin-action@v1
@@ -288,14 +171,48 @@ jobs:
           name: dist-sdist
           path: dist/*.tar.gz
 
-  # Stage 6b: Publish to PyPI (trusted publishing: no token; the PyPI project has
-  # this repository, workflow main.yml and environment "pypi" as its publisher).
-  # Give the "pypi" environment a required reviewer on GitHub to approve each upload.
+  # GitHub release (pre-release) with the wheels, the sdist and the changelog section.
+  github-release:
+    name: Create GitHub release
+    needs: [release-check, build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          VERSION="${{ needs.release-check.outputs.version }}"
+          awk "/^## \[?v?$VERSION\]?/ {flag=1; next} /^## \[?v?[0-9]/ {flag=0} flag" \
+            CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "See [CHANGELOG.md](https://github.com/willov/pynlme/blob/main/CHANGELOG.md)." \
+              > release_notes.md
+          fi
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: pynlme v${{ needs.release-check.outputs.version }}
+          body_path: release_notes.md
+          files: dist/*
+          prerelease: true
+          fail_on_unmatched_files: true
+
+  # PyPI by trusted publishing (no token): the PyPI project trusts this workflow
+  # (main.yml) in the environment "pypi", whose required reviewer approves the upload.
   publish-pypi:
     name: Publish to PyPI
-    needs: [check-version, test, release, build-wheels, build-sdist]
+    needs: [release-check, build-wheels, build-sdist]
     runs-on: ubuntu-latest
-    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
     environment:
       name: pypi
       url: https://pypi.org/project/pynlme/
@@ -312,91 +229,30 @@ jobs:
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
 
-  # Stage 7: Create GitHub Release with artifacts
-  github-release:
-    name: Create GitHub Release
-    needs: [check-version, test, release, build-wheels, build-sdist]
+  # The release date in CHANGELOG.md's heading for this version and in
+  # CITATION.cff, committed to main (commits by GITHUB_TOKEN start no new run).
+  date-release:
+    name: Date the release on main
+    needs: [release-check, github-release]
     runs-on: ubuntu-latest
-    if: needs.check-version.outputs.version-changed == 'true' && needs.check-version.outputs.tag-exists == 'false'
     permissions:
       contents: write
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v${{ needs.check-version.outputs.new-version }}
+          ref: main
 
-      - name: Debug trigger information
+      - name: Set the date and push
         run: |
-          echo "🔍 GitHub Release creation info:"
-          echo "Version: ${{ needs.check-version.outputs.new-version }}"
-          echo "Tag: v${{ needs.check-version.outputs.new-version }}"
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: dist-*
-          merge-multiple: true
-          path: dist
-
-      - name: List all artifacts
-        run: |
-          echo "📦 Contents of dist directory:"
-          ls -la dist/
-          echo ""
-          echo "🔍 All files to be uploaded:"
-          find dist/ -type f -name "*.whl" -o -name "*.tar.gz"
-          echo ""
-          echo "📊 File count:"
-          echo "Wheels: $(find dist/ -name "*.whl" | wc -l)"
-          echo "Sdist: $(find dist/ -name "*.tar.gz" | wc -l)"
-
-      - name: Extract changelog for release
-        id: release-info
-        run: |
-          VERSION="${{ needs.check-version.outputs.new-version }}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
-          # Try to extract changelog for this version
-          if [ -f CHANGELOG.md ]; then
-            CHANGELOG_CONTENT=$(awk "/^## \[?v?$VERSION\]?/ {flag=1; next} /^## \[?v?[0-9]/ {flag=0} flag" CHANGELOG.md || echo "")
-            if [ -n "$CHANGELOG_CONTENT" ]; then
-              echo "Found changelog content for v$VERSION"
-              echo "$CHANGELOG_CONTENT" > /tmp/release_notes.md
-            else
-              echo "No specific changelog found for v$VERSION"
-              echo "See [CHANGELOG.md](https://github.com/willov/pynlme/blob/main/CHANGELOG.md) for details about this release." > /tmp/release_notes.md
-            fi
-          else
-            echo "Automatic release for pynlme v$VERSION" > /tmp/release_notes.md
-            echo "" >> /tmp/release_notes.md
-            echo "This is a proof-of-concept implementation. Please use with caution and report any issues." >> /tmp/release_notes.md
-          fi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ needs.check-version.outputs.new-version }}
-          files: dist/*
-          name: "pynlme v${{ steps.release-info.outputs.version }}"
-          body_path: /tmp/release_notes.md
-          draft: false
-          prerelease: true  # Mark as pre-release since it's proof-of-concept
-          fail_on_unmatched_files: true
-
-  # Stage 8: Notify if skipped
-  notify-skip:
-    name: Notify why release was skipped
-    needs: [check-version, test]
-    runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main' && (needs.check-version.outputs.version-changed != 'true' || needs.check-version.outputs.tag-exists == 'true' || needs.test.result == 'failure')
-    
-    steps:
-      - name: Explain why release was skipped
-        run: |
-          if [ "${{ needs.check-version.outputs.version-changed }}" != "true" ]; then
-            echo "ℹ️  No release created: Version unchanged (${{ needs.check-version.outputs.new-version }})"
-          elif [ "${{ needs.check-version.outputs.tag-exists }}" == "true" ]; then
-            echo "⚠️  No release created: Tag v${{ needs.check-version.outputs.new-version }} already exists"
-          elif [ "${{ needs.test.result }}" == "failure" ]; then
-            echo "❌ No release created: Tests failed"
+          VERSION="${{ needs.release-check.outputs.version }}"
+          TODAY=$(date -u +%Y-%m-%d)
+          PATTERN="${VERSION//./\\.}"
+          sed -i -E "s/^## \[$PATTERN\].*$/## [$VERSION] - $TODAY/" CHANGELOG.md
+          sed -i -E "s/^date-released: .*/date-released: $TODAY/" CITATION.cff
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "Date the v$VERSION release"
+            git push origin HEAD:main
           fi
