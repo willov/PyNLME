@@ -56,6 +56,22 @@ _SAEM_FIELDS = (
 )
 
 
+def _make_options(parsed: dict) -> NLMEOptions:
+    """NLMEOptions from parsed options; an unknown option name gets the closest
+    MATLAB or Python name as a suggestion."""
+    import dataclasses
+    import difflib
+
+    known = {f.name for f in dataclasses.fields(NLMEOptions)}
+    unknown = [key for key in parsed if key not in known]
+    if unknown:
+        names = sorted(known | set(_MATLAB_NAMES) | set(_SAEM_FIELDS))
+        close = difflib.get_close_matches(unknown[0], names, n=2)
+        hint = f" Did you mean {' or '.join(repr(c) for c in close)}?" if close else ""
+        raise TypeError(f"Unknown option {unknown[0]!r}.{hint}")
+    return NLMEOptions(**parsed)
+
+
 def _parse_options(kwargs: dict) -> tuple[dict, set[str]]:
     """Normalise MATLAB-style and Python-style options to NLMEOptions fields.
 
@@ -164,7 +180,7 @@ def _build_model(
     # "SingleGroup" models also accept a parameter vector, so they are called
     # as "SinglePhi".
     vectorization = "full" if options.vectorization.lower() == "full" else "singlephi"
-    return GroupedModel(
+    model = GroupedModel(
         vectorization=vectorization,
         X=[X[r] for r in rows],
         y=[y[r] for r in rows],
@@ -175,6 +191,26 @@ def _build_model(
         modelfun=modelfun,
         rows=rows,
     )
+    _check_start(model, beta0, p)
+    return model
+
+
+def _check_start(model: GroupedModel, beta0, p: int) -> None:
+    """Call the model once at the start values, so that a model that cannot be
+    evaluated there (e.g. beta0 shorter than the model's parameter vector) fails
+    with a message saying so, rather than deep inside the fit."""
+    beta0 = np.asarray(beta0, dtype=float)
+    try:
+        model.predict_flat(np.array([0]), model.etas_all(beta0)[:1])
+    except (IndexError, TypeError, KeyError, AttributeError, ValueError) as error:
+        if str(error).startswith("modelfun returned"):
+            raise  # pynlme's own message about the output's shape
+        raise type(error)(
+            f"modelfun failed at the start values (the first group, phi from "
+            f"beta0 = {beta0.tolist()}): {error}. Check that beta0 has one value per "
+            f"model parameter ({p} here) and that modelfun takes (phi, X) or "
+            "(phi, X, V) as documented."
+        ) from error
 
 
 def _full_covariance(cov_pattern, r: int) -> bool:
@@ -295,7 +331,7 @@ def nlmefit(
             "pnls_tol, pnls_max_iter and min_scale apply to R's nlme iteration "
             "(compat='r', LME/RELME, constant or exponential error model)"
         )
-    options = NLMEOptions(**parsed)
+    options = _make_options(parsed)
     X, y, group, V, beta0 = validate_inputs(X, y, group, V, beta0, options.data_format)
 
     approx = options.approximation_type.upper()
@@ -547,7 +583,7 @@ def nlmefitsa(
         parsed.setdefault("n_chains", 1)  # saemix's default
     saem_kwargs = {k: parsed.pop(k) for k in _SAEM_FIELDS if k in parsed}
     compute_se = bool(parsed.pop("compute_std_errors", False))
-    options = NLMEOptions(**parsed)
+    options = _make_options(parsed)
     saem_options = SAEMOptions(**saem_kwargs)
     error_model = options.error_model.lower()
     _require(

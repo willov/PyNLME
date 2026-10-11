@@ -312,3 +312,28 @@ def test_empty_v_means_no_group_predictors():
     a = nlmefit(c.X, c.y, c.group, None, c.modelfun, c.beta0, **c.kwargs)
     b = nlmefit(c.X, c.y, c.group, [], c.modelfun, c.beta0, **c.kwargs)
     np.testing.assert_allclose(b[0], a[0], rtol=1e-12)
+
+
+def test_start_values_that_do_not_fit_the_model():
+    """A model that fails at beta0 (here beta0 is too short) says so."""
+    t = np.tile(np.arange(1.0, 6.0), 3)
+    y = np.exp(-0.3 * t)
+    group = np.repeat([0, 1, 2], 5)
+
+    def model(phi, t):
+        return phi[0] * np.exp(-phi[1] * t) + phi[2]
+
+    with pytest.raises(IndexError, match="start values.*beta0 has one value per"):
+        nlmefit(t, y, group, None, model, [1.0, 0.3])
+
+
+def test_unknown_option_suggests_the_closest_name():
+    t = np.tile(np.arange(1.0, 6.0), 3)
+    y = np.exp(-0.3 * t)
+    group = np.repeat([0, 1, 2], 5)
+
+    def model(phi, t):
+        return phi[0] * np.exp(-phi[1] * t)
+
+    with pytest.raises(TypeError, match="Did you mean 'ParamTransform'"):
+        nlmefit(t, y, group, None, model, [1.0, 0.3], ParamTransfrom=[0, 1])
