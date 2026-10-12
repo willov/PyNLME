@@ -59,6 +59,9 @@ Changelog = "https://github.com/willov/pynlme/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "src"
+# The sdist is built from rust/ and src/: add the licence file, which the
+# metadata names (PyPI rejects an sdist without it).
+include = [{ path = "LICENSE", format = "sdist" }]
 manifest-path = "rust/Cargo.toml"
 module-name = "pynlme._kernels"
 features = ["pyo3/extension-module"]

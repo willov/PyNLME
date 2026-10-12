@@ -5,6 +5,13 @@ All notable changes to the pynlme project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - unreleased
+
+### Fixed
+
+- The source distribution includes `LICENSE`, which its metadata names; PyPI rejected
+  0.5.0's source distribution without it (0.5.0's wheels are on PyPI).
+
 ## [0.5.0] - 2026-10-12
 
 Rewrite: `nlmefit` and `nlmefitsa` are now real implementations, validated against
