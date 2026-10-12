@@ -1,0 +1,30 @@
+########## NAME
+tmdd
+########## METADATA
+time_unit = h
+Description = """Target-mediated drug disposition: the drug L binds its receptor (fast, kon, koff) to a complex Cx that is internalised (kint); the receptor is synthesised and degraded around its baseline R0 (as the deviation Rdev). Stiff: binding is about 1000 times faster than elimination."""
+Authors = """pynlme validation"""
+########## MACROS
+########## STATES
+ddt_L = -kel*L - binding
+ddt_Rdev = -kdeg*Rdev - binding
+ddt_Cx = binding - kint*Cx
+L(0) = 0
+Rdev(0) = 0
+Cx(0) = 0
+########## PARAMETERS
+kel = 0.1
+kint = 0.05
+R0 = 10
+kon = 100
+koff = 1
+kdeg = 0.1
+########## VARIABLES
+receptor = R0 + Rdev
+binding = kon*L*receptor - koff*Cx
+########## FUNCTIONS
+########## EVENTS
+########## OUTPUTS
+########## INPUTS
+########## FEATURES
+logL = log(L)

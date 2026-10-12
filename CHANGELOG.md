@@ -1,18 +1,114 @@
 # Changelog
 
-All notable changes to the PyNLME project will be documented in this file.
+All notable changes to the pynlme project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - unreleased
+
+Rewrite: `nlmefit` and `nlmefitsa` are now real implementations, validated against
+MATLAB R2023b, R nlme and R saemix. The earlier versions did not fit mixed-effects
+models correctly.
+
+### Changed
+
+- `sund_model`: an integrator failure (e.g. a stiff system at extreme parameters)
+  gives non-finite predictions, which the fitting methods reject like any other
+  non-finite step, instead of stopping the fit with an exception.
+- **nlmefit rewritten** as a Lindstrom-Bates implementation (LME step via QR decompositions with a log-Cholesky covariance parameterisation and an analytic gradient; restarts for collapsed variance components; damping for cycling iterations) for `ApproximationType` "LME" and "RELME", the algorithm used by MATLAB nlmefit and R nlme. The previous Rust and Python MLE code did not estimate random effects (psi was fixed at 0.1*I and b at zero) and has been removed.
+- MATLAB name-value arguments are accepted directly (`ParamTransform=...`, `REParamsSelect=[2, 3]`, `FEGroupDesign=...`, `CovPattern=...`, `Options={...}`), with MATLAB's 1-based indices. `modelfun` is called with two arguments when `V` is empty, as in MATLAB. `b` is returned r-by-m.
+- Options that are not implemented raise `NotImplementedError` instead of being silently ignored. Failed fits raise instead of returning `beta0`, and there is no silent switch between backends.
+- Probit `ParamTransform` uses the exact normal CDF instead of a tanh approximation.
+- **nlmefitsa rewritten** as a SAEM implementation in Python (three Metropolis-Hastings kernels with adaptive scales, simulated annealing, closed-form M-step, saemix-style updates for parameters without random effects, multiple chains, importance-sampling and linearisation log-likelihoods, linearisation standard errors). It replaces the previous Rust and Python SAEM code, which is no longer used.
+- `stats.rmse` follows MATLAB: sqrt(sum(ires^2)/dfe). The error standard deviation is in `stats.errorparam`. For RELME, psi, the error variance and covb are reported as MATLAB does (RSS/N scaling) and BIC uses log(m - f).
+- The Rust code is now only the compiled kernels (`rust/`, module `pynlme._kernels`);
+  the package is still built with maturin, one abi3 wheel per platform, and installing
+  from source needs a Rust toolchain.
+- `compat="matlab"` (the default) with `"LME"`/`"RELME"` reproduces MATLAB nlmefit's
+  iteration step by step (`matlab_lb.py`: LMfit pre-fit, Gauss-Newton PNLS, fminsearch
+  LME step on `logm`/`chol`, tolFac schedule, error-model weights, forward-difference
+  derivatives) with MATLAB's default options (`TolX = TolFun = 1e-4`).
+  Results agree with MATLAB R2023b's to ~1e-10 on most data, also at its default
+  options. `CovParameterization` (`"logm"`, `"chol"`) takes effect; `OptimFun`
+  `"fminunc"` raises.
+- A warning when a random-effects variance collapses to zero during the iterations
+  (results there depend on rounding, in MATLAB too).
+- `compat="r"` with `"LME"`/`"RELME"` (constant or exponential error model) reproduces
+  R nlme's iteration step by step: PNLS with the covariance updated by EM and nlm
+  (`optif9`) and at most `pnlsMaxIter` steps, and nlmeControl's defaults (`max_iter=50`,
+  `tol_x=1e-5`, new options `pnls_tol=1e-3`, `pnls_max_iter=7`, `min_scale=1e-3`). The
+  fit is R's, also where several local solutions exist and for `method="REML"`, which
+  in nlme is not a restricted-likelihood fit.
+- `pynlme.r.nlme` accepts `control={"pnlsTol": ..., "tolerance": ..., "maxIter": ...}`.
+- The randomized comparison with R requires the same fit (log-likelihood to 1e-3,
+  estimates to 1e-4), not just one at least as good.
+
+### Added
+
+- An empty `V` (`[]`, as in MATLAB code) means no group-level predictors.
+- Documentation rewritten around three audiences: MATLAB users, Python users, and R users.
+- Proportional, combined and exponential error models for FO/FOCE (reweighting as MATLAB does); with `compat="matlab"` the exponential FO/FOCE log-likelihood follows MATLAB in omitting -sum(log y).
+- Analytic model derivatives: a model function with a `jacobian` attribute (or `pynlme.with_jacobian(f, jac)`) is differentiated analytically in all methods instead of by finite differences; prepares for SUND sensitivities.
+- `DataFormat="stacked"|"grouped"`. Without it the layout follows from the shape of y only; the previous X-based guess (which treated small stacked datasets without a group as grouped) is no longer used.
+- ODE models: `pynlme.sund_model` (compiled SUND models; optional extra `pynlme[sund]`) and `pynlme.ode_model` (SciPy, batched over subjects with `Vectorization="Full"`); Michaelis-Menten validation case with MATLAB references; `examples/sund_ode_model.py`.
+- SAEM samples parameters without random effects during annealing (MATLAB/saemix scheme); the Lindstrom-Bates loop stops when changes only jitter at the model's numerical noise level.
+- `nlmefit` ApproximationType "FO" and "FOCE" (direct maximisation of the linearised marginal likelihood; FOCE with conditional modes).
+- Error models "proportional", "combined" and "exponential" for `nlmefit` (LME/RELME) and `nlmefitsa`, and `ErrorParameters`, with MATLAB's definitions.
+- `stats.pwres` and `stats.cwres`, and MATLAB's definitions for all weighted residuals.
+- `Vectorization="Full"`: the model is called once for many groups (one parameter row per observation). SAEM and LME internals work on flat/padded arrays.
+- `compat="matlab"|"r"`: MATLAB (default) or R (nlme/saemix) defaults and reporting conventions.
+- `NChains` for `nlmefitsa`, defaulting to MATLAB's max(1, round(100/m)).
+- R timing benchmark (`validation/r/benchmark.R`) and MATLAB error-model, FO and FOCE references.
+- Randomized comparison against R nlme on freshly simulated datasets each run (`tests/validation/test_random_vs_r.py`) and simulation studies of bias and coverage (`tests/validation/test_simulation_recovery.py`, `--runslow`); a CI job runs both with R installed.
+- MATLAB R2023b reference fits for nlmefit (LME, RELME, FO, FOCE) and nlmefitsa, and R saemix references; tests compare against both.
+- `validation/`: reference datasets, R nlme reference fits, MATLAB documentation values, a MATLAB script to generate MATLAB references, and a benchmark against R timings.
+- `tests/validation/`: nlmefit compared against R nlme on six cases and against the MATLAB documentation indomethacin example.
+- `pynlme.fit`: named parameters, data as a dict or Polars DataFrame, results as a
+  dict (natural-scale estimates, named random effects), with `covariates=` for
+  group-level covariate models.
+- `pynlme.r`: R's `nlme()` with string formulas, `pdDiag`/`pdSymm`, `SSfol` and other
+  `SS*` models, and `summary`, `fixef`, `ranef`, `VarCorr`, `vcov`, `logLik`, `AIC`,
+  `BIC`, `fitted`, `resid`, `predict`; matches R nlme on the validation cases.
+- `pynlme.r` saemix interface: `saemixData`, `saemixModel`, `saemix` with saemix's
+  control names and defaults, `summary`, `coef`, `psi`/`phi`/`eta` (modes or
+  conditional means), `predict` (ipred, icpred, ppred, ypred); agrees with R saemix.
+- `pynlme.predict` for `fit` results (new data, population or individual level).
+- Several observed features per subject: `sund_model(feature=[...])` and `ode_model` with
+  a multi-column `output` read out each row's feature (index in a column of `X`) from
+  one simulation per subject, for stacked data as in MATLAB.
+- Model inputs from SUND activities, one set per experiment:
+  `sund_model(activities={experiment: builder}, ...)` with the experiment ID in a column
+  of `V`. A builder `container -> Activity` lets `sund_model` simulate the experiment's
+  subjects in batches; ready `Activity` objects are simulated one subject at a time.
+
+- Compiled kernels in Rust (`rust/`, module `pynlme._kernels`) for the inner loops of
+  every algorithm: the LME solve and gradient, the EM and nlm (`optif9`) steps of the R
+  mode; the QR decompositions, objective, `expm` and `fminsearch` LME step of the
+  MATLAB mode; FOCE's conditional modes and linearised likelihood; SAEM's
+  Metropolis-Hastings sampler (same chain for a given `random_state`). The model
+  function stays Python and is called once per step for all subjects. Same arithmetic
+  as the NumPy code, which runs without them or with `PYNLME_KERNELS=0`.
+- Benchmarks against MATLAB, R (nlme, saemix) and nlmixr2, all scripted
+  (`validation/run_benchmarks.sh` runs them with what is installed): speed on the
+  validation cases (README), scaling to 1000 subjects with a closed-form, an ODE and a
+  multiple-dose ODE model (`validation/scaling/`), and accuracy (bias, RMSE and
+  confidence-interval coverage over simulated datasets, `validation/accuracy/`).
+- Faster with many subjects: the rows of many groups are gathered in one indexing
+  operation, and the residuals in `stats` evaluate the model for all groups at once.
+- FOCE solves all subjects' conditional modes in lock-step (one model call per step
+  with `Vectorization="Full"` instead of one per subject).
+
+### Removed
+
+- Tests of the removed MLE backends (`test_backend_comparison`, `test_batched_ffi_optimization`, `test_performance_optimization`) and `test_matlab_baseline` (its group-predictor data was incomplete); `examples/performance_benchmark.py`.
 
 ### Fixed
+
 - **Test Suite**: Fixed backend consistency test to properly compare Rust vs Python backends
   - Corrected pharmacokinetic model function signature to be static method
   - Fixed backend switching mechanism using module-level RUST_AVAILABLE flag
   - Adjusted tolerance for backend comparison to account for optimization differences
-
 
 ## [0.4.0] - 2025-06-17
 
@@ -200,7 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Example Scripts** - Fixed critical API usage issues in  
   `warfarin_case_study.py` and `performance_benchmark.py`
   - Corrected model function signatures from `model(x, params)` to  
-    `model(params, x, v=None)` to match PyNLME API expectations
+    `model(params, x, v=None)` to match pynlme API expectations
   - Fixed result unpacking to properly handle nlmefit return tuple  
     `(beta, psi, stats, b)`
   - Updated convergence checking to use robust `stats.logl is not None`  
@@ -220,7 +316,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Improved
 
-- **API Consistency** - All example scripts now use consistent PyNLME API  
+- **API Consistency** - All example scripts now use consistent pynlme API  
   patterns
 - **Documentation** - Example scripts provide better demonstrations of library  
   capabilities
@@ -428,7 +524,7 @@ Note: this release was written (code and changelog) by AI (Claude Sonnet 4 in Gi
 
 ### 🎉 Initial Release - Full Implementation
 
-This is the first complete release of PyNLME with both Python and Rust implementations.
+This is the first complete release of pynlme with both Python and Rust implementations.
 
 ### Added
 
@@ -550,10 +646,10 @@ For users coming from MATLAB:
 ```
 
 ```python
-# PyNLME (Python) - MATLAB-style interface
+# pynlme (Python) - MATLAB-style interface
 beta, psi, stats, b = nlmefit(X, y, group, None, model, beta0, **opts)
 
-# PyNLME (Python) - Python-style unified interface
+# pynlme (Python) - Python-style unified interface
 beta, psi, stats, b = fit_nlme(X, y, group, None, model, beta0, method="ML", **opts)
 ```
 

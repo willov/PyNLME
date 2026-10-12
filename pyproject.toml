@@ -1,11 +1,11 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
+requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
 [project]
 name = "pynlme"
-version = "0.4.0"
-description = "Nonlinear Mixed Effects Models for Python with Rust backend"
+version = "0.5.0"
+description = "Nonlinear mixed-effects models for Python with MATLAB nlmefit/nlmefitsa syntax"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -14,14 +14,14 @@ authors = [
 ]
 keywords = ["statistics", "mixed-effects", "nonlinear", "nlme"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 dependencies = [
@@ -34,12 +34,16 @@ dev = [
     "pytest>=6.0",
     "matplotlib>=3.0",
     "pandas>=1.0",
-    "maturin>=1.0,<2.0",
     "mypy>=1.0",
     "ruff>=0.1.0",
     "pre-commit>=3.0",
     "coverage[toml]>=7.0",
     "pytest-cov>=4.0",
+]
+sund = [
+    "sund>=2.5",
+    # SUND needs ziglang (its fallback compiler); ziglang 0.17.0 has no Windows wheel.
+    "ziglang!=0.17.0; sys_platform == 'win32'",
 ]
 benchmark = [
     "psutil>=5.9.0",
@@ -47,27 +51,34 @@ benchmark = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/willov/PyNLME"
-Repository = "https://github.com/willov/PyNLME"
-Documentation = "https://github.com/willov/PyNLME/blob/main/docs/README.md"
-Issues = "https://github.com/willov/PyNLME/issues"
-Changelog = "https://github.com/willov/PyNLME/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/willov/pynlme"
+Repository = "https://github.com/willov/pynlme"
+Documentation = "https://github.com/willov/pynlme/blob/main/docs/README.md"
+Issues = "https://github.com/willov/pynlme/issues"
+Changelog = "https://github.com/willov/pynlme/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "src"
-manifest-path = "Cargo.toml"
-module-name = "pynlme._core"
+manifest-path = "rust/Cargo.toml"
+module-name = "pynlme._kernels"
 features = ["pyo3/extension-module"]
+
+[tool.uv]
+# Rebuild the compiled kernels when the Rust code changes
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "rust/Cargo.toml" },
+    { file = "rust/src/**/*.rs" },
+]
 
 [tool.uv.sources]
 pynlme = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "cibuildwheel>=2.23.3",
     "matplotlib>=3.10.3",
-    "maturin>=1.8.7",
     "pandas>=2.3.0",
+    "polars>=1.44.2",
     "psutil>=7.0.0",
     "pynlme",
     "pyqt6>=6.9.1",
@@ -90,7 +101,6 @@ source = ["src/pynlme"]
 omit = [
     "*/tests/*",
     "*/examples/*",
-    "*/_core.abi3.so",
 ]
 
 [tool.coverage.report]
@@ -137,7 +147,7 @@ select = [
     "UP", # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long, handled by formatter
+    "E501",  # long lines (mostly comments) are fine; the formatter handles code
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
 ]
@@ -145,26 +155,3 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B018"]  # Allow useless expressions in tests
 "examples/*" = ["B018", "F841"]  # Allow useless expressions and unused variables in examples
-
-[tool.cibuildwheel]
-# Build for Python 3.11+ only
-build = ["cp311-*", "cp312-*", "cp313-*"]
-# Skip 32-bit and PyPy builds for now
-skip = ["*-win32", "*-manylinux_i686", "pp*-*"]
-# Test the built wheels
-test-requires = ["pytest", "numpy", "scipy"]
-test-command = "pytest {project}/tests/test_basic.py -v"
-# Build options
-build-verbosity = 1
-
-[tool.cibuildwheel.linux]
-before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-environment = { PATH = "$HOME/.cargo/bin:$PATH" }
-
-[tool.cibuildwheel.windows]
-before-all = "powershell -Command \"& { Invoke-WebRequest -Uri 'https://win.rustup.rs/x86_64' -OutFile 'rustup-init.exe'; .\\rustup-init.exe -y --default-host x86_64-pc-windows-msvc }\""
-environment = { PATH = "$USERPROFILE\\.cargo\\bin;$PATH" }
-
-[tool.cibuildwheel.macos]
-before-all = "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-environment = { PATH = "$HOME/.cargo/bin:$PATH" }

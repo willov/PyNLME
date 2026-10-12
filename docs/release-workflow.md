@@ -1,135 +1,56 @@
-# PyNLME Release Workflow
+# Release workflow
 
-This document shows the **manual version control** workflow for PyNLME releases.
-
-## 🎯 Release Process Overview
-
-PyNLME uses **manual version setting** combined with **automatic release creation**:
-
-1. **Developer manually sets version** in `pyproject.toml`
-2. **GitHub Actions detects change** and creates release automatically
-3. **Users get pre-built wheels** without needing Rust
-
-## 📋 Step-by-Step Release
-
-### 1. Prepare for Release
+Merges to `main` only run the tests. To release, on an up-to-date `main`:
 
 ```bash
-# The automated workflow will:
-# - Run comprehensive tests across all platforms
-# - Validate code formatting and builds
-# - Test examples and functionality
-# - Only create releases if everything passes
+git checkout main && git pull
+uv run python scripts/release.py x.y.z            # --dry-run shows the changes only
 ```
 
-### 2. Update Version Manually
+The script checks that `main` is clean and matches `origin/main` and that the tag is
+new; sets the version in `pyproject.toml` and `rust/Cargo.toml`; dates the heading
+`## [x.y.z] - unreleased` in `CHANGELOG.md` and `CITATION.cff`; shows the changes,
+asks, then commits "Release vx.y.z", tags `vx.y.z` and pushes both.
 
-Edit `pyproject.toml`:
+The pushed tag starts the release in GitHub Actions (`.github/workflows/main.yml`):
 
-```toml
-[project]
-name = "pynlme"
-version = "0.1.1"  # <- Change this manually (was 0.1.0)
-```
+- check that the tag is `v` plus `pyproject.toml`'s version and on `main`;
+- run the tests (Linux, Windows, macOS; Python 3.11-3.14);
+- build one wheel per platform (Linux x86_64 and aarch64, Windows x64, macOS arm64
+  and x86_64; abi3 wheels for Python 3.11+ with the compiled Rust kernels) and the
+  sdist with maturin;
+- create a GitHub release (pre-release) with them and the changelog section;
+- publish them to PyPI once you approve the deployment ("Review deployments" in the
+  run; environment `pypi`).
 
-### 3. Update Changelog
+Between releases, add notes under a heading `## [next version] - unreleased` at the
+top of `CHANGELOG.md`.
 
-Edit `CHANGELOG.md`:
+Nothing is published if the tag does not match the version or is not on `main`, or if
+the tests fail. The slow validation against R runs only when the workflow is started
+by hand (Actions -> CI/CD Pipeline -> Run workflow). To check the wheel builds before
+tagging: Actions -> Build wheels -> Run workflow (`.github/workflows/wheels.yml`).
 
-```markdown
-## [0.1.1] - 2025-06-11
+PyPI publishing is trusted publishing: no token; PyPI trusts this repository's
+`main.yml` in the environment `pypi`. Set up once:
 
-### Added
-- New feature X
-- Enhanced Y functionality
+- PyPI: Account settings -> Publishing -> Add a new pending publisher: project
+  `pynlme`, owner `willov`, repository `pynlme`, workflow `main.yml`, environment
+  `pypi`.
+- GitHub: Settings -> Environments -> New environment `pypi`, with a required
+  reviewer, so that each upload waits for approval (a version uploaded to PyPI can
+  never be replaced).
 
-### Fixed
-- Bug Z in algorithm
-- Documentation updates
-```
-
-### 4. Commit and Push
+Users install from PyPI (`pip install pynlme`) or from the release:
 
 ```bash
-git add pyproject.toml CHANGELOG.md
-git commit -m "Release v0.1.1: Add feature X, fix bug Z"
-git push origin main
+# the wheel for your platform from the release page, e.g. Linux x86_64:
+pip install pynlme-x.y.z-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+# with SUND models:
+pip install "pynlme[sund] @ file:///path/to/pynlme-x.y.z-cp311-abi3-<platform>.whl"
 ```
 
-### 5. GitHub Actions Magic ✨
+or from source (needs a Rust toolchain): `pip install git+https://github.com/willov/pynlme`.
 
-GitHub Actions automatically:
-- **Detects** version change (`0.1.0` → `0.1.1`)
-- **Validates** that tag `v0.1.1` doesn't exist
-- **Runs tests** to ensure everything works
-- **Creates git tag** `v0.1.1`
-- **Builds wheels** for Linux, Windows, macOS
-- **Creates GitHub release** with all wheels attached
-- **Marks as pre-release** (proof-of-concept status)
-
-### 6. Users Install Easily
-
-Users can now install without Rust:
-
-```bash
-# Install latest wheel from GitHub releases (using uv)
-uv add https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
-
-# Or using pip
-pip install https://github.com/willov/PyNLME/releases/latest/download/pynlme-0.1.1-cp38-abi3-linux_x86_64.whl
-
-# Or browse releases and pick specific wheel
-# https://github.com/willov/PyNLME/releases
-```
-
-## 🔍 What GitHub Actions Checks
-
-The auto-release workflow (`auto-release.yml`) checks:
-
-- ✅ **Version changed** in `pyproject.toml`
-- ✅ **Tag doesn't exist** yet
-- ✅ **Valid version format** (e.g., `1.2.3` or `1.2.3-alpha`)
-- ✅ **Tests pass**
-- ✅ **Code builds successfully**
-
-## 🚫 When Releases Don't Happen
-
-No release is created if:
-- Version unchanged (e.g., just documentation updates)
-- Tag already exists (prevents duplicate releases)
-- Version format invalid (must be semantic versioning)
-- Tests fail
-
-## 💡 Benefits of This Approach
-
-- ✅ **Manual control** - You decide when to release
-- ✅ **Automatic execution** - No manual tag/release creation
-- ✅ **Safe** - Won't create duplicate or broken releases
-- ✅ **User-friendly** - Pre-built wheels, no Rust required
-- ✅ **Clear history** - Git tags match release versions
-
-## 🎯 Example Workflow
-
-```bash
-# Working on features...
-git commit -m "Add new algorithm"
-git commit -m "Fix edge case"
-git commit -m "Update docs"
-
-# Ready to release!
-# The automated workflow will handle validation
-
-# Edit pyproject.toml: version = "0.2.0"
-# Edit CHANGELOG.md: ## [0.2.0] - 2025-06-11
-
-git add pyproject.toml CHANGELOG.md
-git commit -m "Release v0.2.0: Major algorithm improvements"
-git push origin main
-
-# 🤖 GitHub Actions automatically:
-# 1. Detects version change and runs comprehensive tests
-# 2. Creates v0.2.0 release with wheels if tests pass
-# ✅ Users can install: uv add <wheel-url>
-```
-
-This workflow gives you full control over versioning while automating the tedious parts of release creation!
+Reference results in `validation/reference/` are regenerated separately (see
+[validation/README.md](../validation/README.md)); they need R and MATLAB, not CI.

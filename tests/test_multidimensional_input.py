@@ -19,23 +19,33 @@ class TestMultiDimensionalInput:
     def test_stack_grouped_data_basic(self):
         """Test basic functionality of stack_grouped_data function."""
         # Example from user request: 3 persons, 4 measurements each
-        X_grouped = np.array([
-            [1, 2, 3, 4],  # Person 1 measurements
-            [1, 2, 3, 4],  # Person 2 measurements
-            [1, 2, 3, 4],  # Person 3 measurements
-        ])
-        y_grouped = np.array([
-            [10, 7, 5, 3],  # Person 1 responses
-            [12, 8, 6, 4],  # Person 2 responses
-            [11, 8, 6, 3],  # Person 3 responses
-        ])
+        X_grouped = np.array(
+            [
+                [1, 2, 3, 4],  # Person 1 measurements
+                [1, 2, 3, 4],  # Person 2 measurements
+                [1, 2, 3, 4],  # Person 3 measurements
+            ]
+        )
+        y_grouped = np.array(
+            [
+                [10, 7, 5, 3],  # Person 1 responses
+                [12, 8, 6, 4],  # Person 2 responses
+                [11, 8, 6, 3],  # Person 3 responses
+            ]
+        )
 
         X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped)
 
         # Check shapes
-        assert X_stacked.shape == (12, 1), f"Expected X_stacked shape (12, 1), got {X_stacked.shape}"
-        assert y_stacked.shape == (12,), f"Expected y_stacked shape (12,), got {y_stacked.shape}"
-        assert group_stacked.shape == (12,), f"Expected group_stacked shape (12,), got {group_stacked.shape}"
+        assert X_stacked.shape == (12, 1), (
+            f"Expected X_stacked shape (12, 1), got {X_stacked.shape}"
+        )
+        assert y_stacked.shape == (12,), (
+            f"Expected y_stacked shape (12,), got {y_stacked.shape}"
+        )
+        assert group_stacked.shape == (12,), (
+            f"Expected group_stacked shape (12,), got {group_stacked.shape}"
+        )
 
         # Check X values
         expected_X = np.array([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]).reshape(-1, 1)
@@ -53,30 +63,40 @@ class TestMultiDimensionalInput:
         """Test stack_grouped_data with custom group identifiers."""
         X_grouped = np.array([[1, 2], [3, 4]])
         y_grouped = np.array([[10, 20], [30, 40]])
-        group_ids = ['A', 'B']
+        group_ids = ["A", "B"]
 
-        X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped, group_ids)
+        X_stacked, y_stacked, group_stacked = stack_grouped_data(
+            X_grouped, y_grouped, group_ids
+        )
 
-        expected_group = np.array(['A', 'A', 'B', 'B'])
+        expected_group = np.array(["A", "A", "B", "B"])
         np.testing.assert_array_equal(group_stacked, expected_group)
 
     def test_stack_grouped_data_3d_input(self):
         """Test stack_grouped_data with 3D X input (multiple features)."""
         # 2 groups, 3 observations per group, 2 features
-        X_grouped = np.array([
-            [[1, 10], [2, 20], [3, 30]],  # Group 1
-            [[4, 40], [5, 50], [6, 60]],  # Group 2
-        ])
-        y_grouped = np.array([
-            [100, 200, 300],  # Group 1 responses
-            [400, 500, 600],  # Group 2 responses
-        ])
+        X_grouped = np.array(
+            [
+                [[1, 10], [2, 20], [3, 30]],  # Group 1
+                [[4, 40], [5, 50], [6, 60]],  # Group 2
+            ]
+        )
+        y_grouped = np.array(
+            [
+                [100, 200, 300],  # Group 1 responses
+                [400, 500, 600],  # Group 2 responses
+            ]
+        )
 
         X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped)
 
         # Check shapes
-        assert X_stacked.shape == (6, 2), f"Expected X_stacked shape (6, 2), got {X_stacked.shape}"
-        assert y_stacked.shape == (6,), f"Expected y_stacked shape (6,), got {y_stacked.shape}"
+        assert X_stacked.shape == (6, 2), (
+            f"Expected X_stacked shape (6, 2), got {X_stacked.shape}"
+        )
+        assert y_stacked.shape == (6,), (
+            f"Expected y_stacked shape (6,), got {y_stacked.shape}"
+        )
 
         # Check X values
         expected_X = np.array([[1, 10], [2, 20], [3, 30], [4, 40], [5, 50], [6, 60]])
@@ -98,24 +118,31 @@ class TestMultiDimensionalInput:
         group_stacked = np.array([0, 0, 0, 0, 1, 1, 1, 1])
 
         format_detected = detect_data_format(X_stacked, y_stacked, group_stacked)
-        assert format_detected == 'stacked', f"Expected 'stacked', got '{format_detected}'"
+        assert format_detected == "stacked", (
+            f"Expected 'stacked', got '{format_detected}'"
+        )
 
         # Test grouped format detection (2D y)
         X_grouped = np.array([[1, 2, 3, 4], [1, 2, 3, 4]])
         y_grouped = np.array([[10, 7, 5, 3], [12, 8, 6, 4]])
 
         format_detected = detect_data_format(X_grouped, y_grouped)
-        assert format_detected == 'grouped', f"Expected 'grouped', got '{format_detected}'"
+        assert format_detected == "grouped", (
+            f"Expected 'grouped', got '{format_detected}'"
+        )
 
         # Test grouped format detection (3D X)
         X_grouped_3d = np.array([[[1, 10], [2, 20]], [[3, 30], [4, 40]]])
         y_grouped_2d = np.array([[100, 200], [300, 400]])
 
         format_detected = detect_data_format(X_grouped_3d, y_grouped_2d)
-        assert format_detected == 'grouped', f"Expected 'grouped', got '{format_detected}'"
+        assert format_detected == "grouped", (
+            f"Expected 'grouped', got '{format_detected}'"
+        )
 
     def test_nlmefit_with_grouped_input(self):
-        """Test that nlmefit accepts grouped input and produces same results as stacked input."""
+        """nlmefit accepts grouped input and gives the same results as stacked input."""
+
         # Define a simple exponential decay model
         def exponential_model(phi, x, v=None):
             return phi[0] * np.exp(-phi[1] * x.ravel())
@@ -131,11 +158,11 @@ class TestMultiDimensionalInput:
         for i in range(3):
             # Different subject parameters
             A = 10 + i  # Amplitude varies by subject
-            k = 0.5 + 0.1*i  # Decay rate varies by subject
+            k = 0.5 + 0.1 * i  # Decay rate varies by subject
             noise = np.random.normal(0, 0.1, len(time_points))
             response = A * np.exp(-k * time_points) + noise
             subjects_responses.append(response)
-        
+
         y_grouped = np.array(subjects_responses)  # Shape: (3, 5)
 
         # Test with grouped format
@@ -147,11 +174,13 @@ class TestMultiDimensionalInput:
                 group=None,  # Not needed for grouped format
                 V=None,
                 modelfun=exponential_model,
-                beta0=beta0
+                beta0=beta0,
             )
 
             # Test with equivalent stacked format
-            X_stacked, y_stacked, group_stacked = stack_grouped_data(X_grouped, y_grouped)
+            X_stacked, y_stacked, group_stacked = stack_grouped_data(
+                X_grouped, y_grouped
+            )
 
             beta_stacked, psi_stacked, stats_stacked, b_stacked = nlmefit(
                 X=X_stacked,
@@ -159,7 +188,7 @@ class TestMultiDimensionalInput:
                 group=group_stacked,
                 V=None,
                 modelfun=exponential_model,
-                beta0=beta0
+                beta0=beta0,
             )
 
             # Results should be very similar (allowing for numerical differences)
@@ -179,7 +208,7 @@ class TestMultiDimensionalInput:
         """Test error handling for invalid grouped input."""
         # Mismatched dimensions
         X_grouped = np.array([[1, 2, 3], [4, 5, 6]])  # 2 subjects, 3 obs each
-        y_grouped = np.array([[10, 20], [30, 40]])     # 2 subjects, 2 obs each
+        y_grouped = np.array([[10, 20], [30, 40]])  # 2 subjects, 2 obs each
 
         with pytest.raises(ValueError, match="must have same dimensions"):
             stack_grouped_data(X_grouped, y_grouped)
@@ -195,17 +224,95 @@ class TestMultiDimensionalInput:
     def test_indomethacin_example_grouped_format(self):
         """Test the indomethacin example using the new grouped format."""
         # Use the same data from test_matlab_baseline.py but in grouped format
-        concentration_by_subject = np.array([
-            [1.5000, 0.9400, 0.7800, 0.4800, 0.3700, 0.1900, 0.1200, 0.1100, 0.0800, 0.0700, 0.0500],
-            [2.0300, 1.6300, 0.7100, 0.7000, 0.6400, 0.3600, 0.3200, 0.2000, 0.2500, 0.1200, 0.0800],
-            [2.7200, 1.4900, 1.1600, 0.8000, 0.8000, 0.3900, 0.2200, 0.1200, 0.1100, 0.0800, 0.0800],
-            [1.8500, 1.3900, 1.0200, 0.8900, 0.5900, 0.4000, 0.1600, 0.1100, 0.1000, 0.0700, 0.0700],
-            [2.0500, 1.0400, 0.8100, 0.3900, 0.3000, 0.2300, 0.1300, 0.1100, 0.0800, 0.1000, 0.0600],
-            [2.3100, 1.4400, 1.0300, 0.8400, 0.6400, 0.4200, 0.2400, 0.1700, 0.1300, 0.1000, 0.0900],
-        ])
+        concentration_by_subject = np.array(
+            [
+                [
+                    1.5000,
+                    0.9400,
+                    0.7800,
+                    0.4800,
+                    0.3700,
+                    0.1900,
+                    0.1200,
+                    0.1100,
+                    0.0800,
+                    0.0700,
+                    0.0500,
+                ],
+                [
+                    2.0300,
+                    1.6300,
+                    0.7100,
+                    0.7000,
+                    0.6400,
+                    0.3600,
+                    0.3200,
+                    0.2000,
+                    0.2500,
+                    0.1200,
+                    0.0800,
+                ],
+                [
+                    2.7200,
+                    1.4900,
+                    1.1600,
+                    0.8000,
+                    0.8000,
+                    0.3900,
+                    0.2200,
+                    0.1200,
+                    0.1100,
+                    0.0800,
+                    0.0800,
+                ],
+                [
+                    1.8500,
+                    1.3900,
+                    1.0200,
+                    0.8900,
+                    0.5900,
+                    0.4000,
+                    0.1600,
+                    0.1100,
+                    0.1000,
+                    0.0700,
+                    0.0700,
+                ],
+                [
+                    2.0500,
+                    1.0400,
+                    0.8100,
+                    0.3900,
+                    0.3000,
+                    0.2300,
+                    0.1300,
+                    0.1100,
+                    0.0800,
+                    0.1000,
+                    0.0600,
+                ],
+                [
+                    2.3100,
+                    1.4400,
+                    1.0300,
+                    0.8400,
+                    0.6400,
+                    0.4200,
+                    0.2400,
+                    0.1700,
+                    0.1300,
+                    0.1000,
+                    0.0900,
+                ],
+            ]
+        )
 
-        time_points = np.array([0.25, 0.50, 0.75, 1.00, 1.25, 2.00, 3.00, 4.00, 5.00, 6.00, 8.00])
-        time_by_subject = np.tile(time_points, (6, 1))  # Same time points for all subjects
+        time_points = np.array(
+            [0.25, 0.50, 0.75, 1.00, 1.25, 2.00, 3.00, 4.00, 5.00, 6.00, 8.00]
+        )
+        time_by_subject = np.tile(
+            time_points, (6, 1)
+        )  # Same time points for all subjects
 
         # Test data stacking
         time_stacked, conc_stacked, subject_stacked = stack_grouped_data(
@@ -213,8 +320,12 @@ class TestMultiDimensionalInput:
         )
 
         # Verify dimensions
-        assert time_stacked.shape == (66, 1), "Should have 6*11=66 time observations with 1 feature"
-        assert conc_stacked.shape == (66,), "Should have 6*11=66 concentration observations"
+        assert time_stacked.shape == (66, 1), (
+            "Should have 6*11=66 time observations with 1 feature"
+        )
+        assert conc_stacked.shape == (66,), (
+            "Should have 6*11=66 concentration observations"
+        )
         assert subject_stacked.shape == (66,), "Should have 66 subject indicators"
 
         # Verify the stacking worked correctly
@@ -234,7 +345,7 @@ if __name__ == "__main__":
     test_suite = TestMultiDimensionalInput()
 
     print("Testing multi-dimensional input functionality...")
-    
+
     print("1. Testing basic stacking functionality...")
     test_suite.test_stack_grouped_data_basic()
     print("✓ Basic stacking test passed!")

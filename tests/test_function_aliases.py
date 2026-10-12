@@ -62,13 +62,16 @@ def test_fit_nlme_saem_alias(sample_data):
         random_state=42,
     )
 
-    # For SAEM (stochastic algorithm), results can vary significantly even with same seed
+    # For SAEM (stochastic algorithm), results can vary significantly even with same
+    # seed
     # Check that both functions return the same structure and reasonable values
     assert len(result1[0]) == len(result2[0])  # Same parameter count
     assert result1[1].shape == result2[1].shape  # Same covariance matrix shape
 
-    # Check that parameter estimates are in reasonable range (much more lenient for stochastic algorithms)
-    # SAEM is highly stochastic, so we just ensure results are finite and not wildly different
+    # Check that parameter estimates are in reasonable range (much more lenient for
+    # stochastic algorithms)
+    # SAEM is highly stochastic, so we just ensure results are finite and not wildly
+    # different
     assert np.all(np.isfinite(result1[0])) and np.all(np.isfinite(result2[0]))
     assert np.all(np.isfinite(result1[1])) and np.all(np.isfinite(result2[1]))
 

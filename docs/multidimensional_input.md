@@ -1,12 +1,18 @@
 # Multi-Dimensional Input Format
 
-PyNLME now supports both traditional "stacked" data format (compatible with MATLAB's nlmefit) and a new "grouped" multi-dimensional format that makes working with structured data more intuitive.
+pynlme now supports both traditional "stacked" data format (compatible with MATLAB's nlmefit) and a new "grouped" multi-dimensional format that makes working with structured data more intuitive.
 
 ## Overview
 
 In the traditional MATLAB-style approach, all measurements must be arranged in a 1D stacked format where each row represents a single observation, and a separate group vector indicates which subject/group each observation belongs to.
 
 With the new multi-dimensional format, you can provide data where each row represents a subject/group, making it much easier to work with structured datasets.
+
+## How the format is chosen
+
+- `DataFormat="stacked"` or `DataFormat="grouped"` (or `data_format=...`) states it explicitly.
+- Otherwise it follows from `y` only: a vector (including an n-by-1 or 1-by-n array, as MATLAB passes it) is stacked and requires `group`; a matrix with more than one row and column is grouped, one row per group, and `group` may give labels for the rows.
+- There is no other guessing: stacked data without `group` is an error.
 
 ## Format Comparison
 
@@ -57,7 +63,7 @@ y_grouped = np.array([
 
 ### Automatic Detection
 
-PyNLME automatically detects the input format and converts it internally:
+pynlme automatically detects the input format and converts it internally:
 
 ```python
 from pynlme import nlmefit

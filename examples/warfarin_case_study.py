@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PyNLME Real-world Case Study: Warfarin Pharmacokinetics
+pynlme Real-world Case Study: Warfarin Pharmacokinetics
 
 This example demonstrates fitting a realistic pharmacokinetic model to warfarin
 concentration data, including:
@@ -18,7 +18,6 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy import stats
 
 import pynlme
 
@@ -167,10 +166,13 @@ def warfarin_model(beta, x, v=None):
     age = x[:, 3]
     female = x[:, 4]
 
+    # One parameter vector, or one row per observation (vectorization="full"):
+    # index parameters along the last axis.
+    beta = np.asarray(beta).T
     # Transform parameters to ensure positivity (vectorized)
     cl_70kg = np.exp(beta[0])
     v_per_kg = np.exp(beta[1])
-    ka = np.exp(beta[2])
+    ka = np.broadcast_to(np.exp(beta[2]), time.shape)
     age_effect = beta[3]
     female_effect = beta[4]
 
@@ -189,34 +191,38 @@ def warfarin_model(beta, x, v=None):
     # Only compute for positive times
     valid_mask = time > 0
     conc = np.zeros_like(time)
-    
+
     if np.any(valid_mask):
         t_valid = time[valid_mask]
         dose_valid = dose[valid_mask]
         v_valid = v[valid_mask]
         ke_valid = ke[valid_mask]
-        
+        ka_valid = ka[valid_mask]
+
         # Check for numerical issues (vectorized)
-        diff_mask = np.abs(ka - ke_valid) > 1e-6
-        
+        diff_mask = np.abs(ka_valid - ke_valid) > 1e-6
+
         # Normal case: ka != ke (vectorized)
         if np.any(diff_mask):
             idx = valid_mask.copy()
             idx[valid_mask] = diff_mask
             conc[idx] = (
-                (f * dose_valid[diff_mask] * ka)
-                / (v_valid[diff_mask] * (ka - ke_valid[diff_mask]))
-                * (np.exp(-ke_valid[diff_mask] * t_valid[diff_mask]) -
-                   np.exp(-ka * t_valid[diff_mask]))
+                (f * dose_valid[diff_mask] * ka_valid[diff_mask])
+                / (v_valid[diff_mask] * (ka_valid[diff_mask] - ke_valid[diff_mask]))
+                * (
+                    np.exp(-ke_valid[diff_mask] * t_valid[diff_mask])
+                    - np.exp(-ka_valid[diff_mask] * t_valid[diff_mask])
+                )
             )
-        
+
         # Special case: ka ≈ ke (vectorized)
         if np.any(~diff_mask):
             idx = valid_mask.copy()
             idx[valid_mask] = ~diff_mask
             conc[idx] = (
                 (f * dose_valid[~diff_mask] * t_valid[~diff_mask])
-                / v_valid[~diff_mask] * np.exp(-ke_valid[~diff_mask] * t_valid[~diff_mask])
+                / v_valid[~diff_mask]
+                * np.exp(-ke_valid[~diff_mask] * t_valid[~diff_mask])
             )
 
     return np.maximum(conc, 1e-6)  # Avoid zero/negative concentrations
@@ -230,16 +236,17 @@ def main():
 
     # Generate synthetic data (realistic size)
     print("📊 Generating warfarin concentration data...")
-    df = generate_warfarin_data(n_subjects=50, seed=42)  # Increased to 50 for more realistic dataset
+    df = generate_warfarin_data(n_subjects=50, seed=42)
 
     print(f"Generated {len(df)} observations from {df['subject'].nunique()} subjects")
     print(f"Age range: {df['age'].min():.0f}-{df['age'].max():.0f} years")
     print(f"Weight range: {df['weight'].min():.0f}-{df['weight'].max():.0f} kg")
     print(
-        f"Female subjects: {df['female'].sum()}/{len(df.groupby('subject'))} ({100 * df['female'].mean():.0f}%)"
+        f"Female subjects: {df['female'].sum()}/{len(df.groupby('subject'))} "
+        f"({100 * df['female'].mean():.0f}%)"
     )
 
-    # Prepare data for PyNLME
+    # Prepare data for pynlme
     x = df[["time", "dose", "weight", "age", "female"]].values
     y = df["concentration"].values
     groups = df["subject"].values
@@ -264,32 +271,29 @@ def main():
 
     # Fit the model with SAEM for realistic mixed-effects modeling
     print("\n⚙️  Fitting NLME model using SAEM algorithm...")
-    print("   This may take 1-2 minutes for realistic convergence...")
+    print("   This takes a few seconds...")
 
     try:
-        # Force Python SAEM implementation to see progress indicators
-        from pynlme import nlmefit
-        import sys
-        nlmefit_module = sys.modules[nlmefit.__module__]
-        rust_available_backup = nlmefit_module.RUST_AVAILABLE
-        nlmefit_module.RUST_AVAILABLE = False  # Force Python implementation
-        
         beta, psi, stats, b = pynlme.fit_nlme(
-            x, y, groups, None, warfarin_model, beta0,
-            method='SAEM',   # Use SAEM for better random effects estimation
-            verbose=2,       # More verbose output for progress tracking
-            max_iter=100,    # Reasonable iterations for SAEM
-            tol_fun=1e-5,    # Good convergence tolerance
+            x,
+            y,
+            groups,
+            None,
+            warfarin_model,
+            beta0,
+            method="SAEM",  # Use SAEM for better random effects estimation
+            vectorization="full",  # all subjects in one model call
+            verbose=1,  # progress output
+            max_iter=100,  # Reasonable iterations for SAEM
+            tol_fun=1e-5,  # Good convergence tolerance
             n_iterations=(40, 40, 20),  # Optimized for 50 subjects: faster convergence
-            n_mcmc_iterations=(2, 2, 2)  # Keep MCMC steps reasonable
+            n_mcmc_iterations=(2, 2, 2),  # Keep MCMC steps reasonable
+            loglik_method="lin",  # report the (linearised) log-likelihood
         )
-        
-        # Restore original setting
-        nlmefit_module.RUST_AVAILABLE = rust_available_backup
 
         converged = stats.logl is not None
         print(f"✅ Convergence: {'Yes' if converged else 'No'}")
-        if hasattr(stats, 'iterations') and stats.iterations is not None:
+        if hasattr(stats, "iterations") and stats.iterations is not None:
             print(f"Iterations: {stats.iterations}")
         if stats.logl is not None:
             print(f"Final log-likelihood: {stats.logl:.2f}")
@@ -330,7 +334,7 @@ def main():
     print("\n📊 Model Fit Statistics:")
     print(f"AIC: {stats.aic:.1f}")
     print(f"BIC: {stats.bic:.1f}")
-    print(f"RMSE: {np.sqrt(np.mean((y - warfarin_model(beta, x))**2)):.3f} mg/L")
+    print(f"RMSE: {np.sqrt(np.mean((y - warfarin_model(beta, x)) ** 2)):.3f} mg/L")
 
     # Create comprehensive plots
     plot_results(df, beta, psi, stats, x, y)
@@ -387,6 +391,7 @@ def plot_results(df, beta, psi, stats, x, y):
     # 4. Q-Q plot of residuals
     plt.subplot(3, 4, 4)
     from scipy import stats as scipy_stats
+
     scipy_stats.probplot(residuals, dist="norm", plot=plt)
     plt.title("Residual Q-Q Plot")
 
@@ -443,7 +448,7 @@ def plot_results(df, beta, psi, stats, x, y):
 
     # 8. Random effects covariance matrix
     plt.subplot(3, 4, 8)
-    im = plt.imshow(psi, cmap='RdBu_r', aspect='auto')
+    im = plt.imshow(psi, cmap="RdBu_r", aspect="auto")
     plt.colorbar(im)
     plt.title("Random Effects Covariance")
     plt.xlabel("Parameter")
@@ -500,19 +505,19 @@ def plot_results(df, beta, psi, stats, x, y):
     aic_str = f"{stats.aic:.1f}" if stats.aic is not None else "N/A"
     logl_str = f"{stats.logl:.2f}" if stats.logl is not None else "N/A"
     converged_str = "Yes" if stats.logl is not None else "No"
-    
+
     summary_text = f"""
     WARFARIN PK MODEL SUMMARY
-    
+
     Population Parameters:
     • CL = {np.exp(beta[0]):.3f} L/h
     • V = {np.exp(beta[1]):.3f} L/kg
     • Ka = {np.exp(beta[2]):.3f} h⁻¹
-    
+
     Covariate Effects:
     • Age: {(1 - np.exp(beta[3])) * 100:.1f}% ↓ per year
     • Female: {(1 - np.exp(beta[4])) * 100:.1f}% ↓ CL
-    
+
     Model Fit:
     • AIC: {aic_str}
     • Log-likelihood: {logl_str}

@@ -1,142 +1,61 @@
-# Contributing to PyNLME
+# Contributing to pynlme
 
-Thank you for your interest in contributing to PyNLME! This document provides guidelines for contributing to the project.
+## Setup
 
-## Development Setup
+Python 3.11-3.14, [uv](https://docs.astral.sh/uv/) and a Rust toolchain
+([rustup.rs](https://rustup.rs)): the package is built with maturin and compiles the
+kernels in `rust/` (module `pynlme._kernels`). SUND compiles model files with a C
+compiler.
 
-### Prerequisites
-- Python ≥3.11
-- Rust ≥1.65
-- UV package manager (recommended)
-
-### Initial Setup
 ```bash
-# Clone the repository
-git clone https://github.com/willov/PyNLME
-cd PyNLME
-
-# Install dependencies
-uv sync --dev
-
-# Build the Rust extension
-uv run maturin develop
-
-# Run tests
-uv run pytest
+git clone https://github.com/willov/pynlme && cd pynlme
+uv sync --dev --extra sund     # leave out --extra sund to skip SUND
+uv run pytest                  # the fast tests, as CI runs them
 ```
 
-## Code Style
+`uv sync` installs exactly what is requested; without `--extra sund` it uninstalls SUND.
+It rebuilds the kernels when files in `rust/` change.
 
-### Python
-- Follow PEP 8 guidelines
-- Use type hints for all functions
-- Add docstrings for all public functions and classes
-- Maximum line length: 88 characters
+The kernels do the same arithmetic as the NumPy code in `lindstrom_bates.py`,
+`matlab_lb.py`, `first_order.py` and `saem.py`, which runs when they are missing or `PYNLME_KERNELS=0` is set;
+`tests/test_kernels.py` compares the two. Run the tests both ways after changing either,
+and keep the Rust code clean under `cargo fmt` and `cargo clippy`
+(`cd rust && cargo clippy --release`).
 
-### Rust
-- Follow standard Rust conventions (`cargo fmt`)
-- Use `cargo clippy` for linting
-- Add documentation comments for public APIs
+## Tests
 
-## Testing
+| Command | What runs |
+|---|---|
+| `uv run pytest` | Fast tests: unit tests and the stored MATLAB/R/saemix reference cases (CI, every push to `main` and pull requests) |
+| `uv run pytest --runslow` | Also the simulation studies (bias, coverage) |
+| with R (`nlme`, `jsonlite`) installed | Also the randomized comparison with R nlme |
+| with `PYNLME_MATLAB` set | Also the randomized comparison with MATLAB nlmefit |
 
-### Running Tests
-```bash
-# Run all tests
-uv run pytest
+Run the slow checks by hand when changing algorithms; see
+[validation/README.md](validation/README.md). In CI the R validation job runs only when
+started from the Actions tab.
 
-# Run with coverage
-uv run pytest --cov=pynlme
+`compat="matlab"` and `compat="r"` follow MATLAB's and R's iterations step by step
+(`src/pynlme/matlab_lb.py`, `fit_lindstrom_bates_nlme` in `lindstrom_bates.py`). A
+change there must keep the randomized comparisons agreeing; see
+[docs/implementation.md](docs/implementation.md).
 
-# Run specific test file
-uv run pytest tests/test_fitting.py
-```
+## Code style
 
-### Writing Tests
-- Add tests for all new functionality
-- Use descriptive test names
-- Include edge cases and error conditions
-- Test both Python and Rust backends when applicable
+- `uv run ruff check src tests` (line length 88, Python 3.11 syntax).
+- Docstrings for public functions; MATLAB and Python option names as in
+  `docs/api_reference.md`.
+- New behaviour comes with a test, against a reference (MATLAB, R) where one exists.
+- Never copy code from MATLAB or R (their algorithms and formulas, not their code).
 
 ## Documentation
 
-### API Documentation
-- Update `docs/api_reference.md` for new functions
-- Include examples in docstrings
-- Document all parameters and return values
+- `docs/api_reference.md` for new functions and options, `docs/implementation.md` for
+  algorithm changes, `validation/README.md` for validation findings.
+- `CHANGELOG.md` under `[Unreleased]`.
+- Releases: [docs/release-workflow.md](docs/release-workflow.md).
 
-### Implementation Documentation
-- Update `docs/implementation.md` for architectural changes
-- Document algorithm changes and optimizations
+## Reporting issues
 
-## Pull Request Process
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Make** your changes
-4. **Add** tests for new functionality
-5. **Run** the test suite (`pytest`)
-6. **Update** documentation as needed
-7. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-8. **Push** to the branch (`git push origin feature/amazing-feature`)
-9. **Open** a Pull Request
-
-### Pull Request Guidelines
-- Provide a clear description of the changes
-- Reference any related issues
-- Include test results
-- Update CHANGELOG.md for notable changes
-
-## Reporting Issues
-
-### Bug Reports
-When filing a bug report, please include:
-- Python and Rust versions
-- Operating system
-- Minimal reproducible example
-- Expected vs actual behavior
-- Full error traceback
-
-### Feature Requests
-When requesting features, please include:
-- Clear description of the feature
-- Use case and motivation
-- Proposed API (if applicable)
-
-## Code of Conduct
-
-This project follows a standard code of conduct:
-- Be respectful and inclusive
-- Assume good intentions
-- Provide constructive feedback
-- Help others learn and grow
-
-## Getting Help
-
-- **Documentation**: Check the `docs/` folder
-- **Examples**: Look at the `examples/` folder
-- **Issues**: Search existing issues first
-- **Discussions**: Start a discussion for questions
-
-## Development Tips
-
-### Performance
-- Profile code changes with realistic datasets
-- Benchmark against existing implementations
-- Consider both single-threaded and multi-threaded scenarios
-
-### Algorithm Development
-- Implement in Python first for correctness
-- Port to Rust for performance
-- Maintain feature parity between backends
-
-### Testing Large Datasets
-```bash
-# Generate test data
-python examples/generate_test_data.py
-
-# Run performance tests
-python examples/benchmark.py
-```
-
-Thank you for contributing to PyNLME! 🎉
+Include the pynlme, Python, NumPy and SciPy versions, the operating system, a minimal
+reproducible example, and the expected and actual results.

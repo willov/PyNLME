@@ -1,11 +1,11 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "PyNLME: Nonlinear Mixed-Effects Models for Python"
-version: 0.3.0
-date-released: 2025-06-16
-url: "https://github.com/willov/PyNLME"
-repository-code: "https://github.com/willov/PyNLME"
+title: "pynlme: Nonlinear Mixed-Effects Models for Python"
+version: 0.5.0
+date-released: 2026-10-10
+url: "https://github.com/willov/pynlme"
+repository-code: "https://github.com/willov/pynlme"
 license: MIT
 authors:
   - family-names: "Lövfors"
@@ -15,10 +15,11 @@ keywords:
   - "pharmacokinetics"
   - "pharmacodynamics"
   - "SAEM algorithm"
+  - "Lindstrom-Bates"
   - "Python"
-  - "Rust"
 abstract: >
-  PyNLME is a Python package for fitting nonlinear mixed-effects models,
-  commonly used in pharmacokinetic and pharmacodynamic analyses. It features
-  a high-performance Rust backend implementing the SAEM algorithm with
-  graceful fallback to pure Python implementations.
+  pynlme fits nonlinear mixed-effects models in Python, e.g. for
+  pharmacokinetic and pharmacodynamic analyses and ODE models. It provides
+  MATLAB's nlmefit and nlmefitsa (Lindstrom-Bates, FO, FOCE and SAEM) and an
+  R nlme/saemix-style interface, written in Python with NumPy and SciPy and
+  validated against MATLAB R2023b, R nlme and R saemix.

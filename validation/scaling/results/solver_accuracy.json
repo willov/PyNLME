@@ -1,0 +1,19 @@
+{
+ "mm": {
+  "reference check (DOP853 at 1e-13)": 2.8795030839403526e-14,
+  "SciPy DOP853 (pynlme ode_model)": 2.5393703520995532e-11,
+  "SUND Adams (pynlme)": 1.5241149833648704e-10,
+  "SUND BDF (not used)": 1.2088577301894536e-09,
+  "deSolve lsoda (R nlme)": 2.490194266991617e-10,
+  "rxode2 (nlmixr2)": 2.490194266991617e-10,
+  "MATLAB ode45": 2.1146222223442146e-11
+ },
+ "tmdd": {
+  "reference check (LSODA at 1e-13)": 7.038070126696994e-11,
+  "SciPy LSODA (pynlme ode_model)": 2.3692618533743826e-08,
+  "SUND BDF (pynlme)": 2.3315398500756146e-08,
+  "deSolve lsoda (R nlme)": 2.470753468486464e-08,
+  "rxode2 (nlmixr2)": 6.708879851657912e-08,
+  "MATLAB ode15s": 2.0829634905794592e-08
+ }
+}

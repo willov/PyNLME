@@ -53,11 +53,6 @@ venv.bak/
 # pyenv
 .python-version
 
-# Rust files
-/target/
-Cargo.lock
-**/*.rs.bk
-
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -74,3 +69,11 @@ node_modules/
 # Documentation builds
 docs/_build/
 site/
+# Rust build output of the compiled kernels
+rust/target/
+rust/Cargo.lock
+src/pynlme/_kernels*.so
+src/pynlme/_kernels*.pyd
+validation/scaling/data/
+validation/accuracy/data/
+validation/models/*.cpp

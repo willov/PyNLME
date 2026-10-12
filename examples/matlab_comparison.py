@@ -218,7 +218,8 @@ def compare_algorithms():
 
         print("MLE Results:")
         print(
-            f"  Fixed effects: amplitude={beta_mle[0]:.3f}, decay_rate={beta_mle[1]:.3f}"
+            f"  Fixed effects: amplitude={beta_mle[0]:.3f}, "
+            f"decay_rate={beta_mle[1]:.3f}"
         )
         print("  Random effects covariance:")
         print(f"    {psi_mle}")
@@ -248,7 +249,8 @@ def compare_algorithms():
 
         print("SAEM Results:")
         print(
-            f"  Fixed effects: amplitude={beta_saem[0]:.3f}, decay_rate={beta_saem[1]:.3f}"
+            f"  Fixed effects: amplitude={beta_saem[0]:.3f}, "
+            f"decay_rate={beta_saem[1]:.3f}"
         )
         print("  Random effects covariance:")
         print(f"    {psi_saem}")
@@ -303,12 +305,13 @@ def pharmacokinetic_example():
             verbose=1,
         )
 
+        # Both parameters are estimated on the log scale (param_transform).
         print("\nResults:")
-        print(f"  Population clearance: {beta[1]:.4f} h⁻¹")
-        print(f"  Population volume: {beta[0]:.2f} mg/L")
-        print("  Between-subject variability:")
-        print(f"    CV% on clearance: {100 * np.sqrt(psi[1, 1]):.1f}%")
-        print(f"    CV% on volume: {100 * np.sqrt(psi[0, 0]):.1f}%")
+        print(f"  Population amplitude: {np.exp(beta[0]):.2f} mg/L (true 25)")
+        print(f"  Population decay rate: {np.exp(beta[1]):.4f} h⁻¹ (true 0.3)")
+        print("  Between-subject variability (approx. CV% on the log scale):")
+        print(f"    amplitude: {100 * np.sqrt(psi[0, 0]):.1f}%")
+        print(f"    decay rate: {100 * np.sqrt(psi[1, 1]):.1f}%")
 
         if stats.rmse is not None:
             print(f"  Residual error: {stats.rmse:.3f}")
@@ -331,7 +334,9 @@ def plot_results(results):
     if results is None:
         return
 
-    if len(results) == 4:  # pharmacokinetic_example results
+    if isinstance(
+        results, tuple
+    ):  # pharmacokinetic_example results (log-scale parameters)
         beta, psi, stats, b, (X, y, group) = results
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
@@ -340,7 +345,7 @@ def plot_results(results):
         time_pred = np.linspace(X.min(), X.max(), 100)
 
         # Population prediction
-        y_pop = exponential_decay_model(beta, time_pred)
+        y_pop = exponential_decay_model(np.exp(beta), time_pred)
         ax1.plot(time_pred.ravel(), y_pop, "k-", linewidth=2, label="Population")
 
         # Individual data and predictions
@@ -350,7 +355,7 @@ def plot_results(results):
 
             if b is not None and i < b.shape[1]:
                 # Individual prediction (if random effects available)
-                phi_i = beta + b[:, i]
+                phi_i = np.exp(beta + b[:, i])
                 y_ind = exponential_decay_model(phi_i, time_pred)
                 ax1.plot(time_pred.ravel(), y_ind, "--", alpha=0.6)
 
@@ -361,10 +366,9 @@ def plot_results(results):
         ax1.set_yscale("log")
 
         # Residuals plot
-        if stats.residuals is not None:
-            y_pred_pop = exponential_decay_model(beta, X)
-            residuals = y - y_pred_pop
-            ax2.scatter(y_pred_pop, residuals, alpha=0.6)
+        if stats.pres is not None:
+            y_pred_pop = y - stats.pres
+            ax2.scatter(y_pred_pop, stats.pres, alpha=0.6)
             ax2.axhline(y=0, color="k", linestyle="--")
             ax2.set_xlabel("Population Predictions")
             ax2.set_ylabel("Residuals")
@@ -415,7 +419,7 @@ def plot_results(results):
 
 def main():
     """Run all examples."""
-    print("PyNLME - Nonlinear Mixed-Effects Models for Python")
+    print("pynlme - Nonlinear Mixed-Effects Models for Python")
     print("=" * 50)
 
     # Example 1: Compare algorithms

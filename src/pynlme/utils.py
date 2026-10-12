@@ -1,8 +1,9 @@
 """
-Utility functions for PyNLME package.
+Utility functions for pynlme package.
 """
 
 import numpy as np
+from scipy.special import ndtr
 
 
 def stack_grouped_data(
@@ -18,7 +19,7 @@ def stack_grouped_data(
 
     Parameters
     ----------
-    X_grouped : array_like, shape (n_groups, n_obs_per_group, n_features) or (n_groups, n_obs_per_group)
+    X_grouped : array_like, shape (n_groups, n_obs_per_group[, n_features])
         Predictor variables in grouped format where:
         - n_groups: number of groups/subjects
         - n_obs_per_group: number of observations per group
@@ -59,7 +60,8 @@ def stack_grouped_data(
     # Check dimensions match
     if X_grouped.shape[:2] != y_grouped.shape[:2]:
         raise ValueError(
-            f"X_grouped and y_grouped must have same dimensions for groups and observations. "
+            "X_grouped and y_grouped must have same dimensions for groups and "
+            "observations. "
             f"Got X_grouped: {X_grouped.shape[:2]}, y_grouped: {y_grouped.shape[:2]}"
         )
 
@@ -87,7 +89,9 @@ def stack_grouped_data(
     else:
         group_ids = np.asarray(group_ids)
         if len(group_ids) != n_groups:
-            raise ValueError(f"group_ids must have length {n_groups}, got {len(group_ids)}")
+            raise ValueError(
+                f"group_ids must have length {n_groups}, got {len(group_ids)}"
+            )
 
     # Repeat group IDs for each observation
     group_stacked = np.repeat(group_ids, n_obs_per_group)
@@ -101,7 +105,11 @@ def detect_data_format(
     group: np.ndarray | list | None = None,
 ) -> str:
     """
-    Detect whether data is in stacked or grouped format.
+    Guess whether data is in stacked or grouped format.
+
+    Not used by nlmefit/nlmefitsa, which decide from the shape of y only (see
+    resolve_data_format) or from the DataFormat option; this heuristic also
+    looks at X and can misclassify small datasets.
 
     Parameters
     ----------
@@ -122,34 +130,53 @@ def detect_data_format(
 
     # If y is 2D, likely grouped format
     if y.ndim == 2:
-        return 'grouped'
+        return "grouped"
 
     # If X is 3D, likely grouped format
     if X.ndim == 3:
-        return 'grouped'
+        return "grouped"
 
     # If group is None and data could be grouped, check dimensions
     if group is None:
         # If X is 2D and y is 2D, grouped
         if X.ndim == 2 and y.ndim == 2:
-            return 'grouped'
+            return "grouped"
         # If X is 2D and y is 1D, but both have small first dimension, might be grouped
         if X.ndim == 2 and y.ndim == 1 and X.shape[0] <= 10 and X.shape[0] == len(y):
             # Could be either, but if no group provided, assume grouped
-            return 'grouped'
+            return "grouped"
 
     # If group is provided and has same length as y, likely stacked format
     if group is not None:
         group = np.asarray(group)
         if len(group) == len(y):
-            return 'stacked'
+            return "stacked"
 
     # If X and y have same first dimension and it's large, likely stacked
     if X.shape[0] == y.shape[0] and X.shape[0] > 10:
-        return 'stacked'
+        return "stacked"
 
     # Default to stacked format
-    return 'stacked'
+    return "stacked"
+
+
+def resolve_data_format(y, data_format: str | None = None) -> str:
+    """'stacked' or 'grouped', from an explicit setting or from the shape of y.
+
+    Without a setting, y with a singleton dimension (a vector, including a
+    MATLAB-style column or row vector) is stacked, and a matrix with more than
+    one row and column is grouped (one row per group). No other shape
+    heuristics are used.
+    """
+    if data_format is not None:
+        data_format = str(data_format).lower()
+        if data_format not in ("stacked", "grouped"):
+            raise ValueError(
+                f"DataFormat must be 'stacked' or 'grouped', not '{data_format}'"
+            )
+        return data_format
+    y = np.asarray(y)
+    return "grouped" if y.ndim == 2 and min(y.shape) > 1 else "stacked"
 
 
 def validate_inputs(
@@ -158,6 +185,7 @@ def validate_inputs(
     group: np.ndarray | list | None,
     V: np.ndarray | None,
     beta0: np.ndarray,
+    data_format: str | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
     """
     Validate and standardize inputs for NLME fitting.
@@ -170,17 +198,20 @@ def validate_inputs(
     X : array_like
         Predictor variables. Can be:
         - Stacked: shape (n_obs, n_features)
-        - Grouped: shape (n_groups, n_obs_per_group, n_features) or (n_groups, n_obs_per_group)
+        - Grouped: shape (n_groups, n_obs_per_group[, n_features])
     y : array_like
         Response variable. Can be:
-        - Stacked: shape (n_obs,)
+        - Stacked: shape (n_obs,), (n_obs, 1) or (1, n_obs)
         - Grouped: shape (n_groups, n_obs_per_group)
     group : array_like or None
-        Grouping variable. Required for stacked format, ignored for grouped format.
+        Grouping variable. Required for stacked data; for grouped data,
+        optional labels for the rows of y.
     V : array_like or None
         Group-level predictors
     beta0 : array_like
         Initial parameter values
+    data_format : {'stacked', 'grouped'} or None
+        Overrides the format inferred from y (see resolve_data_format).
 
     Returns
     -------
@@ -194,11 +225,12 @@ def validate_inputs(
 
     if V is not None:
         V = np.asarray(V, dtype=float)
+        if V.size == 0:  # MATLAB code passes [] for "no group predictors"
+            V = None
 
-    # Detect data format and convert if necessary
-    data_format = detect_data_format(X, y, group)
+    data_format = resolve_data_format(y, data_format)
 
-    if data_format == 'grouped':
+    if data_format == "grouped":
         # Convert grouped data to stacked format
         if group is not None:
             # Use provided group IDs
@@ -211,7 +243,11 @@ def validate_inputs(
     else:
         # Already in stacked format
         if group is None:
-            raise ValueError("group parameter is required for stacked data format")
+            raise ValueError(
+                "group is required for stacked data (y a vector). For grouped data, "
+                "pass y "
+                "with one row per group, or set DataFormat='grouped'."
+            )
         group = np.asarray(group)
         y = y.ravel()
 
@@ -223,7 +259,8 @@ def validate_inputs(
     n_obs = len(y)
     if X.shape[0] != n_obs:
         raise ValueError(
-            f"X and y must have same number of observations. Got {X.shape[0]} and {n_obs}"
+            f"X and y must have same number of observations. Got {X.shape[0]} and "
+            f"{n_obs}"
         )
 
     if len(group) != n_obs:
@@ -242,7 +279,9 @@ def validate_inputs(
     # Validate V if provided
     if V is not None:
         if V.ndim == 1:
-            V = V.reshape(1, -1)
+            # A vector is one value per group (MATLAB column vector), unless
+            # there is a single group, in which case it is that group's row.
+            V = V.reshape(-1, 1) if V.shape[0] == n_groups else V.reshape(1, -1)
         if V.shape[0] != n_groups:
             raise ValueError(f"V must have {n_groups} rows (one per group)")
 
@@ -299,7 +338,6 @@ def transform_parameters(
 
     Notes
     -----
-    This function is currently a placeholder for future implementation.
     Parameter transformations are useful for:
     - Ensuring positive parameters (e.g., clearance, volume)
     - Constraining parameters to intervals (e.g., bioavailability 0-1)
@@ -324,13 +362,10 @@ def transform_parameters(
     if np.any(exp_mask):
         phi_transformed[..., exp_mask] = np.exp(phi[..., exp_mask])
 
-    # Probit transformation (normal CDF approximation)
+    # Probit transformation (normal CDF), as MATLAB's ParamTransform code 2
     probit_mask = transform_codes == 2
     if np.any(probit_mask):
-        # Use tanh approximation to normal CDF: Φ(x) ≈ 0.5(1 + tanh(0.7978x))
-        phi_transformed[..., probit_mask] = 0.5 * (
-            1 + np.tanh(phi[..., probit_mask] * 0.7978)
-        )
+        phi_transformed[..., probit_mask] = ndtr(phi[..., probit_mask])
 
     # Logit transformation (inverse logit)
     logit_mask = transform_codes == 3
@@ -368,74 +403,3 @@ def generate_design_matrix(
     else:
         # Full pattern matrix
         return pattern.copy()
-
-
-def compute_residuals(
-    y: np.ndarray,
-    y_pred_pop: np.ndarray,
-    y_pred_ind: np.ndarray,
-    weights: np.ndarray | None = None,
-) -> dict:
-    """
-    Compute various types of residuals for model diagnostics.
-
-    Parameters
-    ----------
-    y : ndarray
-        Observed responses
-    y_pred_pop : ndarray
-        Population predictions (fixed effects only)
-    y_pred_ind : ndarray
-        Individual predictions (fixed + random effects)
-    weights : ndarray, optional
-        Weights for weighted residuals
-
-    Returns
-    -------
-    residuals : dict
-        Dictionary containing different types of residuals
-    """
-    residuals = {}
-
-    # Population and individual residuals
-    residuals["pres"] = y - y_pred_pop
-    residuals["ires"] = y - y_pred_ind
-
-    # Weighted residuals if weights provided
-    if weights is not None:
-        sqrt_weights = np.sqrt(weights)
-        residuals["pwres"] = residuals["pres"] * sqrt_weights
-        residuals["iwres"] = residuals["ires"] * sqrt_weights
-        # Conditional weighted residuals (simplified)
-        residuals["cwres"] = residuals["iwres"]
-    else:
-        residuals["pwres"] = residuals["pres"]
-        residuals["iwres"] = residuals["ires"]
-        residuals["cwres"] = residuals["ires"]
-
-    return residuals
-
-
-def compute_information_criteria(
-    logl: float, n_params: int, n_groups: int
-) -> tuple[float, float]:
-    """
-    Compute AIC and BIC for model selection.
-
-    Parameters
-    ----------
-    logl : float
-        Log-likelihood
-    n_params : int
-        Number of parameters
-    n_groups : int
-        Number of groups
-
-    Returns
-    -------
-    aic, bic : float, float
-        Akaike and Bayesian information criteria
-    """
-    aic = -2 * logl + 2 * n_params
-    bic = -2 * logl + np.log(n_groups) * n_params
-    return aic, bic

@@ -1,3 +1,3 @@
 """
-Test suite for PyNLME package.
+Test suite for pynlme package.
 """

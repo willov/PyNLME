@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for PyNLME package.
+Test script for pynlme package.
 """
 
 import os
@@ -152,7 +152,7 @@ def test_nlmefitsa():
 
 def main():
     """Run all tests."""
-    print("PyNLME Test Suite")
+    print("pynlme Test Suite")
     print("=" * 40)
 
     success_count = 0

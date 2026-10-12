@@ -1,0 +1,141 @@
+{
+  "indometh": {
+    "focei": {
+      "elapsed_s": 1.308,
+      "theta": {
+        "tp1": 0.77963754531,
+        "tp2": -0.87631422135,
+        "tp3": 2.7723557305,
+        "tp4": 1.02781453,
+        "add.sd": 0.08198462401
+      },
+      "omega": [
+        [0.042944992556, 0, 0, 0],
+        [0, 0.0010000019602, 0, 0],
+        [0, 0, 0.33737443575, 0],
+        [0, 0, 0, 0.0010000019602]
+      ],
+      "omega_names": ["eta.p1", "eta.p2", "eta.p3", "eta.p4"],
+      "objf": -233.400942393,
+      "loglik": 56.050528005,
+      "message": "Normal exit from bobyqa"
+    },
+    "saem": {
+      "elapsed_s": 0.63,
+      "theta": {
+        "tp1": 0.5,
+        "tp2": -1.1487104661,
+        "tp3": 2.5,
+        "tp4": 0.70183482435,
+        "add.sd": 0.11665699451
+      },
+      "omega": [
+        [6.4213052265e-10, 0, 0, 0],
+        [0, 5.9154655556e-05, 0, 0],
+        [0, 0, 6.4213052265e-10, 0],
+        [0, 0, 0, 0.064213052265]
+      ],
+      "omega_names": ["eta.p1", "eta.p2", "eta.p3", "eta.p4"],
+      "objf": -201.5453581576,
+      "loglik": 40.1227358873,
+      "message": ""
+    }
+  },
+  "theoph": {
+    "focei": {
+      "elapsed_s": 0.323,
+      "theta": {
+        "tke": -2.4666153051,
+        "tka": 0.48896322344,
+        "tcl": -3.231727608,
+        "add.sd": 0.70646892319
+      },
+      "omega": [
+        [0.44068880248, 0],
+        [0, 0.027677858435]
+      ],
+      "omega_names": ["eta.ka", "eta.cl"],
+      "objf": 111.3897204449,
+      "loglik": -176.9947466055,
+      "message": "Normal exit from bobyqa"
+    },
+    "saem": {
+      "elapsed_s": 1.372,
+      "theta": {
+        "tke": -2.5049324215,
+        "tka": 0.51116000757,
+        "tcl": -3.2554097484,
+        "add.sd": 0.71161275485
+      },
+      "omega": [
+        [0.43459564829, 0],
+        [0, 0.028249368765]
+      ],
+      "omega_names": ["eta.ka", "eta.cl"],
+      "objf": 116.7722609788,
+      "loglik": -179.6860168724,
+      "message": ""
+    }
+  },
+  "orange": {
+    "focei": {
+      "elapsed_s": 0.281,
+      "theta": {
+        "tasym": 192.3236614455,
+        "txmid": 728.3568785719,
+        "tscal": 348.4805569396,
+        "add.sd": 7.8600046555
+      },
+      "omega": [
+        [995.421884857]
+      ],
+      "omega_names": "eta.asym",
+      "objf": 198.8188528565,
+      "loglik": -131.5722750904,
+      "message": "Normal exit from bobyqa"
+    },
+    "saem": {
+      "elapsed_s": 0.614,
+      "theta": {
+        "tasym": 192,
+        "txmid": 726.0029933828,
+        "tscal": 348.4166484446,
+        "add.sd": 22.3500531244
+      },
+      "omega": [
+        [1e-06]
+      ],
+      "omega_names": "eta.asym",
+      "objf": "Inf",
+      "loglik": "-Inf",
+      "message": ""
+    }
+  },
+  "linear": {
+    "focei": {
+      "elapsed_s": 0.198,
+      "theta": {
+        "ta": 1.9661882589,
+        "tb": 0.54051282841,
+        "add.sd": 0.29731115959
+      },
+      "omega": [
+        [0.17703755347, 0.021076156547],
+        [0.021076156547, 0.01934782029]
+      ],
+      "omega_names": ["eta.a", "eta.b"],
+      "objf": -85.566051819,
+      "loglik": -67.489598075,
+      "message": "Normal exit from bobyqa"
+    },
+    "saem": {
+      "error": "chol(): decomposition failed"
+    }
+  },
+  "versions": {
+    "r": "R version 4.6.1 (2026-06-24)",
+    "nlmixr2": "7.0.1",
+    "nlmixr2est": "7.1.0",
+    "rxode2": "5.1.7.1"
+  }
+}

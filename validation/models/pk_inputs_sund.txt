@@ -1,0 +1,26 @@
+########## NAME
+pk_inputs
+########## METADATA
+time_unit = h
+Description = """One-compartment PK with oral doses (state manipulations of gut) and an intravenous infusion given per kg body weight (input infusion_per_kg, scaled by the parameter BW)."""
+Authors = """pynlme validation"""
+########## MACROS
+########## STATES
+ddt_gut = -ka*gut
+ddt_C = ka*gut/V + infusion/V - CL/V*C
+gut(0) = 0
+C(0) = 0
+########## PARAMETERS
+ka = 1
+V = 10
+CL = 2
+BW = 70
+########## VARIABLES
+infusion = infusion_per_kg*BW
+########## FUNCTIONS
+########## EVENTS
+########## OUTPUTS
+########## INPUTS
+infusion_per_kg = infusion_per_kg_in @ 0
+########## FEATURES
+conc = C

@@ -1,408 +1,133 @@
-# Tutorial: Getting Started with PyNLME
+# Tutorial
 
-This tutorial provides a step-by-step introduction to nonlinear mixed-effects modeling using PyNLME.
+A walk through the main features, for users coming from MATLAB. The code runs from the
+repository root (the datasets are in `validation/datasets/`).
 
-## PyNLME Function Interface
+## 1. A MATLAB example, line by line
 
-PyNLME is designed with simplicity in mind. We provide **just 3 essential functions**:
+MATLAB's `nlmefit` documentation fits a bi-exponential model to the indomethacin data:
 
-### MATLAB Users
-- **`nlmefit()`** - Maximum Likelihood Estimation (identical to MATLAB)
-- **`nlmefitsa()`** - Stochastic Approximation EM (identical to MATLAB)
-
-### Python Users
-- **`fit_nlme(method='ML'|'SAEM')`** - Unified interface with method parameter
-
-This clean design makes PyNLME easy to learn and use, regardless of your background. All functions provide access to the same underlying algorithms and produce identical results for the same method.
-
-## What are Nonlinear Mixed-Effects Models?
-
-Nonlinear mixed-effects (NLME) models are used to analyze data where:
-- The relationship between variables is **nonlinear**
-- Data comes from **multiple groups** (subjects, batches, etc.)
-- There's both **population-level** and **individual-specific** variation
-
-Common applications include:
-- **Pharmacokinetics**: Drug concentration over time
-- **Growth curves**: Height/weight development
-- **Dose-response**: Biological responses to treatments
-
-## Basic Concepts
-
-### Model Structure
-An NLME model has the form:
-
-```
-y_ij = f(x_ij, β_i) + ε_ij
-β_i = β + b_i
+```matlab
+load indomethacin
+model = @(phi,t)(phi(1).*exp(-phi(2).*t)+phi(3).*exp(-phi(4).*t));
+[beta,psi,stats,b] = nlmefit(time,concentration,subject,[],model,[1 1 1 1], ...
+                             ParamTransform=[0 1 0 1]);
 ```
 
-Where:
-- `y_ij`: Observation j from individual i
-- `f()`: Nonlinear function
-- `β_i`: Individual-specific parameters
-- `β`: Population (fixed) effects
-- `b_i`: Random effects for individual i
-- `ε_ij`: Residual error
+In pynlme:
 
-### Key Components
-1. **Fixed Effects (β)**: Population-average parameters
-2. **Random Effects (b_i)**: Individual deviations from population
-3. **Error Model**: Describes residual variation
-
-## Data Input Formats
-
-PyNLME supports two data input formats to accommodate different data organization preferences:
-
-### Traditional Stacked Format (MATLAB-compatible)
-
-In the traditional format, all measurements are stacked into single arrays:
-
-```python
-# All time points stacked together
-time_stacked = np.array([0, 1, 2, 4, 0, 1, 2, 4, 0, 1, 2, 4])  # 3 subjects, 4 obs each
-
-# All concentration measurements stacked  
-conc_stacked = np.array([10, 7, 5, 3, 12, 8, 6, 4, 11, 8, 6, 3])
-
-# Group indicators (which subject each measurement belongs to)
-subject_stacked = np.array([0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2])
-```
-
-### Multi-Dimensional Format (New!)
-
-In the new format, each row represents a subject:
-
-```python
-# Time points organized by subject (each row = one subject)
-time_grouped = np.array([
-    [0, 1, 2, 4],  # Subject 1 time points
-    [0, 1, 2, 4],  # Subject 2 time points  
-    [0, 1, 2, 4],  # Subject 3 time points
-])
-
-# Concentrations organized by subject
-conc_grouped = np.array([
-    [10, 7, 5, 3],  # Subject 1 concentrations
-    [12, 8, 6, 4],  # Subject 2 concentrations
-    [11, 8, 6, 3],  # Subject 3 concentrations
-])
-
-# No group parameter needed!
-```
-
-### Using Both Formats
-
-Both formats work identically with all PyNLME functions:
-
-```python
-# Traditional stacked format
-beta1, psi1, stats1, b1 = nlmefit(
-    time_stacked.reshape(-1, 1), conc_stacked, subject_stacked, 
-    None, model_function, initial_params
-)
-
-# Multi-dimensional format - no group parameter needed!
-beta2, psi2, stats2, b2 = nlmefit(
-    time_grouped, conc_grouped, None,
-    None, model_function, initial_params  
-)
-
-# Results are identical
-assert np.allclose(beta1, beta2)
-```
-
-The system automatically detects the input format and handles the conversion internally, so you can use whichever format is more convenient for your data organization.
-
-## Tutorial 1: One-Compartment Pharmacokinetic Model
-
-Let's fit a simple PK model: `C(t) = Dose/V * exp(-CL/V * t)`
-
-### Step 1: Import and Setup
 ```python
 import numpy as np
-import matplotlib.pyplot as plt
-import pynlme
+from pynlme import nlmefit
 
-# Set random seed for reproducibility
-np.random.seed(42)
+data = np.genfromtxt("validation/datasets/indometh.csv", delimiter=",", names=True)
+subject, time, concentration = data["subject"], data["time"], data["conc"]
+
+def model(phi, t):
+    return phi[0] * np.exp(-phi[1] * t) + phi[2] * np.exp(-phi[3] * t)
+
+beta, psi, stats, b = nlmefit(time, concentration, subject, None, model, [1, 1, 1, 1],
+                              ParamTransform=[0, 1, 0, 1])
+print(beta)            # MATLAB: 0.4606 -1.3459 2.8277 0.7729 (possibly with the two terms swapped)
+print(np.diag(psi))    # MATLAB: 0.0124 0.0000 0.3264 0.0250
+print(stats.logl, stats.rmse, stats.sebeta)
 ```
 
-### Step 2: Generate Synthetic Data
-```python
-def generate_pk_data(n_subjects=20, n_timepoints=8):
-    """Generate synthetic PK data"""
-    
-    # Population parameters
-    pop_cl = 2.0    # Clearance (L/h)
-    pop_v = 10.0    # Volume (L)
-    
-    # Between-subject variability (CV%)
-    cv_cl = 0.3
-    cv_v = 0.2
-    
-    # Residual error (proportional)
-    prop_error = 0.1
-    
-    # Time points
-    times = np.array([0.5, 1, 2, 4, 8, 12, 24, 48])
-    
-    data = []
-    for subject in range(n_subjects):
-        # Individual parameters (log-normal distribution)
-        cl_i = pop_cl * np.exp(np.random.normal(0, cv_cl))
-        v_i = pop_v * np.exp(np.random.normal(0, cv_v))
-        
-        # Dose (assume 100 mg)
-        dose = 100
-        
-        for time in times:
-            # True concentration
-            conc_true = (dose / v_i) * np.exp(-cl_i / v_i * time)
-            
-            # Add proportional error
-            conc_obs = conc_true * (1 + np.random.normal(0, prop_error))
-            
-            data.append({
-                'subject': subject,
-                'time': time,
-                'dose': dose,
-                'concentration': conc_obs,
-                'cl_true': cl_i,
-                'v_true': v_i
-            })
-    
-    return pd.DataFrame(data)
+`b` is r x m (one column per subject) and `psi` r x r, as in MATLAB. The start
+`[1 1 1 1]` is symmetric in the two exponential terms, so which term ends up first is
+decided by rounding; the fit is the same.
 
-# Generate data
-import pandas as pd
-df = generate_pk_data(n_subjects=20, n_timepoints=8)
-print(f"Generated {len(df)} observations from {df['subject'].nunique()} subjects")
-```
+## 2. Group-level predictors, covariates and random-effects selection
 
-### Step 3: Prepare Data for PyNLME
-```python
-# Extract arrays for PyNLME
-x = df[['time', 'dose']].values  # Covariates (time, dose)
-y = df['concentration'].values   # Observations
-groups = df['subject'].values    # Subject IDs
-
-print(f"Data shape: x={x.shape}, y={y.shape}, groups={groups.shape}")
-```
-
-### Step 4: Define the Model Function
-```python
-def pk_model(x, beta):
-    """
-    One-compartment PK model
-    x[:, 0] = time
-    x[:, 1] = dose
-    beta[0] = CL (clearance)
-    beta[1] = V (volume)
-    """
-    time = x[:, 0]
-    dose = x[:, 1]
-    cl, v = beta[0], beta[1]
-    
-    # Avoid division by zero and negative parameters
-    cl = np.maximum(cl, 1e-6)
-    v = np.maximum(v, 1e-6)
-    
-    # One-compartment model: C = (Dose/V) * exp(-CL/V * t)
-    conc = (dose / v) * np.exp(-cl / v * time)
-    return conc
-```
-
-### Step 5: Set Initial Parameter Estimates
-```python
-# Initial guesses for population parameters
-beta0 = np.array([
-    2.5,   # CL initial guess
-    8.0    # V initial guess
-])
-
-print(f"Initial parameters: CL={beta0[0]}, V={beta0[1]}")
-```
-
-### Step 6: Fit the Model
-
-PyNLME provides multiple function interfaces. Choose the one that matches your background:
-
-#### Option A: MATLAB-style interface
-```python
-# Fit using MATLAB-compatible function
-print("Fitting NLME model using nlmefit()...")
-beta, psi, stats, b = pynlme.nlmefit(
-    X=x,
-    y=y,
-    group=groups,
-    V=None,
-    modelfun=pk_model,
-    beta0=beta0,
-    max_iter=100,
-    verbose=1
-)
-
-print(f"Convergence: {'Yes' if stats.converged else 'No'}")
-print(f"Final log-likelihood: {stats.logl:.2f}")
-```
-
-#### Option B: Python-style unified interface
-```python
-# Fit using Python-style unified function
-print("Fitting NLME model using fit_nlme()...")
-beta, psi, stats, b = pynlme.fit_nlme(
-    X=x,
-    y=y,
-    group=groups,
-    V=None,
-    modelfun=pk_model,
-    beta0=beta0,
-    method="ML",  # or "SAEM" for stochastic EM
-    max_iter=100,
-    verbose=1
-)
-
-print(f"Convergence: {'Yes' if stats.converged else 'No'}")
-print(f"Final log-likelihood: {stats.logl:.2f}")
-```
-
-### Step 7: Examine Results
-```python
-# Population parameters
-print("\nPopulation Parameters:")
-print(f"CL = {beta[0]:.2f} L/h (true: 2.0)")
-print(f"V  = {beta[1]:.2f} L   (true: 10.0)")
-
-# Random effects variance
-print(f"\nRandom Effects Covariance:")
-print(psi)
-
-# Model fit statistics
-print(f"\nModel Fit:")
-print(f"AIC: {stats.aic:.1f}")
-print(f"BIC: {stats.bic:.1f}")
-print(f"RMSE: {stats.rmse:.3f}")
-```
-
-### Step 8: Visualize Results
-```python
-# Plot population fit
-plt.figure(figsize=(15, 10))
-
-# Individual profiles
-plt.subplot(2, 3, 1)
-for subject in df['subject'].unique()[:6]:  # Show first 6 subjects
-    subj_data = df[df['subject'] == subject]
-    plt.plot(subj_data['time'], subj_data['concentration'], 'o-', alpha=0.7, 
-             label=f'Subject {subject}')
-
-plt.xlabel('Time (h)')
-plt.ylabel('Concentration (mg/L)')
-plt.title('Individual Concentration Profiles')
-plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-
-# Population prediction
-plt.subplot(2, 3, 2)
-time_pred = np.linspace(0.5, 48, 100)
-x_pred = np.column_stack([time_pred, np.full_like(time_pred, 100)])
-pop_pred = pk_model(x_pred, result.beta)
-plt.plot(time_pred, pop_pred, 'r-', linewidth=2, label='Population')
-plt.scatter(df['time'], df['concentration'], alpha=0.5, label='Observed')
-plt.xlabel('Time (h)')
-plt.ylabel('Concentration (mg/L)')
-plt.title('Population Fit')
-plt.legend()
-
-# Residuals vs fitted
-plt.subplot(2, 3, 3)
-fitted = pk_model(x, result.beta)
-residuals = y - fitted
-plt.scatter(fitted, residuals, alpha=0.6)
-plt.axhline(y=0, color='r', linestyle='--')
-plt.xlabel('Fitted Values')
-plt.ylabel('Residuals')
-plt.title('Residuals vs Fitted')
-
-# Residual distribution
-plt.subplot(2, 3, 4)
-plt.hist(residuals, bins=20, density=True, alpha=0.7)
-plt.xlabel('Residuals')
-plt.ylabel('Density')
-plt.title('Residual Distribution')
-
-# Q-Q plot
-plt.subplot(2, 3, 5)
-from scipy import stats
-stats.probplot(residuals, dist="norm", plot=plt)
-plt.title('Q-Q Plot')
-
-# Parameter correlation
-plt.subplot(2, 3, 6)
-if hasattr(result, 'random_effects') and result.random_effects is not None:
-    re = result.random_effects
-    plt.scatter(re[:, 0], re[:, 1], alpha=0.7)
-    plt.xlabel('CL Random Effect')
-    plt.ylabel('V Random Effect')
-    plt.title('Random Effects Correlation')
-    plt.axhline(y=0, color='r', linestyle='--', alpha=0.5)
-    plt.axvline(x=0, color='r', linestyle='--', alpha=0.5)
-
-plt.tight_layout()
-plt.show()
-```
-
-## Tutorial 2: Comparing True vs Estimated Parameters
+Theophylline: an oral one-compartment model where the dose differs by subject (`V`), and
+only absorption and clearance vary between subjects.
 
 ```python
-# Extract true and estimated individual parameters
-true_params = df.groupby('subject')[['cl_true', 'v_true']].first()
-est_params = result.beta + result.random_effects  # Population + individual effects
+data = np.genfromtxt("validation/datasets/theoph.csv", delimiter=",", names=True)
+subject, time, conc = data["subject"], data["time"], data["conc"]
+_, first = np.unique(subject, return_index=True)
+dose = data["dose"][first]                      # one value per subject (V)
 
-# Create comparison plot
-fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+def oral(phi, t, dose):
+    ke, ka, cl = phi
+    return dose * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
 
-# CL comparison
-axes[0].scatter(true_params['cl_true'], est_params[:, 0], alpha=0.7)
-axes[0].plot([0, 5], [0, 5], 'r--', label='Perfect agreement')
-axes[0].set_xlabel('True CL')
-axes[0].set_ylabel('Estimated CL')
-axes[0].set_title('Clearance')
-axes[0].legend()
-
-# V comparison  
-axes[1].scatter(true_params['v_true'], est_params[:, 1], alpha=0.7)
-axes[1].plot([5, 15], [5, 15], 'r--', label='Perfect agreement')
-axes[1].set_xlabel('True V')
-axes[1].set_ylabel('Estimated V')
-axes[1].set_title('Volume')
-axes[1].legend()
-
-plt.tight_layout()
-plt.show()
-
-# Calculate prediction accuracy
-cl_corr = np.corrcoef(true_params['cl_true'], est_params[:, 0])[0, 1]
-v_corr = np.corrcoef(true_params['v_true'], est_params[:, 1])[0, 1]
-
-print(f"Parameter Recovery:")
-print(f"CL correlation: {cl_corr:.3f}")
-print(f"V correlation:  {v_corr:.3f}")
+beta, psi, stats, b = nlmefit(time, conc, subject, dose, oral, [-2.5, 0.5, -3.2],
+                              ParamTransform=[1, 1, 1],   # estimate log ke, log ka, log cl
+                              REParamsSelect=[2, 3])      # random effects on ka and cl (1-based)
 ```
 
-## Key Takeaways
+A weight effect on log clearance uses a group-specific fixed-effects design, as in
+MATLAB:
 
-1. **Data Preparation**: Ensure proper array shapes and data types
-2. **Model Function**: Define vectorized functions that handle parameters safely
-3. **Initial Values**: Good starting values improve convergence
-4. **Diagnostics**: Always check residuals and model fit
-5. **Validation**: Compare results with known truth when possible
+```python
+wt = data["wt"][first] - 70
+A = np.zeros((3, 4, len(wt)))       # p x f x m
+A[0, 0] = A[1, 1] = A[2, 2] = 1
+A[2, 3] = wt                         # log cl = beta3 + beta4 * (wt - 70)
+beta, psi, stats, b = nlmefit(time, conc, subject, dose, oral, [-2.5, 0.5, -3.2, 0.0],
+                              ParamTransform=[1, 1, 1], REParamsSelect=[2, 3], FEGroupDesign=A)
+```
 
-## Next Steps
+## 3. Approximations, error models and SAEM
 
-- **Tutorial 2**: Multi-compartment models
-- **Tutorial 3**: Covariate effects
-- **Tutorial 4**: Different error models
-- **Tutorial 5**: Model selection and validation
+```python
+fit = dict(ParamTransform=[1, 1, 1], REParamsSelect=[2, 3])
+nlmefit(time, conc, subject, dose, oral, [-2.5, 0.5, -3.2], ApproximationType="FOCE", **fit)
+nlmefit(time, conc, subject, dose, oral, [-2.5, 0.5, -3.2], ErrorModel="combined", **fit)
 
-Ready to explore more complex models? Check out the advanced examples!
+from pynlme import nlmefitsa
+beta, psi, stats, b = nlmefitsa(time, conc, subject, dose, oral, [-2.5, 0.5, -3.2],
+                                random_state=1, LogLikMethod="is", **fit)
+```
+
+SAEM is stochastic: set `random_state` for reproducible results. It maximises the exact
+likelihood rather than a linearised one.
+
+## 4. Faster fits: `Vectorization="Full"`
+
+If the model can evaluate many parameter rows at once, pass `Vectorization="Full"`; the
+model then receives one parameter row per observation. Index the last axis so the same
+function also works for a single vector:
+
+```python
+def oral_v(phi, t, dose):
+    ke, ka, cl = phi[..., 0], phi[..., 1], phi[..., 2]
+    t, dose = t[:, 0], dose[..., 0]
+    return dose * ke * ka / (cl * (ka - ke)) * (np.exp(-ke * t) - np.exp(-ka * t))
+
+nlmefit(time, conc, subject, dose, oral_v, [-2.5, 0.5, -3.2], Vectorization="Full", **fit)
+```
+
+## 5. Grouped data
+
+With one row per subject, `group` can be left out:
+
+```python
+X = np.tile([0.5, 1, 2, 4, 8], (6, 1))          # 6 subjects x 5 times
+Y = 10 * np.exp(-0.3 * X) * np.exp(np.random.default_rng(0).normal(0, 0.1, (6, 1)))
+nlmefit(X, Y, None, None, lambda phi, t: phi[0] * np.exp(-phi[1] * t[:, 0]), [8, 0.2],
+        REParamsSelect=[1])
+```
+
+The layout follows from the shape of `y` (a vector is stacked; a matrix with more than
+one row and column is grouped) or is set with `DataFormat="stacked"`/`"grouped"`.
+
+## 6. ODE models
+
+See `examples/sund_ode_model.py` for a model compiled with SUND, and the API reference
+for `ode_model` (SciPy).
+
+
+Several measured features (e.g. concentration and effect) are fitted together by
+stacking them into one response vector with a feature-index column in `X`, as in
+MATLAB; `sund_model(feature=["conc", "effect"], ...)` and `ode_model` read out each row's
+feature from one simulation per subject. See the API reference, "Several observed
+features".
+
+## 7. R conventions
+
+`compat="r"` follows R's nlme: its iteration and default tolerances for `"LME"` and
+`"RELME"`, and its standard errors and BIC; `nlmefitsa` defaults to one chain like
+saemix. On well-behaved problems the estimates are those of the default mode to the
+convergence tolerance.
