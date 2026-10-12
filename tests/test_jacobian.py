@@ -126,3 +126,28 @@ def test_saem_with_analytic_derivatives():
         random_state=2,
     )
     np.testing.assert_allclose(b[0], a[0], atol=2e-3)
+
+
+@pytest.mark.parametrize("method", ["LSODA", "BDF", "Radau"])
+def test_ode_model_implicit_methods_match_dop853(method):
+    """ode_model's implicit methods (given the systems' block-diagonal Jacobian)
+    give the explicit method's solution."""
+    from pynlme import ode_model
+
+    def rhs(t, y, phi, v):
+        return np.column_stack(
+            [-phi[:, 0] * y[:, 0], phi[:, 0] * y[:, 0] - phi[:, 1] * y[:, 1]]
+        )
+
+    def y0(phi, v):
+        return np.column_stack([v[:, 0], np.zeros(len(v))])
+
+    def output(y, phi, v):
+        return y[:, 1]
+
+    t = np.tile([0.5, 1.0, 2.0, 4.0, 8.0], 4)[:, None]
+    phi = np.repeat([[1.0, 0.1], [1.5, 0.2], [0.8, 0.05], [2.0, 0.3]], 5, axis=0)
+    v = np.repeat([[10.0], [20.0], [5.0], [8.0]], 5, axis=0)
+    expected = ode_model(rhs, y0, output)(phi, t, v)
+    got = ode_model(rhs, y0, output, method=method)(phi, t, v)
+    np.testing.assert_allclose(got, expected, rtol=1e-7)

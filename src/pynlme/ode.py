@@ -28,6 +28,20 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 
+def _block_structure(method: str, K: int, n_states: int) -> dict:
+    """The systems are independent, so the stacked system's Jacobian is block
+    diagonal: tell SciPy's implicit methods (a band for LSODA, a sparsity pattern for
+    BDF and Radau) instead of letting them estimate and factor a dense matrix."""
+    if method == "LSODA":
+        return {"lband": n_states - 1, "uband": n_states - 1}
+    if method in ("BDF", "Radau"):
+        from scipy import sparse
+
+        block = sparse.csr_array(np.ones((n_states, n_states)))
+        return {"jac_sparsity": sparse.kron(sparse.eye_array(K), block, format="csr")}
+    return {}
+
+
 def ode_model(
     rhs: Callable,
     y0: Callable,
@@ -58,7 +72,10 @@ def ode_model(
     feature_column : int
         Column of x holding the feature index (several features only).
     method, rtol, atol
-        Passed to scipy.integrate.solve_ivp. The tolerances apply to the
+        Passed to scipy.integrate.solve_ivp. The default DOP853 suits non-stiff
+        models; for stiff ones use "LSODA" (or "BDF", "Radau"): the subjects'
+        independence is passed on as a banded or block-sparse Jacobian, which
+        makes these methods fast for many subjects. The tolerances apply to the
         stacked system; tight values keep finite-difference Jacobians accurate.
 
     Returns
@@ -115,6 +132,7 @@ def ode_model(
                 method=method,
                 rtol=rtol,
                 atol=atol,
+                **_block_structure(method, K, n_states),
             )
             if not sol.success:
                 return np.full(n, np.nan)
