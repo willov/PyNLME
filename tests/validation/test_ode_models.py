@@ -97,3 +97,19 @@ def test_sund_model_matches_matlab():
             c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full"
         )
         _compare_to_matlab(beta, psi, stats)
+
+
+def test_sund_adams_method_matches_matlab():
+    """method="adams" (for non-stiff models) gives MATLAB's fit as well."""
+    sund = pytest.importorskip("sund")
+    from pynlme import sund_model
+
+    sund.install_model(os.path.relpath(MODELS / "mm_pk_sund.txt"))
+    model = sund_model(
+        "mm_pk", "conc", ["ka", "V", "vmax", "km"], v_states=["gut"], method="adams"
+    )
+    c = mm_pk()
+    beta, psi, stats, _ = nlmefit(
+        c.X, c.y, c.group, c.V, model, c.beta0, **c.kwargs, Vectorization="Full"
+    )
+    _compare_to_matlab(beta, psi, stats)

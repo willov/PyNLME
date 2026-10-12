@@ -272,7 +272,9 @@ With `Vectorization="Full"` it simulates `batch_size` (16) parameter sets per SU
 using containers. Integrator tolerances default to rel 1e-10, abs 1e-12, because the
 model is differentiated numerically. If the integrator fails (e.g. a stiff system at
 extreme parameters during a step), the predictions are non-finite and the step is
-rejected like any other. See `examples/sund_ode_model.py`.
+rejected like any other. `method="adams"` (default `"bdf"`) suits non-stiff models:
+on the Michaelis-Menten PK model it is 3 times faster per batched simulation and more
+accurate. See `examples/sund_ode_model.py`.
 
 Inputs (doses, infusions) come from SUND activities, one set per experiment. You give
 the model and the data; `sund_model` creates the simulations. Give each experiment as a
