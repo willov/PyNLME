@@ -1,9 +1,12 @@
-# Build the wheels and the sdist without releasing (Actions -> Build wheels -> Run
-# workflow), to check the per-platform builds before a release.
+# Build the wheels and the sdist without releasing, to check the per-platform builds
+# before a release: on pull requests to main, or by hand (Actions -> Build wheels ->
+# Run workflow).
 name: Build wheels
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [ main ]
 
 jobs:
   wheels:
