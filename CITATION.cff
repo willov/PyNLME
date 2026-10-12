@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 type: software
 title: "pynlme: Nonlinear Mixed-Effects Models for Python"
 version: 0.5.0
-date-released: 2026-10-10
+date-released: 2026-10-12
 url: "https://github.com/willov/pynlme"
 repository-code: "https://github.com/willov/pynlme"
 license: MIT
