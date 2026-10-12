@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pynlme"
-version = "0.5.0"
+version = "0.5.1"
 description = "Nonlinear mixed-effects models for Python with MATLAB nlmefit/nlmefitsa syntax"
 readme = "README.md"
 requires-python = ">=3.11"
