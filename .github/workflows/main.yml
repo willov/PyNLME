@@ -227,3 +227,6 @@ jobs:
 
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A rerun after a partial upload uploads only what is missing.
+          skip-existing: true
