@@ -43,7 +43,7 @@ dev = [
 sund = [
     "sund>=2.5",
     # SUND needs ziglang (its fallback compiler); ziglang 0.17.0 has no Windows wheel.
-    "ziglang<0.17; sys_platform == 'win32'",
+    "ziglang!=0.17.0; sys_platform == 'win32'",
 ]
 benchmark = [
     "psutil>=5.9.0",
