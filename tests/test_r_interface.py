@@ -127,10 +127,12 @@ def test_full_covariance_and_user_function():
     )
     # R, default nlmeControl(): nlme(..., random = Asym + xmid ~ 1) gives logLik
     # -130.9016, fixed effects 189.8378, 709.5475, 340.4893, corr 0.771. With R's
-    # iteration and defaults pynlme stops where R does (to the printed digits).
+    # iteration and defaults pynlme stops where R does, within the convergence
+    # tolerance (1e-5): where exactly depends on rounding, which differs between
+    # platforms' BLAS (here within 5e-7, on CI runners up to 1.2e-6).
     assert logLik(fit) == pytest.approx(-130.9016, abs=1e-4)
     np.testing.assert_allclose(
-        list(fixef(fit).values()), [189.8378, 709.5475, 340.4893], rtol=5e-7
+        list(fixef(fit).values()), [189.8378, 709.5475, 340.4893], rtol=5e-6
     )
     assert VarCorr(fit)["Corr"][1, 0] == pytest.approx(0.771, abs=1e-3)
     assert "Log-Cholesky" in summary(fit)
