@@ -11,7 +11,7 @@ function run_matlab(models)
 %   is called for all observations at once ('Full', with each observation's
 %   group index in the last column of X, see validation/matlab/benchmark.m); the
 %   ODE model is solved per subject with ode45 at the common tolerance (relative
-%   1e-8, absolute 1e-10). Sizes run in increasing order; once a run takes longer
+%   1e-10, absolute 1e-12). Sizes run in increasing order; once a run takes longer
 %   than 60 s the larger sizes are skipped. Runs shorter than 5 s are repeated and
 %   the best of 3 is kept; the first run of each method is an untimed warm-up.
 %   The multi-dose model (mmd) is solved from dose to dose with ode45.
@@ -26,6 +26,11 @@ if ~isempty(getenv('SCALING_SIZES'))  % e.g. SCALING_SIZES=10,100
 end
 limit = 60;
 methods = {'LME', 'FOCE', 'SAEM'};
+% SCALING_METHODS=FOCE runs only these methods (the others' results stay).
+selected = ~isempty(getenv('SCALING_METHODS'));
+if selected
+    methods = strsplit(getenv('SCALING_METHODS'), ',');
+end
 if nargin < 1
     models = {'oral', 'mm', 'mmd'};
 end
@@ -38,7 +43,9 @@ else
     results = struct();
 end
 for name = models
-    results.(name{1}) = struct();
+    if ~selected || ~isfield(results, name{1})
+        results.(name{1}) = struct();
+    end
     tooSlow = {};
     for n = sizes
         c = loadCase(dataDir, name{1}, n);
@@ -141,7 +148,7 @@ function c = mmModel(phi, t, dose)
 ka = phi(1); V = phi(2); vmax = phi(3); km = phi(4);
 rhs = @(~, s) [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
 [ts, order] = sort(t(:));
-opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
+opts = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
 [~, sol] = ode45(rhs, [0; ts], [dose(1); 0], opts);
 sol = sol(2:end, 2);
 c = zeros(size(t(:)));
@@ -156,7 +163,7 @@ function c = mmdModel(phi, t, dose)
 % failing integrator does in SUND.
 ka = phi(1); V = phi(2); vmax = phi(3); km = phi(4);
 evaluations = 0;
-opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
+opts = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
 [ts, order] = sort(t(:));
 edges = [0 12 24 inf];
 state = [0; 0];

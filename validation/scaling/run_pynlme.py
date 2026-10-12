@@ -1,8 +1,9 @@
 """
 Time pynlme on the scaling datasets (validation/scaling/make_data.py).
 
-Each method runs with its defaults. The ODE solvers use a common tolerance (relative
-1e-8, absolute 1e-10), except SUND, which keeps its tighter defaults (see mm_sund). Sizes run in increasing order; once a run
+Each method runs with its defaults. Every ODE solver uses the same tolerance
+(relative 1e-10, absolute 1e-12) and its program's method for non-stiff models;
+validation/scaling/solver_accuracy.py measures the accuracy each reaches. Sizes run in increasing order; once a run
 takes longer than LIMIT_S, the larger sizes are skipped (they would take ten times
 longer). Runs shorter than 5 s are repeated and the best of 3 is kept.
 
@@ -33,7 +34,7 @@ SIZES_TO_RUN = tuple(
     int(n)
     for n in os.environ.get("SCALING_SIZES", ",".join(map(str, SIZES))).split(",")
 )
-RTOL, ATOL = 1e-8, 1e-10
+RTOL, ATOL = 1e-10, 1e-12
 RESULTS = Path(__file__).resolve().parent / "results"
 MODELS = Path(__file__).resolve().parents[1] / "models"
 
@@ -76,10 +77,17 @@ def mm_sund():
     from pynlme import sund_model
 
     sund.install_model(os.path.relpath(MODELS / "mm_pk_sund.txt"))
-    # SUND at its default tolerances (1e-10, 1e-12): at the common 1e-8 its
-    # solver error spoils the MATLAB mode's forward-difference derivatives (the fit
-    # at 1000 subjects ended 115 lower in log-likelihood).
-    return sund_model("mm_pk", "conc", ["ka", "V", "vmax", "km"], v_states=["gut"])
+    # The common tolerance, and Adams: the model is not stiff, and each program
+    # uses its non-stiff method (ode45, lsoda, DOP853).
+    return sund_model(
+        "mm_pk",
+        "conc",
+        ["ka", "V", "vmax", "km"],
+        v_states=["gut"],
+        rel_tol=RTOL,
+        abs_tol=ATOL,
+        method="adams",
+    )
 
 
 def mmd_sund():
@@ -111,6 +119,9 @@ def mmd_sund():
         ["ka", "V", "vmax", "km"],
         activities={dose: experiment(dose) for dose in (50.0, 75.0, 100.0)},
         activity_column=0,
+        rel_tol=RTOL,
+        abs_tol=ATOL,
+        method="adams",
     )
 
 

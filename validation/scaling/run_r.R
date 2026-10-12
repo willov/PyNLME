@@ -6,7 +6,7 @@
 #
 # Default options, as validation/scaling/run_pynlme.py: nlmeControl(), saemix's
 # defaults, nlmixr2's defaults. The ODE model is solved with the common tolerance
-# (relative 1e-8, absolute 1e-10): by deSolve's lsoda for nlme (per subject) and by
+# (relative 1e-10, absolute 1e-12): by deSolve's lsoda for nlme (per subject) and by
 # rxode2 for nlmixr2; the multi-dose model (mmd) with deSolve events and nlmixr2's
 # event table. saemix runs the closed-form model only. Sizes run in
 # increasing order; once a run takes longer than 60 s the larger sizes are skipped.
@@ -24,8 +24,8 @@ suppressMessages({
 
 sizes <- as.numeric(strsplit(Sys.getenv("SCALING_SIZES", "10,100,1000"), ",")[[1]])
 limit <- 60
-rtol <- 1e-8
-atol <- 1e-10
+rtol <- 1e-10
+atol <- 1e-12
 
 read_case <- function(name, n) {
   read.csv(file.path("validation/scaling/data", sprintf("%s_%d.csv", name, n)))
