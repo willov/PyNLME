@@ -85,5 +85,45 @@
   },
   "matlab_version": "23.2.0.2380103 (R2023b) Update 1",
   "toolbox_version": "23.2",
-  "threads": 8
+  "threads": 8,
+  "mmd": {
+    "LME": {
+      "n10": {
+        "error": "MYFUN has returned Inf or NaN values."
+      },
+      "n100": {
+        "time_s": 34.046459,
+        "logl": 271.08500275044526
+      },
+      "n1000": {
+        "time_s": 242.173923,
+        "logl": 2571.6103985432055
+      }
+    },
+    "FOCE": {
+      "n10": {
+        "error": "MYFUN has returned Inf or NaN values."
+      },
+      "n100": {
+        "time_s": 17601.188611,
+        "logl": 269.93022320627097
+      },
+      "n1000": {
+        "skipped": true
+      }
+    },
+    "SAEM": {
+      "n10": {
+        "time_s": 781.297762,
+        "logl": []
+      },
+      "n100": {
+        "time_s": 819.694464,
+        "logl": []
+      },
+      "n1000": {
+        "skipped": true
+      }
+    }
+  }
 }

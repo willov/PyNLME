@@ -215,15 +215,16 @@ the system BLAS), and they could likely be made faster. The times also vary by
 10-20% between runs, and R's timer resolves 1 ms. These cases are small; larger
 problems rank differently in places (below).
 
-**Larger problems** ([validation/scaling/](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md): 10, 100 and
-1000 simulated subjects, a closed-form and an ODE model, also against nlmixr2). At 1000
-subjects pynlme is the fastest for LME (19 times faster than MATLAB on the closed-form
-model; on the ODE model 10 times faster than MATLAB and 27 times faster than R
-`nlme`) and for SAEM (2.5-85 times faster than MATLAB, saemix and nlmixr2 on the
-closed-form model, 1.3 times faster than nlmixr2 on the ODE model). Its FOCE is 70
-times faster than MATLAB's, but nlmixr2's FOCEi is 6 times faster than pynlme on the
-closed-form model and far faster on the ODE model, where nlmixr2 uses sensitivity
-equations and pynlme finite differences. All programs reach the same fits.
+**Larger problems** ([validation/scaling/](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md):
+10, 100 and 1000 simulated subjects, a closed-form, an ODE and a multiple-dose ODE
+model, also against nlmixr2). At 1000 subjects pynlme is the fastest for LME (19 times
+faster than MATLAB on the closed-form model; on the ODE model 10 times faster than
+MATLAB and 44 times faster than R `nlme`) and for SAEM (2.5-85 times faster than
+MATLAB, saemix and nlmixr2 on the closed-form model, 5 times faster than nlmixr2 on
+the ODE model). Its FOCE is 70 times faster than MATLAB's, but nlmixr2's FOCEi is 6
+times faster than pynlme on the closed-form model and far faster on the ODE models,
+where nlmixr2 uses sensitivity equations and pynlme finite differences. All programs
+reach the same fits.
 
 Verify on your machine: `bash validation/run_benchmarks.sh` runs every benchmark with
 what is installed (pynlme always; R and MATLAB when available, otherwise their stored
@@ -254,11 +255,11 @@ times slower.
   (SUND) or a multi-column `output` (SciPy); each subject is simulated once.
 
 Speed with ODE models (the [scaling benchmark](https://github.com/willov/pynlme/blob/main/validation/scaling/README.md)): at 1000
-subjects LME fits are 1.4-10 times faster than MATLAB with `ode45` and 27 times faster
-than R `nlme` with deSolve; SAEM is 4.5 times faster than MATLAB's (10 subjects) and
-1.2-1.3 times faster than nlmixr2's from 100 subjects on. SUND is the faster solver
-with few subjects and for FOCE and SAEM; SciPy's `ode_model`, which solves all
-subjects as one system, for LME with hundreds of subjects. FOCE is slow with ODE models (finite differences re-solve every
+subjects LME fits are 10 times faster than MATLAB with `ode45` and 44 times faster
+than R `nlme` with deSolve; SAEM is 5 times faster than nlmixr2's (and 5 times faster
+than MATLAB's at 10 subjects). SciPy's `ode_model`, which solves all subjects as one
+system, is the faster solver for LME with many subjects and for SAEM; SUND for FOCE,
+for LME with few subjects, and for models with inputs (activities). FOCE is slow with ODE models (finite differences re-solve every
 subject's random effects); prefer LME or SAEM there. Analytic derivatives
 (`pynlme.with_jacobian`) replace finite differences when available.
 
