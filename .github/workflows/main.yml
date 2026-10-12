@@ -36,8 +36,8 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install dependencies (builds the Rust kernels)
-        run: uv sync --dev
+      - name: Install dependencies (builds the Rust kernels; with SUND)
+        run: uv sync --dev --extra sund
 
       - name: Check import and kernels
         run: |
@@ -83,7 +83,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --dev --extra sund
 
       - name: Validation tests
         run: uv run pytest tests/validation -v --tb=short --runslow
