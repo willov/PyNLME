@@ -125,6 +125,47 @@ def mmd_sund():
     )
 
 
+def _tmdd_rhs(t, y, phi, v):
+    from validation.scaling.make_data import TMDD
+
+    kon, koff, kdeg = (TMDD["fixed"][k] for k in ("kon", "koff", "kdeg"))
+    L, D, P = y.T
+    kel, kint, R0 = phi.T
+    bind = kon * L * (R0 + D) - koff * P
+    return np.column_stack([-kel * L - bind, -kdeg * D - bind, bind - kint * P])
+
+
+def tmdd_scipy():
+    """The stiff TMDD model with SciPy's LSODA (banded Jacobian over subjects)."""
+    return ode_model(
+        _tmdd_rhs,
+        y0=lambda phi, dose: np.column_stack(
+            [dose[:, 0], np.zeros(len(dose)), np.zeros(len(dose))]
+        ),
+        output=lambda y, phi, dose: np.log(y[:, 0]),
+        method="LSODA",
+        rtol=RTOL,
+        atol=ATOL,
+    )
+
+
+def tmdd_sund():
+    """The stiff TMDD model with SUND's BDF (its stiff method, the default)."""
+    import sund
+
+    from pynlme import sund_model
+
+    sund.install_model(os.path.relpath(MODELS / "tmdd_sund.txt"))
+    return sund_model(
+        "tmdd",
+        "logL",
+        ["kel", "kint", "R0"],
+        v_states=["L"],
+        rel_tol=RTOL,
+        abs_tol=ATOL,
+    )
+
+
 def saemix_oral(t, y, group, dose):
     from pynlme.r import saemix, saemixData, saemixModel
 
@@ -168,6 +209,14 @@ def runs(name: str, n: int):
             "Vectorization": "Full",
         }
         models = {"": None}
+    elif name == "tmdd":
+        beta0 = np.log([0.15, 0.07, 8.0])
+        kw = {
+            "ParamTransform": [1, 1, 1],
+            "REParamsSelect": [1, 2],
+            "Vectorization": "Full",
+        }
+        models = {"SUND": tmdd_sund(), "SciPy": tmdd_scipy()}
     elif name == "mmd":
         beta0 = np.log([0.8, 12.0, 2.5, 1.0])
         kw = {
@@ -216,7 +265,7 @@ def main() -> None:
     RESULTS.mkdir(exist_ok=True)
     path = RESULTS / "pynlme.json"
     results = json.loads(path.read_text()) if path.exists() else {}
-    for name in sys.argv[1:] or ("oral", "mm", "mmd"):
+    for name in sys.argv[1:] or ("oral", "mm", "mmd", "tmdd"):
         results[name] = {}
         too_slow = set()
         for n in SIZES_TO_RUN:

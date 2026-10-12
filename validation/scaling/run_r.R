@@ -74,12 +74,38 @@ mmd_conc <- function(lka, lV, lvmax, lkm, dose, time, id) {
   out
 }
 
+# The stiff TMDD model (validation/models/tmdd_sund.txt): log free drug, per subject
+# with lsoda (which switches to its stiff method).
+tmdd_fixed <- c(kon = 100, koff = 1, kdeg = 0.1)
+tmdd_rhs <- function(t, s, p) {
+  binding <- tmdd_fixed[["kon"]] * s[1] * (p[3] + s[2]) - tmdd_fixed[["koff"]] * s[3]
+  list(c(-p[1] * s[1] - binding, -tmdd_fixed[["kdeg"]] * s[2] - binding,
+         binding - p[2] * s[3]))
+}
+tmdd_conc <- function(lkel, lkint, lR0, dose, time, id) {
+  out <- numeric(length(time))
+  for (subject in unique(id)) {
+    rows <- which(id == subject)
+    k <- rows[1]
+    p <- exp(c(lkel[k], lkint[k], lR0[k]))
+    times <- sort(unique(c(0, time[rows])))
+    sol <- lsoda(c(dose[k], 0, 0), times, tmdd_rhs, p, rtol = rtol, atol = atol)
+    out[rows] <- log(sol[match(time[rows], sol[, 1]), 2])
+  }
+  out
+}
+
 nlme_fit <- function(name, d) {
   if (name == "oral") {
     g <- groupedData(conc ~ time | id, data = d)
     nlme(conc ~ oral_conc(lKe, lKa, lCl, dose, time), data = g,
          fixed = lKe + lKa + lCl ~ 1, random = pdDiag(lKa + lCl ~ 1),
          start = c(lKe = -2.5, lKa = 0.5, lCl = -3.2))
+  } else if (name == "tmdd") {
+    g <- groupedData(conc ~ time | id, data = d)
+    nlme(conc ~ tmdd_conc(lkel, lkint, lR0, dose, time, id), data = g,
+         fixed = lkel + lkint + lR0 ~ 1, random = pdDiag(lkel + lkint ~ 1),
+         start = log(c(lkel = 0.15, lkint = 0.07, lR0 = 8)))
   } else if (name == "mmd") {
     g <- groupedData(conc ~ time | id, data = d)
     nlme(conc ~ mmd_conc(lka, lV, lvmax, lkm, dose, time, id), data = g,
@@ -146,6 +172,27 @@ mm_model <- function() {
   })
 }
 
+tmdd_model <- function() {
+  ini({
+    tkel <- log(0.15); tkint <- log(0.07); tR0 <- log(8)
+    eta.kel ~ 0.1; eta.kint ~ 0.1
+    add.sd <- 0.2
+  })
+  model({
+    kel <- exp(tkel + eta.kel)
+    kint <- exp(tkint + eta.kint)
+    R0 <- exp(tR0)
+    kon <- 100; koff <- 1; kdeg <- 0.1
+    receptor <- R0 + Rdev
+    binding <- kon * L * receptor - koff * Cx
+    d/dt(L) <- -kel * L - binding
+    d/dt(Rdev) <- -kdeg * Rdev - binding
+    d/dt(Cx) <- binding - kint * Cx
+    lL <- log(L)
+    lL ~ add(add.sd)
+  })
+}
+
 nlmixr2_data <- function(name, d) {
   obs <- data.frame(ID = d$id, TIME = d$time, DV = d$conc, dosemg = d$dose,
                     AMT = 0, EVID = 0, CMT = 2)
@@ -168,7 +215,7 @@ nlmixr2_fit <- function(name, d, est) {
   } else {
     saemControl(print = 0, seed = 1, rxControl = rxControl(rtol = rtol, atol = atol))
   }
-  model <- if (name == "oral") oral_model else mm_model
+  model <- switch(name, oral = oral_model, tmdd = tmdd_model, mm_model)
   suppressMessages(suppressWarnings(
     nlmixr2(model, nlmixr2_data(name, d), est = est, control = control)
   ))
@@ -196,6 +243,11 @@ methods <- list(
     "LME, nlme" = function(d) nlme_fit("mm", d),
     "FOCEi, nlmixr2" = function(d) nlmixr2_fit("mm", d, "focei"),
     "SAEM, nlmixr2" = function(d) nlmixr2_fit("mm", d, "saem")
+  ),
+  tmdd = list(
+    "LME, nlme" = function(d) nlme_fit("tmdd", d),
+    "FOCEi, nlmixr2" = function(d) nlmixr2_fit("tmdd", d, "focei"),
+    "SAEM, nlmixr2" = function(d) nlmixr2_fit("tmdd", d, "saem")
   ),
   mmd = list(
     "LME, nlme" = function(d) nlme_fit("mmd", d),

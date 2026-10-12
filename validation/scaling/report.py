@@ -55,11 +55,30 @@ ROWS["mmd"] = [
     ("SAEM", "MATLAB `nlmefitsa` (ode45)", "matlab", "SAEM"),
     ("SAEM", "nlmixr2 (rxode2)", "r", "SAEM, nlmixr2"),
 ]
+ROWS["tmdd"] = [
+    ("LME", "pynlme, MATLAB mode (SUND)", "pynlme", "LME, MATLAB mode (SUND)"),
+    ("LME", "pynlme, MATLAB mode (SciPy)", "pynlme", "LME, MATLAB mode (SciPy)"),
+    ("LME", "MATLAB `nlmefit` (ode15s)", "matlab", "LME"),
+    ("LME", "pynlme, R mode (SUND)", "pynlme", "LME, R mode (SUND)"),
+    ("LME", "pynlme, R mode (SciPy)", "pynlme", "LME, R mode (SciPy)"),
+    ("LME", "R `nlme` (deSolve)", "r", "LME, nlme"),
+    ("FOCE", "pynlme (SUND)", "pynlme", "FOCE (SUND)"),
+    ("FOCE", "pynlme (SciPy)", "pynlme", "FOCE (SciPy)"),
+    ("FOCE", "MATLAB `nlmefit` (ode15s)", "matlab", "FOCE"),
+    ("FOCE", "nlmixr2 (FOCEi, rxode2)", "r", "FOCEi, nlmixr2"),
+    ("SAEM", "pynlme `nlmefitsa` (SUND)", "pynlme", "SAEM (SUND)"),
+    ("SAEM", "pynlme `nlmefitsa` (SciPy)", "pynlme", "SAEM (SciPy)"),
+    ("SAEM", "MATLAB `nlmefitsa` (ode15s)", "matlab", "SAEM"),
+    ("SAEM", "nlmixr2 (rxode2)", "r", "SAEM, nlmixr2"),
+]
 TITLES = {
     "oral": "Closed-form oral PK model (3 parameters, 2 random effects, 10 "
     "observations per subject)",
     "mm": "Michaelis-Menten ODE model (4 parameters, 2 random effects, 8 "
     "observations per subject)",
+    "tmdd": "Stiff target-mediated drug disposition model (3 parameters, 2 random "
+    "effects, 3 states, log free drug observed; each program's stiff solver: SUND "
+    "BDF, SciPy LSODA, ode15s, lsoda; 10 observations per subject)",
     "mmd": "Michaelis-Menten ODE model with three doses (0, 12 and 24 h; SUND "
     "activities, nlmixr2 event table, ode45/deSolve from dose to dose; 15 "
     "observations per subject)",

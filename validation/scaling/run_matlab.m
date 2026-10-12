@@ -32,7 +32,7 @@ if selected
     methods = strsplit(getenv('SCALING_METHODS'), ',');
 end
 if nargin < 1
-    models = {'oral', 'mm', 'mmd'};
+    models = {'oral', 'mm', 'mmd', 'tmdd'};
 end
 % Results of other models already in matlab.json stay.
 outDir = fullfile('validation', 'scaling', 'results');
@@ -118,6 +118,11 @@ if strcmp(name, 'oral')
     c.beta0 = [-2.5 0.5 -3.2];
     c.args = {'ParamTransform', [1 1 1], 'REParamsSelect', [2 3], ...
         'Vectorization', 'Full'};
+elseif strcmp(name, 'tmdd')
+    c.X = d.time;
+    c.model = @tmddModel;
+    c.beta0 = log([0.15 0.07 8]);
+    c.args = {'ParamTransform', [1 1 1], 'REParamsSelect', [1 2]};
 elseif strcmp(name, 'mmd')
     c.X = d.time;
     c.model = @mmdModel;
@@ -197,4 +202,21 @@ c(order) = sol;
         end
         ds = [-ka*s(1); ka*s(1)/V - vmax*s(2)/(km + s(2))];
     end
+end
+
+function c = tmddModel(phi, t, dose)
+% The stiff TMDD model (validation/models/tmdd_sund.txt), log free drug: ode15s,
+% MATLAB's solver for stiff problems.
+kel = phi(1); kint = phi(2); R0 = phi(3);
+kon = 100; koff = 1; kdeg = 0.1;
+rhs = @(~, s) [ ...
+    -kel*s(1) - (kon*s(1)*(R0 + s(2)) - koff*s(3)); ...
+    -kdeg*s(2) - (kon*s(1)*(R0 + s(2)) - koff*s(3)); ...
+    (kon*s(1)*(R0 + s(2)) - koff*s(3)) - kint*s(3)];
+[ts, order] = sort(t(:));
+opts = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
+[~, sol] = ode15s(rhs, [0; ts], [dose(1); 0; 0], opts);
+sol = log(sol(2:end, 1));
+c = zeros(size(t(:)));
+c(order) = sol;
 end
