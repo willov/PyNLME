@@ -196,8 +196,10 @@ At the largest size each program completed:
 - **ODE models, LME**: pynlme's R mode is the fastest on all three: 2.5 s on mm at
   1000 subjects (R `nlme` 210 s, MATLAB 47 s), 6.7 s on mmd (`nlme` 697 s, MATLAB 217
   s), 6.2 s on tmdd at 100 (`nlme` 84 s at 1e-12, MATLAB 426 s). The MATLAB mode is
-  fast with SciPy (4.8 s on mm, 10 times MATLAB), but with SUND, which it needs at
-  1e-10, it is slower than MATLAB on mm (75 s) and mmd (511 s against 217 s). On the
+  fast with SciPy (4.8 s on mm, 10 times MATLAB). With SUND it runs at 1e-10 (the
+  fallback above), 100 times tighter than the other programs, and takes longer on mm
+  (75 s) and mmd (511 s); the time likely goes to more outer iterations, as its path
+  is sensitive to small solver differences, but we have not investigated it. On the
   stiff tmdd model it is 48 times faster than MATLAB at 100 subjects (8.9 s).
 - **ODE models, SAEM**: from 100 subjects on pynlme is the fastest (mm 74 s at 1000
   against 383 s for nlmixr2; mmd 30 s against 111 s at 100; tmdd 136 s against 228 s

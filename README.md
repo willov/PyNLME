@@ -266,8 +266,8 @@ solver: SUND for stiff models (BDF; 3-17 times faster than SciPy at 10 subjects,
 non-stiff models SUND's Adams method (`method="adams"`) and SciPy's `ode_model`
 (all subjects as one system) are close (SUND faster in the R mode, SciPy for SAEM),
 except in the MATLAB mode: it and FOCE take finite differences of the solution and
-need an accurate solve, so SUND needs `rel_tol=1e-10` there and SciPy, accurate
-enough at `rtol=1e-8`, is 15 times faster. FOCE is slow with ODE models (finite differences re-solve every
+need an accurate solve, so SUND needs `rel_tol=1e-10` there, and in the benchmark
+SciPy at `rtol=1e-8` was faster in this mode (not yet investigated). FOCE is slow with ODE models (finite differences re-solve every
 subject's random effects); prefer LME or SAEM there. Analytic derivatives
 (`pynlme.with_jacobian`) replace finite differences when available.
 
