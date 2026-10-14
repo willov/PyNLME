@@ -6,7 +6,7 @@
 #
 # Default options, as validation/scaling/run_pynlme.py: nlmeControl(), saemix's
 # defaults, nlmixr2's defaults. The ODE model is solved with the common tolerance
-# (relative 1e-10, absolute 1e-12): by deSolve's lsoda for nlme (per subject) and by
+# (relative 1e-8, absolute 1e-10): by deSolve's lsoda for nlme (per subject) and by
 # rxode2 for nlmixr2; the multi-dose model (mmd) with deSolve events and nlmixr2's
 # event table. saemix runs the closed-form model only. Sizes run in
 # increasing order; once a run takes longer than 60 s the larger sizes are skipped.
@@ -24,8 +24,8 @@ suppressMessages({
 
 sizes <- as.numeric(strsplit(Sys.getenv("SCALING_SIZES", "10,100,1000"), ",")[[1]])
 limit <- 60
-rtol <- 1e-10
-atol <- 1e-12
+rtol <- 1e-8
+atol <- 1e-10
 
 read_case <- function(name, n) {
   read.csv(file.path("validation/scaling/data", sprintf("%s_%d.csv", name, n)))
@@ -256,6 +256,20 @@ methods <- list(
   )
 )
 
+# The fallback, as in run_pynlme.py: a fit that fails or misses the optimum at the
+# common tolerance runs at a tighter one, marked in the report. Here: nlme on tmdd,
+# whose PNLS step halving fails near the optimum at relative 1e-6 to 1e-10.
+tight <- list(tmdd = list("LME, nlme" = c(1e-12, 1e-14)))
+with_tol <- function(tol, f) {
+  force(f)
+  function(d) {
+    old <- c(rtol, atol)
+    on.exit({ rtol <<- old[1]; atol <<- old[2] })
+    rtol <<- tol[1]; atol <<- tol[2]
+    f(d)
+  }
+}
+
 # SCALING_MODELS=mmd runs only these models; other results already in r.json stay.
 models <- strsplit(Sys.getenv("SCALING_MODELS", paste(names(methods), collapse = ",")),
                    ",")[[1]]
@@ -273,6 +287,8 @@ for (name in models) {
         next
       }
       fit <- methods[[name]][[method]]
+      tol <- tight[[name]][[method]]
+      if (!is.null(tol)) fit <- with_tol(tol, fit)
       outcome <- tryCatch({
         if (n == sizes[1]) fit(d)  # warm-up
         times <- c()
@@ -282,6 +298,7 @@ for (name in models) {
         }
         list(time_s = min(times), logl = loglik(result))
       }, error = function(e) list(error = conditionMessage(e)))
+      if (!is.null(tol)) outcome[c("rtol", "atol")] <- as.list(tol)
       results[[name]][[method]][[key]] <- outcome
       if (!is.null(outcome$time_s)) {
         cat(sprintf("%s %5d %-16s %9.3f s\n", name, n, method, outcome$time_s))

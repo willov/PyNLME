@@ -5,6 +5,17 @@ All notable changes to the pynlme project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Scaling benchmark: a stiff model (target-mediated drug disposition) and every
+  program's ODE solver at the same tolerance (relative 1e-8, absolute 1e-10), checked
+  for equal accuracy; a fit that fails or misses the optimum there runs at a tighter
+  tolerance, marked in the tables. README and troubleshooting: which ODE solver to use
+  (SUND for stiff models and inputs; SUND needs `rel_tol=1e-10` in the MATLAB mode and
+  FOCE).
+
 ## [0.5.1] - 2026-10-12
 
 ### Fixed

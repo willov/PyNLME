@@ -1,6 +1,6 @@
 """
 How accurate each program's ODE solver is at the benchmark's settings (relative
-1e-10, absolute 1e-12; each program's method for the model: non-stiff for mm,
+1e-8, absolute 1e-10; each program's method for the model: non-stiff for mm,
 stiff for tmdd), so that the timings compare solvers of equal accuracy.
 
 20 parameter sets around the simulation's values (random effects as in
@@ -36,7 +36,7 @@ from validation.scaling.make_data import MM, TMDD  # noqa: E402
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
 MODEL_FILES = HERE.parent / "models"
-RTOL, ATOL = 1e-10, 1e-12
+RTOL, ATOL = 1e-8, 1e-10
 
 
 def problems(model: str) -> np.ndarray:

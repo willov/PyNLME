@@ -2,7 +2,7 @@
 Time pynlme on the scaling datasets (validation/scaling/make_data.py).
 
 Each method runs with its defaults. Every ODE solver uses the same tolerance
-(relative 1e-10, absolute 1e-12) and its program's method for non-stiff models;
+(relative 1e-8, absolute 1e-10) and its program's method for non-stiff models;
 validation/scaling/solver_accuracy.py measures the accuracy each reaches. Sizes run in increasing order; once a run
 takes longer than LIMIT_S, the larger sizes are skipped (they would take ten times
 longer). Runs shorter than 5 s are repeated and the best of 3 is kept.
@@ -34,7 +34,12 @@ SIZES_TO_RUN = tuple(
     int(n)
     for n in os.environ.get("SCALING_SIZES", ",".join(map(str, SIZES))).split(",")
 )
-RTOL, ATOL = 1e-10, 1e-12
+RTOL, ATOL = 1e-8, 1e-10
+# The fallback, the same rule in every program's runner: a fit that fails or misses
+# the optimum at the common tolerance runs at a tighter one, marked in the report.
+# Here: the fits that use finite differences of SUND's solution (MATLAB mode, FOCE)
+# miss it at the common tolerance (SUND's error there is the largest, 2.6e-8 on mm).
+TIGHT = 1e-10, 1e-12
 RESULTS = Path(__file__).resolve().parent / "results"
 MODELS = Path(__file__).resolve().parents[1] / "models"
 
@@ -71,7 +76,7 @@ def mm_scipy():
     )
 
 
-def mm_sund():
+def mm_sund(rtol=RTOL, atol=ATOL):
     import sund
 
     from pynlme import sund_model
@@ -84,13 +89,13 @@ def mm_sund():
         "conc",
         ["ka", "V", "vmax", "km"],
         v_states=["gut"],
-        rel_tol=RTOL,
-        abs_tol=ATOL,
+        rel_tol=rtol,
+        abs_tol=atol,
         method="adams",
     )
 
 
-def mmd_sund():
+def mmd_sund(rtol=RTOL, atol=ATOL):
     """The mm model with doses at 0, 12 and 24 h from SUND activities: one
     experiment per dose level (V holds the subject's dose, used as the experiment
     ID), subjects batched in containers."""
@@ -119,8 +124,8 @@ def mmd_sund():
         ["ka", "V", "vmax", "km"],
         activities={dose: experiment(dose) for dose in (50.0, 75.0, 100.0)},
         activity_column=0,
-        rel_tol=RTOL,
-        abs_tol=ATOL,
+        rel_tol=rtol,
+        abs_tol=atol,
         method="adams",
     )
 
@@ -149,7 +154,7 @@ def tmdd_scipy():
     )
 
 
-def tmdd_sund():
+def tmdd_sund(rtol=RTOL, atol=ATOL):
     """The stiff TMDD model with SUND's BDF (its stiff method, the default)."""
     import sund
 
@@ -161,8 +166,8 @@ def tmdd_sund():
         "logL",
         ["kel", "kint", "R0"],
         v_states=["L"],
-        rel_tol=RTOL,
-        abs_tol=ATOL,
+        rel_tol=rtol,
+        abs_tol=atol,
     )
 
 
@@ -199,7 +204,8 @@ def saemix_oral(t, y, group, dose):
 
 
 def runs(name: str, n: int):
-    """(method, function returning the log-likelihood) for one dataset."""
+    """(method, function returning the log-likelihood, ODE tolerance or None for
+    the common one) for one dataset."""
     t, y, group, dose = load(name, n)
     if name == "oral":
         args = (t, y, group, dose, one_compartment_oral_v, [-2.5, 0.5, -3.2])
@@ -216,7 +222,7 @@ def runs(name: str, n: int):
             "REParamsSelect": [1, 2],
             "Vectorization": "Full",
         }
-        models = {"SUND": tmdd_sund(), "SciPy": tmdd_scipy()}
+        models = {"SUND": tmdd_sund, "SciPy": tmdd_scipy}
     elif name == "mmd":
         beta0 = np.log([0.8, 12.0, 2.5, 1.0])
         kw = {
@@ -224,7 +230,7 @@ def runs(name: str, n: int):
             "REParamsSelect": [2, 3],
             "Vectorization": "Full",
         }
-        models = {"SUND": mmd_sund()}
+        models = {"SUND": mmd_sund}
     else:
         beta0 = np.log([0.8, 12.0, 2.5, 1.0])
         kw = {
@@ -232,11 +238,15 @@ def runs(name: str, n: int):
             "REParamsSelect": [2, 3],
             "Vectorization": "Full",
         }
-        models = {"SUND": mm_sund(), "SciPy": mm_scipy()}
+        models = {"SUND": mm_sund, "SciPy": mm_scipy}
     out = []
-    for label, model in models.items():
-        if model is not None:
-            args = (t, y, group, dose, model, beta0)
+    for label, build in models.items():
+        if build is not None:
+            args = (t, y, group, dose, build(), beta0)
+        # SUND's finite-difference fits at the tighter tolerance (see TIGHT).
+        tight = label == "SUND"
+        fd_args = (t, y, group, dose, build(*TIGHT), beta0) if tight else args
+        fd_tol = TIGHT if tight else None
         suffix = f" ({label})" if label else ""
 
         def fit(f=nlmefit, args=args, **extra):
@@ -247,14 +257,16 @@ def runs(name: str, n: int):
             return run
 
         out += [
-            (f"LME, MATLAB mode{suffix}", fit()),
-            (f"LME, R mode{suffix}", fit(compat="r")),
-            (f"FOCE{suffix}", fit(ApproximationType="FOCE")),
-            (f"SAEM{suffix}", fit(nlmefitsa, random_state=1)),
+            (f"LME, MATLAB mode{suffix}", fit(args=fd_args), fd_tol),
+            (f"LME, R mode{suffix}", fit(compat="r"), None),
+            (f"FOCE{suffix}", fit(args=fd_args, ApproximationType="FOCE"), fd_tol),
+            (f"SAEM{suffix}", fit(nlmefitsa, random_state=1), None),
         ]
     if name == "oral":
         fit_saemix = saemix_oral(t, y, group, dose)
-        out.append(("SAEM, pynlme.r.saemix", lambda: None if fit_saemix() else None))
+        out.append(
+            ("SAEM, pynlme.r.saemix", lambda: None if fit_saemix() else None, None)
+        )
     return out
 
 
@@ -269,7 +281,7 @@ def main() -> None:
         results[name] = {}
         too_slow = set()
         for n in SIZES_TO_RUN:
-            for method, run in runs(name, n):
+            for method, run, tol in runs(name, n):
                 entry = results.setdefault(name, {}).setdefault(method, {})
                 if method in too_slow:
                     entry[str(n)] = {"skipped": True}
@@ -287,6 +299,8 @@ def main() -> None:
                     print(f"{name} {n} {method}: {error!r}", flush=True)
                     continue
                 entry[str(n)] = {"time_s": min(times), "logl": logl}
+                if tol is not None:
+                    entry[str(n)]["rtol"], entry[str(n)]["atol"] = tol
                 print(f"{name} {n:>5} {method:<28} {min(times):9.3f} s", flush=True)
                 # SAEM runs several chains on few subjects (nlmefitsa's default),
                 # so its time at the smallest size does not predict the larger ones.

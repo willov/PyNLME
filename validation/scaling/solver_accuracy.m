@@ -1,7 +1,7 @@
 function solver_accuracy()
 %SOLVER_ACCURACY MATLAB's ODE solvers at the scaling benchmark's settings.
 %
-%   Relative 1e-10, absolute 1e-12, on the problems of
+%   Relative 1e-8, absolute 1e-10, on the problems of
 %   validation/scaling/solver_accuracy.py: ode45 for the non-stiff mm model,
 %   ode15s for the stiff tmdd model. Run from the repository root (after
 %   `solver_accuracy.py write`):
@@ -11,7 +11,7 @@ function solver_accuracy()
 %
 %   Writes validation/scaling/results/solver_values_matlab_<model>.csv.
 
-opts = odeset('RelTol', 1e-10, 'AbsTol', 1e-12);
+opts = odeset('RelTol', 1e-8, 'AbsTol', 1e-10);
 
 problems = readtable(fullfile('validation', 'scaling', 'data', 'solver_problems_mm.csv'));
 times = [0.5 1 2 3 4 6 8 12];

@@ -1,5 +1,5 @@
-# R's ODE solvers at the scaling benchmark's settings (relative 1e-10, absolute
-# 1e-12) on the problems of validation/scaling/solver_accuracy.py: deSolve's lsoda
+# R's ODE solvers at the scaling benchmark's settings (relative 1e-8, absolute
+# 1e-10) on the problems of validation/scaling/solver_accuracy.py: deSolve's lsoda
 # (as in nlme's model functions) and rxode2 (as nlmixr2 solves the models), for
 # the non-stiff mm model and the stiff tmdd model.
 #
@@ -13,8 +13,8 @@ suppressMessages({
   library(rxode2)
 })
 
-rtol <- 1e-10
-atol <- 1e-12
+rtol <- 1e-8
+atol <- 1e-10
 
 models <- list(
   mm = list(

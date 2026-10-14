@@ -70,9 +70,13 @@ default RELME does not.
 1. Write the model for `Vectorization="Full"` (see the API reference): one model call
    for many groups instead of one per group.
 2. For ODE models use a compiled SUND model via `sund_model` (batched with containers),
-   or `ode_model` with a vectorised right-hand side. `ode_model` solves all subjects
-   as one system and is the faster of the two for SAEM and for LME with many subjects;
-   SUND for FOCE, for LME with few subjects, and for inputs such as doses (activities)
+   or `ode_model` with a vectorised right-hand side. SUND for stiff models (its BDF
+   method; 3-17 times faster than SciPy at 10 subjects, 1.2-1.4 times at 1000) and
+   for inputs such as doses (activities). For non-stiff models SUND with
+   `method="adams"` and `ode_model` (all subjects as one system) are close, except in
+   the MATLAB mode and FOCE: they take finite differences of the solution, so with
+   SUND keep `rel_tol` at 1e-10 or tighter (or the fit can end at a wrong optimum),
+   where `ode_model` at `rtol=1e-8` is much faster
    (see [the scaling benchmark](../validation/scaling/README.md)).
 3. Supply analytic derivatives with `with_jacobian` when the model is expensive.
 4. `nlmefitsa`: fewer chains (`NChains=1`) or iterations trade precision for speed.

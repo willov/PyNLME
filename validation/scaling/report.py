@@ -90,17 +90,30 @@ def cell(entry: dict | None) -> str:
         return "–"
     if entry.get("skipped"):
         return "skipped"
+    if entry.get("not_run"):
+        return "not run"
+    if "stopped_after_s" in entry:  # ran this long without finishing
+        return f"> {entry['stopped_after_s'] / 3600:.0f} h, stopped"
     if "error" in entry:
         return "failed"
     t = entry["time_s"]
-    return f"{t:.3f}" if t < 1 else f"{t:.2f}" if t < 10 else f"{t:.0f}"
+    text = f"{t:.3f}" if t < 1 else f"{t:.2f}" if t < 10 else f"{t:.0f}"
+    return text + tight_mark(entry)
+
+
+def tight_mark(entry: dict) -> str:
+    """† for a fit run at a tighter ODE tolerance than the common one (the
+    runners' fallback when a fit fails or misses the optimum at the common one)."""
+    return f" †{entry['rtol']:.0e}" if "rtol" in entry else ""
 
 
 def logl_cell(entry: dict | None) -> str:
     if not entry or "logl" not in entry or entry["logl"] in (None, "NA", []):
         return "–"
     value = entry["logl"]
-    return f"{value:.2f}" if isinstance(value, int | float) else "–"
+    if not isinstance(value, int | float):
+        return "–"
+    return f"{value:.2f}" + tight_mark(entry)
 
 
 def main() -> None:
@@ -120,6 +133,12 @@ def main() -> None:
             if any(c != "–" for c in cells):  # rows not measured are left out
                 print(f"| {method} | {label} | " + " | ".join(cells) + " |")
         print()
+        if model != "oral":
+            print(
+                "ODE tolerance relative 1e-8, absolute 1e-10 in every program; "
+                "† marks a fit run at a tighter relative tolerance (shown), because "
+                "it fails or misses the optimum at the common one.\n"
+            )
         print(
             "Log-likelihood each program reports, as a check that the fits are "
             "equally good (LME and FOCE; within a method the approximations "
